@@ -1,6 +1,6 @@
 # Examples
 
-Seven worked examples that exercise the package end to end, from a single plate
+Worked examples that exercise the package end to end, from a single plate
 solve to cross-checking against CalculiX. Each one lives in its own folder with
 its script, the figures it produces and a README that walks through the model
 and how to read the results.
@@ -14,6 +14,7 @@ and how to read the results.
 | 05 | [Failure envelopes](05_failure_envelopes/) | Maximum stress, Tsai-Hill, Tsai-Wu and Hashin envelopes for a T300/5208 ply | failure criteria |
 | 06 | [Progressive damage](06_progressive_damage/) | A [0/90]s strip in tension from first-ply failure to fibre failure | `ProgressiveDamageAnalysis` |
 | 07 | [CalculiX cross-check](07_calculix_crosscheck/) | Native solver against CalculiX on the benchmark plate | kernels, `StressDistributionVerifier` |
+| 08 | [Open hole with Gmsh](08_open_hole_gmsh/) | A graded Gmsh quad mesh around a hole; Kt of four laminates against Lekhnitskii | `GmshPlateBuilder`, `GmshMeshImporter` |
 
 All examples are linear static analyses.
 
