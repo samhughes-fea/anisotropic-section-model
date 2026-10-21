@@ -28,7 +28,7 @@ python examples/03_result_fidelity/result_fidelity.py   # or one at a time
 ```
 
 The scripts also run straight from a clone without installing, because they add
-the repository root to the import path. Example 07 needs CalculiX on the `PATH`
+`src/` to the import path. Example 07 needs CalculiX on the `PATH`
 as `ccx` (`apt install calculix-ccx`) and skips itself without it. Example 02
 adds a CalculiX overlay when `ccx` is present.
 
