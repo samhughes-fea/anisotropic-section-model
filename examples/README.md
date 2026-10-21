@@ -15,6 +15,14 @@ and how to read the results.
 | 06 | [Progressive damage](06_progressive_damage/) | A [0/90]s strip in tension from first-ply failure to fibre failure | `ProgressiveDamageAnalysis` |
 | 07 | [CalculiX cross-check](07_calculix_crosscheck/) | Native solver against CalculiX on the benchmark plate | kernels, `StressDistributionVerifier` |
 | 08 | [Open hole with Gmsh](08_open_hole_gmsh/) | A graded Gmsh quad mesh around a hole; Kt of four laminates against Lekhnitskii | `GmshPlateBuilder`, `GmshMeshImporter` |
+| 09 | [Sandwich panel](09_sandwich_panel/) | Foam-core sandwich: FSDT against RZT, layerwise and sandwich theory | `Ply`, `Laminate`, `MaterialCard` |
+| 10 | [Bending-twist coupling](10_bending_twist_coupling/) | Tip twist of an off-axis cantilever against ply angle | clamped supports, `integrate_abd` |
+| 11 | [Laminate failure envelope](11_laminate_failure_envelope/) | First-ply failure in N_x–N_y, with and without cure stress | `TsaiWuCriterion`, `HygrothermalState` |
+| 12 | [Temperature gradient and moisture](12_temperature_gradient_and_moisture/) | Face-to-face temperature difference; moisture undoing cure warp | `HygrothermalState` gradients |
+| 13 | [Stiffness polars](13_stiffness_polars/) | Ex, Gxy and νxy against direction for four stacks | `Laminate`, `integrate_abd` |
+| 14 | [Ply-angle sweep](14_ply_angle_sweep/) | Best [±θ]2s angle for four load cases | failure criteria |
+| 15 | [Solver scaling](15_solver_scaling/) | Runtime against DOFs for sparse, dense and CalculiX | `SparseLinearSolver`, `DenseLinearSolver` |
+| 16 | [Material comparison](16_material_comparison/) | One plate in five library materials: stiffness, strength, mass | `create_default_library`, `ResultsExtractor` |
 
 All examples are linear static analyses.
 
@@ -23,7 +31,7 @@ All examples are linear static analyses.
 From the repository root:
 
 ```bash
-pip install -e ".[examples]"     # the package plus matplotlib
+pip install -e ".[examples]"     # the package plus matplotlib and Gmsh
 python examples/run_all.py       # every example, figures into each folder
 python examples/03_result_fidelity/result_fidelity.py   # or one at a time
 ```
@@ -41,7 +49,8 @@ examples/
 ├── run_all.py                  runs every example in order
 ├── _shared/
 │   ├── plotting.py             plot style, colours, save(), simply_supported()
-│   └── analytical.py           Navier series solutions used as references
+│   ├── analytical.py           Navier series solutions used as references
+│   └── membrane.py             one-element membrane cell for failure envelopes and sweeps
 └── 0N_<name>/
     ├── README.md               walkthrough with the figures
     ├── <name>.py               the script

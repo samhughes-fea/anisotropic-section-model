@@ -7,15 +7,9 @@ or criterion keeps the same colour in every figure.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-
-try:  # installed with `pip install -e .`
-    import laminate_modelling_package  # noqa: F401
-except ImportError:  # running straight from a clone
-    sys.path.insert(0, str(ROOT / "src"))
 
 import matplotlib
 
