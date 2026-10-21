@@ -8,7 +8,7 @@ and how to read the results.
 | # | Example | What it shows | Main API |
 |---|---|---|---|
 | 01 | [Kinematic models vs thickness](01_kinematic_models/) | CLPT, FSDT, RZT and layerwise deflections from thin to thick plates, against Navier solutions | `FEAMesh`, kinematic models, `StructuralGlobalSolver` |
-| 02 | [Through-thickness stresses](02_through_thickness_stresses/) | σx and τxz profiles in a thick [0/90/0] plate for each theory, with CalculiX overlaid | `ExactStressRecoverer` |
+| 02 | [Through-thickness stresses](02_through_thickness_stresses/) | σx and τxz profiles in a thick [0/90/0] plate for each theory, with equilibrium recovery and CalculiX overlaid | `ExactStressRecoverer`, `EquilibriumStressRecoverer` |
 | 03 | [Result fidelity levels](03_result_fidelity/) | The same solution at Gauss points, elements, nodes and global totals, with convergence against Navier | `ResultsExtractor` |
 | 04 | [Thermal warping](04_thermal_warping/) | Cure cool-down shapes of [0/90], [45/-45] and [0/90]s plates, against laminate theory | `HygrothermalState`, `HygrothermalEngine` |
 | 05 | [Failure envelopes](05_failure_envelopes/) | Maximum stress, Tsai-Hill, Tsai-Wu and Hashin envelopes for a T300/5208 ply | failure criteria |
@@ -23,6 +23,10 @@ and how to read the results.
 | 14 | [Ply-angle sweep](14_ply_angle_sweep/) | Best [±θ]2s angle for four load cases | failure criteria |
 | 15 | [Solver scaling](15_solver_scaling/) | Runtime against DOFs for sparse, dense and CalculiX | `SparseLinearSolver`, `DenseLinearSolver` |
 | 16 | [Material comparison](16_material_comparison/) | One plate in five library materials: stiffness, strength, mass | `create_default_library`, `ResultsExtractor` |
+| 17 | [Pagano benchmark](17_pagano_benchmark/) | All four theories against the exact 3D solution; interlaminar shear and σz from equilibrium | `PaganoPlate`, `EquilibriumStressRecoverer` |
+| 18 | [Wound pressure vessel](18_pressure_vessel_winding/) | Full 360° barrel, winding angle sweep against CLT, optimum near 54.7° | `CylindricalPanelBuilder`, `CylindricalDirection` |
+| 19 | [Element comparison](19_element_comparison/) | Tri3, Quad4 and Quad8 on the open hole, Kt error against DOFs | `Tri3ShellElement`, `Quad8ShellElement`, `GmshPlateBuilder(element=...)` |
+| 20 | [Load combinations](20_load_combinations/) | Body, pressure-field, line and thermal cases on a propped cantilever, solved once and combined | `solve_many`, `LoadCombination`, `add_spring` |
 
 All examples are linear static analyses.
 
@@ -37,7 +41,7 @@ python examples/03_result_fidelity/result_fidelity.py   # or one at a time
 ```
 
 The scripts also run straight from a clone without installing, because they add
-`src/` to the import path. Example 07 needs CalculiX on the `PATH`
+`src/` to the import path. Examples 08 and 19 need Gmsh. Example 07 needs CalculiX on the `PATH`
 as `ccx` (`apt install calculix-ccx`) and skips itself without it. Example 02
 adds a CalculiX overlay when `ccx` is present.
 
