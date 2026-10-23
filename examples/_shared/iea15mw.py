@@ -82,13 +82,14 @@ def airfoil(st):
     return Airfoil(pts, f"IEA 15 MW r = {st['r']:.1f} m")
 
 
-def build_segment(st, length, n_span, h_perimeter, element, tip_chord=None, twist=(0.0, 0.0)):
+def build_segment(st, length, n_span, h_perimeter, element, tip_chord=None, twist=(0.0, 0.0), **builder_options):
     """A shell segment with the section of station ``st``, meshed on its PreComp sector boundaries.
 
     The segment runs ``length`` along z with the station's airfoil and layup; the chord
     tapers linearly to ``tip_chord`` (prismatic by default) and the twist goes from
     ``twist[0]`` to ``twist[1]`` degrees. ``h_perimeter`` is the chordwise element size
-    as a fraction of the section perimeter.
+    as a fraction of the section perimeter. Other keywords go to ``BladeBuilder``
+    (``mesh_surface="mid"``, for example).
     """
     chord, af = st["chord"], airfoil(st)
     webs_in = [(x, lam) for x, lam in zip(st["webs"]["loc"], st["webs"]["laminae"]) if x < 0.999]
@@ -131,7 +132,7 @@ def build_segment(st, length, n_span, h_perimeter, element, tip_chord=None, twis
                 Station(length, chord if tip_chord is None else tip_chord, af, twist=twist[1],
                         pitch_axis=st["pitch_axis"])]
     builder = BladeBuilder(stations, regions, webs, n_span=n_span, element=element,
-                           te_web_elements=max(1, int(np.ceil(gap / h))))
+                           te_web_elements=max(1, int(np.ceil(gap / h))), **builder_options)
     return builder.build(laminates, FSDTModel())
 
 
