@@ -37,6 +37,7 @@ WIDTH, HEIGHT, LENGTH = 0.5, 0.25, 4.0
 N_WIDTH, N_HEIGHT, N_SPAN = 6, 3, 32
 TORQUE = 1.0e3  # N m
 RIB_SPACINGS = [None, 2.0, 1.0, 0.5]
+N_SHOWN_MODES = 5  # distortional mode shapes drawn in the section figure
 
 
 def laminates(lib):
@@ -125,7 +126,8 @@ def main():
         ribs_shell = [z for z in ribs if z < LENGTH - 1e-9]
         mesh_b, _, sol_b = shell_case(box, sec, ribs_shell, "couple")
         shell_tw = np.array([0.0] + [shell_section_motion(sol_b, mesh_b, sections[float(z)], float(z)).twist for z in zs[1:]])
-        gbt = {n: gbt_case(sec, ribs_shell, "couple", "full", n).mean_twist(zs) for n in (0, 1, 2, None)}
+        counts = (0, 1, 2, 3, 4, 5, None) if spacing is None else (0, 1, None)
+        gbt = {n: gbt_case(sec, ribs_shell, "couple", "full", n).mean_twist(zs) for n in counts}
         couple[spacing] = (shell_tw, gbt)
         label = "no ribs" if spacing is None else f"ribs every {spacing:g} m"
         print(f"Web couple, {label}: tip twist shell {1e3 * shell_tw[-1]:.4f} mrad; GBT " + ", ".join(
@@ -136,7 +138,10 @@ def main():
 
     # ================================================================ figure 1: the section
     modes = g_full.beam.modes
-    fig, axes = plt.subplots(1, 4, figsize=(15, 3.6))
+    fig = plt.figure(figsize=(15, 6.0))
+    upper, lower = fig.subfigures(2, 1, height_ratios=[1.15, 1.0])
+    axes = list(upper.subplots(1, 3, gridspec_kw={"wspace": 0.5}))
+    mode_axes = list(lower.subplots(1, N_SHOWN_MODES, sharex=True, sharey=True))
     ax = axes[0]
     for k, (a, b) in enumerate(sec.contour()):
         ax.plot([a[0], b[0]], [a[1], b[1]], color=SERIES[1] if sec.walls[k].name.startswith("cap") else SERIES[2],
@@ -167,7 +172,16 @@ def main():
     ax.set_aspect("equal")
     ax.set_title("Warping function ω (Benscoter)", loc="left")
     ax.set_xlabel("x [m]")
-    for idx, ax in zip((3, 4), axes[2:]):
+    ax = axes[2]
+    k_d = modes.all_distortional_stiffness
+    ax.semilogy(np.arange(1, len(k_d) + 1), k_d, ".", color=SERIES[0], ms=5)
+    ax.semilogy(np.arange(1, N_SHOWN_MODES + 1), k_d[:N_SHOWN_MODES], "o", color=SERIES[0], mfc="none", ms=8,
+                label=f"modes 1 to {N_SHOWN_MODES}, shown below")
+    ax.set_xlabel("distortional mode")
+    ax.set_ylabel("transverse bending stiffness")
+    ax.set_title(f"{len(k_d)} distortional modes, softest first", loc="left")
+    ax.legend(fontsize=7.5)
+    for idx, ax in zip(range(3, 3 + N_SHOWN_MODES), mode_axes):
         shape = modes.in_plane_shape(idx)
         base = modes.wall_points()
         scale = 0.08
@@ -179,7 +193,6 @@ def main():
         ax.set_xlabel("x [m]")
         ax.text(0.02, 0.02, f"stiffness {modes.all_distortional_stiffness[idx - 3]:.3g}", transform=ax.transAxes,
                 fontsize=7.5, color=TEXT_SECONDARY)
-    fig.tight_layout()
     save(fig, __file__, "box_spar_section.png")
 
     # ================================================================ figure 2: tip torque through a rib
@@ -246,8 +259,9 @@ def main():
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.2), gridspec_kw={"width_ratios": [1.2, 1.0, 1.0]})
     ax = axes[0]
     shell_tw, gbt = couple[None]
-    for (n, tw), colour in zip(gbt.items(), (SERIES[1], SERIES[2], SERIES[3], SERIES[0])):
-        ax.plot(zs, 1e3 * tw, color=colour, label="GBT, rigid section" if n == 0 else
+    for n, tw in gbt.items():
+        colour = SERIES[1] if n == 0 else SERIES[0] if n is None else plt.cm.Greens(0.35 + 0.65 * (n - 1) / 4)
+        ax.plot(zs, 1e3 * tw, color=colour, lw=1.4, label="GBT, rigid section" if n == 0 else
                 f"GBT, {'all' if n is None else n} distortional mode{'s' if n != 1 else ''}")
     ax.plot(zs, 1e3 * shell_tw, "o", color=REFERENCE, mfc="none", ms=5, label="shell")
     ax.set_xlabel("z [m]")

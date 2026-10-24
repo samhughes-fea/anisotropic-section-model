@@ -16,7 +16,7 @@ same box:
    adds the section's distortional modes as beam degrees of freedom: the box racking
    into a rhombus, the caps bowing. Ribs (diaphragms) stop them.
 
-![The section: Saint-Venant shear flow, the warping function and the two softest distortional modes](figures/box_spar_section.png)
+![The section: Saint-Venant shear flow, the warping function and distortional modes 1 to 5, softest first](figures/box_spar_section.png)
 
 ![Tip torque through a tip rib: twist lost to the warping restraint, bimoment near the root, and the warping stress resultant round the section](figures/box_spar_restrained_warping.png)
 
@@ -65,7 +65,7 @@ distortion.
 | Caps | [0₂/45/−45/−45/45/0₂] T300/5208, 8 × 0.5 mm |
 | Webs | [±45]s E-glass, 4 × 0.5 mm |
 | Shell | Flat Quad8 FSDT on the wall mid-surfaces: 32 along, 6 across each cap, 3 up each web |
-| GBT | 32 elements, graded towards the clamp and the ribs; full warping and all 33 distortional modes unless stated |
+| GBT | 32 elements, graded towards the clamp and the ribs; full warping and all 69 distortional modes unless stated |
 | Loads | 1 kN m at the tip, either through a tip rib (rigid in its plane, free to warp) or as equal and opposite vertical forces on the two webs with no rib |
 | Twist | The least-squares rotation of the section's nodes, measured the same way in the shell and GBT (an RBE3 reference node measures it the same way) |
 
@@ -122,6 +122,10 @@ the box centre.
 - Without ribs, the same torque introduced as forces on the webs twists the tip 26
   times more than through a rib. Nearly all of it is the rhombic distortion of the box,
   and the first GBT mode captures it alone. The rigid-section theories miss it.
+- Modes 1 to 5 one at a time (no ribs, tip twist): 1 mode 53.86, 2 to 4 modes 54.05,
+  5 modes 54.15, all modes 53.83 mrad, against 53.89 for the shell. Mode 1 is the
+  racking mode (top panel of the section figure). Modes 2 to 5 bow the walls, the load
+  does little work on them, and they move the twist by under 0.6%.
 - Ribs bring the response back towards the rigid section. GBT tracks the shell to
   within 1% at every rib spacing.
 

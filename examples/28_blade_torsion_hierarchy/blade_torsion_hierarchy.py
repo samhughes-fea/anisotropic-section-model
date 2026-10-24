@@ -44,6 +44,7 @@ WEBS = [ShearWeb("web_fwd", 0.18, 4), ShearWeb("web_aft", 0.48, 4)]
 TORQUE = 1.0e3  # N m
 RIB_SPACINGS = [None, 3.0, 1.5, 0.75]
 N_GBT = 24  # GBT elements along the span
+N_SHOWN_MODES = 5  # distortional mode shapes drawn in the section figure
 
 
 def laminates(lib):
@@ -157,7 +158,7 @@ def main():
     # ---------------------------------------------------------------- 3. distortion: skin force couple
     # GBT levels: 0 = rigid section, n = n distortional modes, None = all, "ext" = all + wall stretching
     couple = {}
-    mode_counts = (0, 1, 2, 4, 8, None, "ext")
+    mode_counts = (0, 1, 2, 3, 4, 5, 8, None, "ext")
     modes_ext = GeneralizedBeam(sec, LENGTH, 2, "full", None, extensible=True).modes
 
     def level(n, ribs):
@@ -181,8 +182,11 @@ def main():
                           for n, g in gbt.items()))
 
     # ================================================================ figure 1: the section
-    fig, axes = plt.subplots(2, 3, figsize=(15, 5.6))
-    ax = axes[0, 0]
+    fig = plt.figure(figsize=(15, 4.6))
+    upper, lower = fig.subfigures(2, 1, height_ratios=[1.35, 0.65])
+    top = list(upper.subplots(1, 3, gridspec_kw={"wspace": 0.5}))
+    mode_axes = list(lower.subplots(1, N_SHOWN_MODES, sharex=True, sharey=True))
+    ax = top[0]
     qmax = np.max(np.abs(sec.shear_flow))
     for k in range(len(sec.walls)):
         a, b = sec.points[sec.start[k]], sec.points[sec.end[k]]
@@ -199,7 +203,7 @@ def main():
     ax.set_aspect("equal")
     ax.set_title("Saint-Venant shear flow in three cells", loc="left")
     ax.legend(loc="upper right", fontsize=7.5, ncol=1)
-    ax = axes[0, 1]
+    ax = top[1]
     om = sec.omega
     vmax = np.max(np.abs(om))
     for k in range(len(sec.walls)):
@@ -210,15 +214,18 @@ def main():
     sm = plt.cm.ScalarMappable(cmap=DIVERGING, norm=plt.Normalize(-vmax * 1e3, vmax * 1e3))
     fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.02, label="ω [10⁻³ m²]")
     ax.set_aspect("equal")
-    ax.set_title("Warping function ω about the shear centre", loc="left")
-    ax = axes[0, 2]
+    ax.set_title("Warping function ω", loc="left")
+    ax = top[2]
     k_d = modes_all.all_distortional_stiffness
     ax.semilogy(np.arange(1, len(k_d) + 1), k_d, ".", color=SERIES[0], ms=4)
+    ax.semilogy(np.arange(1, N_SHOWN_MODES + 1), k_d[:N_SHOWN_MODES], "o", color=SERIES[0], mfc="none", ms=7,
+                label=f"modes 1 to {N_SHOWN_MODES}, shown below")
+    ax.legend(fontsize=7.5)
     ax.set_xlabel("distortional mode")
     ax.set_ylabel("transverse bending stiffness")
     ax.set_title(f"{len(k_d)} distortional modes, softest first", loc="left")
     base = modes_all.wall_points()
-    for c, ax in enumerate(axes[1]):
+    for c, ax in enumerate(mode_axes):
         shape = modes_all.in_plane_shape(3 + c)
         for p0, du in zip(base, shape):
             ax.plot(p0[:, 0], p0[:, 1], color=TEXT_SECONDARY, lw=0.7)
@@ -226,7 +233,6 @@ def main():
         ax.set_aspect("equal")
         ax.set_title(f"Distortional mode {c + 1}", loc="left")
         ax.set_xlabel("x [m]")
-    fig.tight_layout()
     save(fig, __file__, "blade_torsion_section.png")
 
     # ================================================================ figure 2: Saint-Venant and bimoment
@@ -291,8 +297,8 @@ def main():
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.3), gridspec_kw={"width_ratios": [1.15, 1.0, 1.25]})
     ax = axes[0]
     tw, gbt, s_c = couple[None]
-    colours = [SERIES[1], SERIES[2], SERIES[3], SERIES[4], SERIES[6], SERIES[0], SERIES[7]]
-    for (n, gs), colour in zip(gbt.items(), colours):
+    for n, gs in gbt.items():
+        colour = {0: SERIES[1], None: SERIES[0], "ext": SERIES[7]}.get(n) or plt.cm.Greens(0.3 + 0.7 * (n - 1) / 7)
         ax.plot(zs, 1e3 * gs.mean_twist(zs), color=colour, lw=1.6, ls="--" if n == "ext" else "-",
                 label=f"GBT, {name(n)}" if n in (0, None, "ext") else f"GBT, {n} distortional mode{'s' if n > 1 else ''}")
     ax.plot(zs, 1e3 * tw, "o", color=REFERENCE, mfc="none", ms=5, label="shell")
