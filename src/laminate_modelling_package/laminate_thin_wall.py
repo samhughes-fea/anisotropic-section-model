@@ -328,6 +328,124 @@ class ThinWalledSection:
         f = bimoment / self.EGamma * self.Et
         return f * self.omega[self.start], f * self.omega[self.end]
 
+    # ------------------------------------------------------------ beam stiffness matrices
+    def _axial_bending_stiffness(self, reference) -> np.ndarray:
+        """3 x 3 stiffness of [N, Mx, My] against [eps, kappa_x, kappa_y] about ``reference``.
+
+        Plane sections: eps_zz = eps + kappa_x y - kappa_y x (coordinates from the reference).
+        """
+        P, i, j = self.points, self.start, self.end
+        xr, yr = reference
+        f = [np.ones(len(P)), P[:, 1] - yr, -(P[:, 0] - xr)]
+        K = np.zeros((3, 3))
+        for a in range(3):
+            for b in range(3):
+                K[a, b] = self._integrals(f[a][i], f[a][j], f[b][i], f[b][j], self.Et)
+        return K
+
+    def shear_flow_basis(self, reference=(0.0, 0.0)) -> Dict[str, np.ndarray]:
+        """Shear flows of transverse shear, as values at three Gauss points on every wall.
+
+        Returns ``open_x``, ``open_y`` (n_walls, 3): a shear flow in equilibrium with the
+        axial stress gradient of a unit shear force Fx or Fy (bending varying along z,
+        plane sections, about ``reference``), with no flow out of free edges; ``loops``
+        (n_cells, n_walls): the closed-cell flows that can be added to it (constant along
+        each wall, positive along the wall direction); and the Gauss data ``s`` (n_walls,
+        3) and ``w`` (n_walls, 3) for integrating along the walls.
+        """
+        P, i, j, b = self.points, self.start, self.end, self.length
+        n_pts, n_w = len(P), len(b)
+        Kab = self._axial_bending_stiffness(reference)
+        Cab = np.linalg.inv(Kab)
+        xr, yr = reference
+        X, Y = P[:, 0] - xr, P[:, 1] - yr
+        gp, gw = np.polynomial.legendre.leggauss(3)
+        s = 0.5 * (gp[None, :] + 1.0) * b[:, None]
+        w = 0.5 * gw[None, :] * b[:, None]
+        A = np.zeros((n_pts, n_w))  # flow balance: in at the wall end, out at its start
+        A[j, np.arange(n_w)] += 1.0
+        A[i, np.arange(n_w)] -= 1.0
+        out = {"s": s, "w": w}
+        # d/dz of [N, Mx, My] for unit shear: Mx' = Fy, My' = -Fx
+        for key, dM in (("open_x", np.array([0.0, 0.0, -1.0])), ("open_y", np.array([0.0, 1.0, 0.0]))):
+            de = Cab @ dM
+            f_node_i = de[0] + de[1] * Y[i] - de[2] * X[i]
+            f_node_j = de[0] + de[1] * Y[j] - de[2] * X[j]
+            fi, fj = self.Et * f_node_i, self.Et * f_node_j  # dN_zz/dz at the wall ends
+            G = 0.5 * b * (fi + fj)  # integral of dN_zz/dz along each wall
+            rhs = np.zeros(n_pts)
+            np.add.at(rhs, j, G)
+            q0 = np.linalg.lstsq(A, rhs, rcond=None)[0]
+            out[key] = q0[:, None] - (fi[:, None] * s + (fj - fi)[:, None] * s**2 / (2.0 * b[:, None]))
+        # closed-cell flows: the null space of the balance matrix
+        _, sv, Vt = np.linalg.svd(A)
+        rank = int(np.sum(sv > 1e-10 * sv[0]))
+        out["loops"] = Vt[rank:]
+        return out
+
+    def shear_torsion_compliance(self, reference=(0.0, 0.0)) -> np.ndarray:
+        """3 x 3 compliance of [Fx, Fy, Mz] to [gamma_x, gamma_y, kappa_z] about ``reference``.
+
+        Minimum complementary energy of the wall shear flows (sum of the integral of
+        q^2 / Gt) plus the walls' own twisting (Mz carried by the plate twisting
+        stiffness GJ_walls), with the closed-cell flows free and the torque in
+        equilibrium. The section warps freely (Saint-Venant torsion, Timoshenko shear).
+        """
+        basis = self.shear_flow_basis(reference)
+        w = basis["w"]
+        loops = basis["loops"]
+        n_c = loops.shape[0]
+        xr, yr = reference
+        P, i = self.points, self.start
+        r_n = (P[i, 0] - xr) * self.tangent[:, 1] - (P[i, 1] - yr) * self.tangent[:, 0]
+        # columns of q (n_walls, 3 Gauss points): Fx, Fy, Mz (no flow), loops
+        cols = [basis["open_x"], basis["open_y"], np.zeros_like(w)] + [np.repeat(l[:, None], 3, axis=1) for l in loops]
+        Q = np.stack([c.ravel() for c in cols], axis=1)
+        Fq = (w / self.Gt[:, None]).ravel()
+        H = Q.T @ (Fq[:, None] * Q)
+        # torque carried by the walls' twisting: T_w = Mz - torque of the shear flows
+        torque = np.array([float(np.sum(c * w * r_n[:, None])) for c in cols])
+        tw = -torque
+        tw[2] = 1.0
+        H += np.outer(tw, tw) / self.GJ_walls
+        if n_c:
+            Hff, Hfc, Hcc = H[:3, :3], H[:3, 3:], H[3:, 3:]
+            return Hff - Hfc @ np.linalg.solve(Hcc, Hfc.T)
+        return H
+
+    def timoshenko_stiffness(self, reference=(0.0, 0.0)) -> np.ndarray:
+        """6 x 6 Timoshenko stiffness about ``reference`` (in the section axes).
+
+        Order (as BeamDyn and the windIO files): [Fx, Fy, N, Mx, My, Mz] against
+        [gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z], with gamma_x = u_x' - theta_y
+        and gamma_y = u_y' + theta_x. Thin-wall theory: the axial and bending block comes
+        from plane sections with each wall's Et, the shear and torsion block from the
+        shear flows (``shear_torsion_compliance``). Couplings between the two blocks
+        from unbalanced walls are not included (``beam_section_properties`` measures
+        them on the shell model).
+        """
+        K = np.zeros((6, 6))
+        K[2:5, 2:5] = self._axial_bending_stiffness(reference)
+        st = np.linalg.inv(self.shear_torsion_compliance(reference))
+        idx = [0, 1, 5]
+        K[np.ix_(idx, idx)] = 0.5 * (st + st.T)
+        return K
+
+    def vlasov_stiffness(self, reference=(0.0, 0.0)) -> np.ndarray:
+        """7 x 7 Timoshenko-Vlasov stiffness: ``timoshenko_stiffness`` plus the warping DOF.
+
+        The seventh strain is the warping amplitude's gradient, kappa_z' in Vlasov's
+        theory (or phi' in Benscoter's), and its force is the bimoment B. The warping
+        function is taken about the shear centre and orthogonal to extension and bending,
+        so in thin-wall theory B is uncoupled from the other forces and K[6, 6] = EΓ.
+        ``S_warping`` is the extra shear stiffness Benscoter's theory needs for a closed
+        section.
+        """
+        K = np.zeros((7, 7))
+        K[:6, :6] = self.timoshenko_stiffness(reference)
+        K[6, 6] = self.EGamma
+        return K
+
     def contour(self) -> List[Tuple[np.ndarray, np.ndarray]]:
         """(start, end) point pairs of the walls, for plotting."""
         return [(self.points[a], self.points[b]) for a, b in zip(self.start, self.end)]
