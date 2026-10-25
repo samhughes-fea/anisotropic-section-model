@@ -4,7 +4,8 @@ Worked examples that exercise the package end to end, from a single plate
 solve to blade structures. Examples 01–19 cover the laminate mechanics underneath;
 20–26 are blade sections, spar caps and blade segments, with 24 to 26 validating
 them on the IEA 15 MW reference blade; 27 and 28 take torsion beyond Saint-Venant,
-to restrained warping and cross-section distortion. Each one lives in its own folder with
+to restrained warping and cross-section distortion, and 29 takes the section stiffness
+to the Timoshenko 6 × 6 and the Timoshenko-Vlasov 7 × 7. Each one lives in its own folder with
 its script, the figures it produces and a README that walks through the model
 and how to read the results.
 
@@ -43,6 +44,7 @@ and how to read the results.
 | 26 | [Mid-surface meshing](26_mid_surface_meshing/) | Skins on the mould line with offsets or on their mid-surface: thick-tube torsion and six IEA 15 MW stations, for Quad4, flat and curved Quad8 | `BladeBuilder(mesh_surface="mid")`, `BladeMesh.to_mid_surface` |
 | 27 | [Box spar torsion](27_box_spar_torsion/) | Saint-Venant, Vlasov, Benscoter and GBT on a clamped composite box against closed forms and a shell model: twist, bimoment, warping stress, distortion under a web force couple, ribs | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam` |
 | 28 | [Blade torsion hierarchy](28_blade_torsion_hierarchy/) | A three-cell blade section: Saint-Venant shear flows and GJ, the restrained-warping bimoment at the root, and GBT distortion under torque from skin loads, each against the shell | `ThinWalledSection.from_blade_mesh`, `GeneralizedBeam`, `SectionModes` |
+| 29 | [Timoshenko and Vlasov section stiffness](29_timoshenko_vlasov_stiffness/) | The 6 × 6 (shear) and 7 × 7 (warping) section stiffness from thin-wall theory and from the shell: a composite box spar, shear deflection of short cantilevers, restrained twist, and six IEA 15 MW stations against the published 6 × 6 | `beam_section_properties(warping=True)`, `ThinWalledSection.timoshenko_stiffness`, `transform_beam_stiffness` |
 
 All examples are linear static analyses.
 

@@ -64,12 +64,14 @@ python examples/28_blade_torsion_hierarchy/blade_torsion_hierarchy.py    # about
 |---|---:|---:|
 | `ThinWalledSection` (Saint-Venant, free warping) | 1.730 × 10⁶ | |
 | Shell with ribs every 0.5 m (no distortion), twist rate between 2 and 4 m | 1.732 × 10⁶ | +0.13% |
-| `beam_section_properties` (6 m segment, no ribs) | 1.650 × 10⁶ | −4.6% |
+| `beam_section_properties` (6 m segment, no ribs) | 1.689 × 10⁶ | −2.4% |
+| `beam_section_properties(end_ribs=0.2)` (ribs over the end fifths) | 1.726 × 10⁶ | −0.2% |
 
 The thin-wall Saint-Venant GJ and the shell agree once ribs keep the section in shape.
-`beam_section_properties` reads 4.6% lower. That is not an error in either model: its
-clamped root and rigid tip restrain warping, and the section distorts between them,
-which the measured twist includes. The gap shrinks as the segment gets longer. Use the thin-wall GJ as the Saint-Venant value. The shear centre
+`beam_section_properties` with no ribs reads 2.4% lower. That is not an error in either
+model: its clamped root and rigid tip restrain warping, and the section distorts between
+them, which the measured twist includes. The gap shrinks as the segment gets longer, and
+`end_ribs=0.2` removes it by holding the end fifths of the segment in shape (example 29). The shear centre
 sits 8 mm aft of the pitch axis.
 
 ### 2 · Restrained warping (tip torque through a tip rib)

@@ -132,8 +132,8 @@ def test_shell_6x6_and_7x7_match_thin_wall_theory():
     """
     card = MaterialCard("nu0", ElasticProperties3D.transversely_isotropic(E, E, 0.0, E / 2, 0.0),
                         StrengthProperties3D(1e12, 1e12, 1e12, 1e12, 1e12), density=2700.0)
-    box = shell_box(Laminate([Ply(card, T, 0.0)]), nz=16)
-    p = beam_section_properties(box, reference=(0.05, 0.02), warping=True)
+    box = shell_box(Laminate([Ply(card, T, 0.0)]), nz=32)
+    p = beam_section_properties(box, reference=(0.05, 0.02), warping=True, end_ribs=0.2)
     s = ThinWalledSection.from_blade_mesh(box, z=1.5)
     Cs, Ct = p.compliance_6x6, np.linalg.inv(s.timoshenko_stiffness((0.05, 0.02)))
     assert np.diag(Cs) == pytest.approx(np.diag(Ct), rel=0.005)
@@ -142,4 +142,7 @@ def test_shell_6x6_and_7x7_match_thin_wall_theory():
     # the classical 4 x 4 is the 6 x 6 with the shear forces free
     assert np.allclose(p.stiffness, np.linalg.inv(Cs[2:, 2:]))
     assert p.stiffness_7x7.shape == (7, 7)
-    assert p.EGamma == pytest.approx(s.EGamma, rel=0.12)
+    # the restrained twist of the rigid-section shell gives EΓ and Benscoter's S
+    # (converged with the span mesh: -3.5% and -10%)
+    assert p.EGamma == pytest.approx(s.EGamma, rel=0.06)
+    assert p.warping_shear_stiffness == pytest.approx(s.S_warping, rel=0.15)

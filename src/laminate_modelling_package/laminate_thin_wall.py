@@ -27,10 +27,12 @@ about that normal, so a wall cut from a shell model with the beam axis as the ma
 axis keeps its plies. The laminate ABD of a wall is taken about its own mid-plane (any
 offset is used only to place the wall).
 
-Wall stiffness: membrane resultants act with no hoop stress (N_ss = 0) and the wall
-free to bend, which gives the effective axial stiffness Et = 1 / a11 and membrane
-shear stiffness Gt = 1 / a66 used here (a = inverse ABD), and the plate stiffnesses
-D11 = 1 / d11 (secondary warping) and D66 = 1 / d66 (wall twisting). Couplings
+Wall stiffness: membrane resultants act with no hoop stress (N_ss = 0) and no
+curvature of the wall itself, which gives the effective axial stiffness
+Et = 1 / (A^-1)_11 and membrane shear stiffness Gt = 1 / (A^-1)_66 used here
+(``wall_bending="free"`` lets the wall bend too: 1 / a11, 1 / a66 with a the inverse
+ABD), and the plate stiffnesses D11 = 1 / d11 (secondary warping) and D66 = 1 / d66
+(wall twisting). Couplings
 between extension, shear and bending of an unbalanced wall are carried in full by
 ``GeneralizedBeam``; the closed-form properties here use the uncoupled values.
 """
@@ -82,9 +84,18 @@ class ThinWalledSection:
         (n, 2) wall-midline coordinates (x, y).
     walls:
         ``Wall`` objects, or (start, end, laminate[, name]) tuples.
+    wall_bending:
+        How a wall's membrane stiffness treats its bending. ``"restrained"`` (the
+        default): the walls stretch and shear with no curvature of their own, as the
+        walls of a beam section do (beam bending and torsion curve a wall only to
+        second order), so Et = 1 / (A^-1)_11 and Gt = 1 / (A^-1)_66. ``"free"``: each
+        wall also bends freely, Et = 1 / a11, Gt = 1 / a66 from the full ABD inverse,
+        which is too soft for an unsymmetric wall (a sandwich panel with one thick
+        face, a cap on one side of a core): at r = 44 m on the IEA 15 MW blade it
+        reads GJ 16% low. The two are the same for symmetric walls.
     """
 
-    def __init__(self, points, walls: Sequence):
+    def __init__(self, points, walls: Sequence, wall_bending: str = "restrained"):
         self.points = np.asarray(points, dtype=float).reshape(-1, 2)
         ws = []
         for w in walls:
@@ -124,12 +135,18 @@ class ThinWalledSection:
         self.tangent = d / self.length[:, None]
         self.normal = np.column_stack([-self.tangent[:, 1], self.tangent[:, 0]])  # z x s
         self.stiffness = np.array([condensed_wall_stiffness(w.laminate) for w in ws])  # (n_walls, 5, 5)
-        compliances = []
+        if wall_bending not in ("restrained", "free"):
+            raise ValueError("wall_bending must be 'restrained' or 'free'")
+        self.wall_bending = wall_bending
+        compliances, membrane = [], []
         for w in ws:
-            compliances.append(np.linalg.inv(integrate_abd(Laminate(w.laminate.plies))))
+            abd = integrate_abd(Laminate(w.laminate.plies))
+            compliances.append(np.linalg.inv(abd))
+            membrane.append(np.linalg.inv(abd[:3, :3]))
         F = np.array(compliances)
-        self.Et = 1.0 / F[:, 0, 0]
-        self.Gt = 1.0 / F[:, 2, 2]
+        Fm = np.array(membrane) if wall_bending == "restrained" else F
+        self.Et = 1.0 / Fm[:, 0, 0]
+        self.Gt = 1.0 / Fm[:, 2, 2]
         self.D11 = 1.0 / F[:, 3, 3]
         self.D66 = 1.0 / F[:, 5, 5]
         self.thickness = np.array([w.laminate.thickness for w in ws])
@@ -138,7 +155,7 @@ class ThinWalledSection:
 
     # ------------------------------------------------------------ construction
     @classmethod
-    def from_segments(cls, segments: Sequence, tol: float = 1e-9) -> "ThinWalledSection":
+    def from_segments(cls, segments: Sequence, tol: float = 1e-9, **options) -> "ThinWalledSection":
         """Build from (p0, p1, laminate[, name]) segments, merging coincident end points."""
         pts: List[np.ndarray] = []
         walls = []
@@ -154,10 +171,10 @@ class ThinWalledSection:
         for seg in segments:
             i, j = index(seg[0]), index(seg[1])
             walls.append(Wall(i, j, seg[2], seg[3] if len(seg) > 3 else ""))
-        return cls(np.array(pts), walls)
+        return cls(np.array(pts), walls, **options)
 
     @classmethod
-    def from_blade_mesh(cls, blade, z: Optional[float] = None, tol: float = 1e-9) -> "ThinWalledSection":
+    def from_blade_mesh(cls, blade, z: Optional[float] = None, tol: float = 1e-9, **options) -> "ThinWalledSection":
         """The section of a ``BladeMesh`` (or any shell ``FEAMesh`` along z) at mesh section ``z``.
 
         Every shell element edge that lies on the section plane becomes one wall per
@@ -226,7 +243,7 @@ class ThinWalledSection:
             if t[0] * n3[1] - t[1] * n3[0] < 0.0:  # (z x t) . n3 < 0: run the wall the other way
                 i, j = j, i
             walls.append(Wall(i, j, lam, name))
-        section = cls(P, walls)
+        section = cls(P, walls, **options)
         section.mesh_nodes = order  # mesh node id of each section point
         section.z = float(z)
         return section
