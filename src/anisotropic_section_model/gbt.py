@@ -66,9 +66,9 @@ except ImportError:  # pragma: no cover - dense fallback
     _sp = None
     _spla = None
 
-from .laminate_kinematics import integrate_abd
-from .laminate_mechanics import Laminate
-from .laminate_thin_wall import ThinWalledSection
+from composite_laminate_model.laminate_kinematics import integrate_abd
+from composite_laminate_model.laminate_mechanics import Laminate
+from .thin_wall import ThinWalledSection
 
 _GAUSS_S = np.polynomial.legendre.leggauss(4)
 
