@@ -63,7 +63,7 @@ python examples/28_blade_torsion_hierarchy/blade_torsion_hierarchy.py    # about
 | GJ [N m²] | | Against thin-wall |
 |---|---:|---:|
 | `ThinWalledSection` (Saint-Venant, free warping) | 1.730 × 10⁶ | |
-| Shell with ribs every 0.5 m (no distortion), twist rate between 2 and 4 m | 1.732 × 10⁶ | +0.13% |
+| Shell with ribs every 0.5 m (no distortion), twist rate between 2 and 4 m | 1.732 × 10⁶ | +0.14% |
 | `beam_section_properties` (6 m segment, no ribs) | 1.650 × 10⁶ | −4.6% |
 
 The thin-wall Saint-Venant GJ and the shell agree once ribs keep the section in shape.
@@ -76,12 +76,12 @@ sits 8 mm aft of the pitch axis.
 
 | | Root bimoment [N m²] | Tip twist [mrad] |
 |---|---:|---:|
-| Saint-Venant | 0 | 3.4689 |
-| Vlasov | −33.8 | 3.4493 |
-| Benscoter | −5.75 | 3.4655 |
-| GBT, rigid section | −5.52 | 3.4624 |
-| GBT + distortion | −2.24 | 3.4654 |
-| Shell | | 3.4624 |
+| Saint-Venant | 0 | 3.4686 |
+| Vlasov | −33.8 | 3.4491 |
+| Benscoter | −5.75 | 3.4653 |
+| GBT, rigid section | −5.52 | 3.4622 |
+| GBT + distortion | −2.24 | 3.4651 |
+| Shell | | 3.4618 |
 | First element row (z = 0.125 m): shell / GBT + distortion | −1.79 / −1.75 | |
 
 - The section is closed and stiff in shear, so warping restraint barely changes the
@@ -98,9 +98,9 @@ sits 8 mm aft of the pitch axis.
 | GBT level | Twist at z = 5 m [mrad] | Tip twist [mrad] |
 |---|---:|---:|
 | Rigid section | 2.89 | 3.46 |
-| 1 distortional mode | 16.44 | 22.38 |
-| 2 modes | 21.23 | 57.38 |
-| 3 modes | 21.24 | 57.40 |
+| 1 distortional mode | 16.44 | 22.37 |
+| 2 modes | 21.23 | 57.36 |
+| 3 modes | 21.24 | 57.39 |
 | 4 modes | 19.83 | 70.33 |
 | 5 modes | 19.83 | 70.34 |
 | 8 modes | 21.80 | 78.47 |
