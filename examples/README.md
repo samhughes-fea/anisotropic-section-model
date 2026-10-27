@@ -45,6 +45,8 @@ and how to read the results.
 | 27 | [Box spar torsion](27_box_spar_torsion/) | Saint-Venant, Vlasov, Benscoter and GBT on a clamped composite box against closed forms and a shell model: twist, bimoment, warping stress, distortion under a web force couple, ribs | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam` |
 | 28 | [Blade torsion hierarchy](28_blade_torsion_hierarchy/) | A three-cell blade section: Saint-Venant shear flows and GJ, the restrained-warping bimoment at the root, and GBT distortion under torque from skin loads, each against the shell | `ThinWalledSection.from_blade_mesh`, `GeneralizedBeam`, `SectionModes` |
 | 29 | [Timoshenko and Vlasov section stiffness](29_timoshenko_vlasov_stiffness/) | The 6 × 6 (shear) and 7 × 7 (warping) section stiffness from thin-wall theory and from the shell: a composite box spar, shear deflection of short cantilevers, restrained twist, and six IEA 15 MW stations against the published 6 × 6 | `beam_section_properties(warping=True)`, `ThinWalledSection.timoshenko_stiffness`, `transform_beam_stiffness` |
+| 30 | [Box spar bending and axial load](30_box_spar_bending_axial/) | Beyond Euler-Bernoulli on a composite box: shear deflection at L/h = 6, shear lag in the caps, distortion under a cap pressure, and the diffusion and Poisson end effects of an axial load | `TimoshenkoBeam`, `GeneralizedBeam(extensible=True)`, `ThinWalledSection.timoshenko_stiffness` |
+| 31 | [Blade bending and axial hierarchy](31_blade_bending_axial_hierarchy/) | The same hierarchy on a three-cell blade section: flapwise tip force, shear lag across the spar caps at the root, skin suction and ribs, and an axial load fed into the caps alone | `TimoshenkoBeam`, `GeneralizedBeam`, `beam_section_properties` |
 
 All examples are linear static analyses, and each one compares its results with a
 reference: a closed-form or series solution, exact 3D elasticity, laminate or
@@ -78,7 +80,8 @@ examples/
 │   ├── analytical.py           Navier series solutions used as references
 │   ├── membrane.py             one-element membrane cell for failure envelopes and sweeps
 │   ├── iea15mw.py              IEA 15 MW blade stations as BladeBuilder regions and laminates
-│   └── torsion.py              box spar shell, ribs, shear-flow torques, shell twist and bimoment
+│   └── torsion.py              box spar shell, ribs, shear-flow torques, shell twist, bimoment
+│                                and wall stress resultants (examples 27-31)
 └── NN_<name>/
     ├── README.md               walkthrough with the figures
     ├── <name>.py               the script

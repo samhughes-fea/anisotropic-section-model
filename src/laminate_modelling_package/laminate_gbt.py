@@ -511,6 +511,75 @@ class GeneralizedBeam:
             self._loads[self._u_index(e + 1, True)[2]] -= h * h / 12.0 * torque_per_length
         return self
 
+    def add_section_force(self, z: float, force: Sequence[float], point: Optional[Sequence[float]] = None
+                          ) -> "GeneralizedBeam":
+        """A shear force (Fx, Fy) at ``z`` through a rib: on the rigid translation modes, with
+        the torque of its offset from the shear centre when ``point`` = (x, y) is given.
+        It does no work on the distortional modes (a rib rigid in its plane carries it in)."""
+        Fx, Fy = float(force[0]), float(force[1])
+        idx = self._u_index(self._node(z), False)
+        self._loads[idx[0]] += Fx
+        self._loads[idx[1]] += Fy
+        if point is not None:
+            xs, ys = self.section.shear_centre
+            self._loads[idx[2]] += (point[0] - xs) * Fy - (point[1] - ys) * Fx
+        return self
+
+    def add_axial_force(self, z: float, force: float, distribution: Union[str, Sequence[float]] = "plane",
+                        point: Optional[Sequence[float]] = None) -> "GeneralizedBeam":
+        """An axial force at ``z``: ``distribution="plane"`` spreads it over the section as a
+        uniform strain would (through the modulus-weighted centroid, or with the moments
+        of ``point`` = (x, y) as plane-section stresses); or one weight per section point."""
+        sec = self.section
+        N = self.modes.n_points
+        if isinstance(distribution, str):
+            if distribution != "plane":
+                raise ValueError("distribution must be 'plane' or one weight per section point")
+            # point weights: Et times the contour length around each point
+            w = np.zeros(N)
+            for k in range(len(sec.walls)):
+                w[sec.start[k]] += 0.5 * sec.Et[k] * sec.length[k]
+                w[sec.end[k]] += 0.5 * sec.Et[k] * sec.length[k]
+            if point is not None:
+                # plane stresses eps = a + b x + c y carrying N with moments of the offset point
+                P = sec.points
+                A = np.column_stack([np.ones(N), P[:, 0], P[:, 1]])
+                G = A.T @ (w[:, None] * A)
+                rhs = np.array([1.0, point[0], point[1]])
+                w = w * (A @ np.linalg.solve(G, rhs))
+        else:
+            w = np.asarray(distribution, dtype=float)
+            if w.shape != (N,):
+                raise ValueError("one weight per section point")
+        fw = float(force) * w / w.sum()
+        self._loads[self._w_index(self._warp_node(z))] += self.modes.warping.T @ fw
+        return self
+
+    def add_distributed_wall_load(self, walls: Sequence[int], force_per_length: Sequence[float],
+                                  z_range: Optional[Tuple[float, float]] = None) -> "GeneralizedBeam":
+        """A uniform load per unit span (Fx, Fy) spread evenly over ``walls`` (a pressure on a
+        skin, for example), over the elements in ``z_range`` (the whole span by default)."""
+        walls = [int(w) for w in walls]
+        total = float(sum(self.section.length[w] for w in walls))
+        f = np.zeros(4 * self.modes.n_points)
+        F = np.asarray(force_per_length, dtype=float)[:2]
+        for p in self.modes.points_:
+            if p.wall in walls:
+                t, n = self.section.tangent[p.wall], self.section.normal[p.wall]
+                f += p.weight / total * ((F @ t) * p.v + (F @ n) * p.un)
+        g = self.modes.in_plane.T @ f[self.modes.n_points:]
+        z0, z1 = (self.z_nodes[0], self.z_nodes[-1]) if z_range is None else z_range
+        for e in range(self.n_elements):
+            za, zb = self.z_nodes[e], self.z_nodes[e + 1]
+            if 0.5 * (za + zb) < z0 or 0.5 * (za + zb) > z1:
+                continue
+            h = zb - za
+            self._loads[self._u_index(e, False)] += 0.5 * h * g
+            self._loads[self._u_index(e + 1, False)] += 0.5 * h * g
+            self._loads[self._u_index(e, True)] += h * h / 12.0 * g
+            self._loads[self._u_index(e + 1, True)] -= h * h / 12.0 * g
+        return self
+
     def add_point_force(self, z: float, point: Union[int, Sequence[float]], force: Sequence[float]) -> "GeneralizedBeam":
         """Force (Fx, Fy[, Fz]) at a section point (an index, or the nearest point to (x, y))."""
         k = self._point_index(point)
