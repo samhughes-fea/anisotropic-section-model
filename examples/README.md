@@ -37,9 +37,9 @@ and how to read the results.
 | 21 | [Spar cap ply drops](21_spar_cap_ply_drops/) | A tapered, twisted blade whose caps come from a ply book with ply drops, against a thin-walled beam; per-ply failure; ParaView output | `Layup`, `PlyDefinition`, `write_vtu` |
 | 22 | [Ply drop in 3D](22_ply_drop_solid_detail/) | Interlaminar shear and peel at a cap ply drop from layered Hex20 solids inside a shell model; equilibrium checks and a mesh study of the corner singularity | `solid_block`, `merge_coincident_nodes`, `couple_shell_to_solid` |
 | 23 | [Sandwich blade segment](23_blade_segment/) | Foam-cored panels, caps and webs under pressure, gravity and outboard loads; shell against beam | `distributing_link`, `beam_section_properties`, `write_vtu` |
-| 24 | [IEA 15 MW section properties](24_iea15mw_section_properties/) | The published reference blade at six stations against PreComp and the published data; torsion of offset skins on flat and curved shells | `BladeBuilder`, `beam_section_properties` |
+| 24 | [IEA 15 MW section properties](24_iea15mw_section_properties/) | The published reference blade at six stations against PreComp and the published data; why skins are meshed on their mid-surface (torsion of offset skins on flat shells) | `BladeBuilder`, `beam_section_properties` |
 | 25 | [CalculiX on a blade segment](25_blade_calculix_crosscheck/) | A 20 m IEA 15 MW segment under operating loads: deflection, twist and ply stresses against CalculiX S8R | `CalculiXKernelAdapter`, `AnalysisModel` |
-| 26 | [Mid-surface meshing](26_mid_surface_meshing/) | Skins on the mould line with offsets or on their mid-surface: thick-tube torsion and six IEA 15 MW stations, for Quad4, flat and curved Quad8 | `BladeBuilder(mesh_surface="mid")`, `BladeMesh.to_mid_surface` |
+| 26 | [Mid-surface meshing](26_mid_surface_meshing/) | Skins on the mould line with offsets or on their mid-surface: thick-tube torsion and six IEA 15 MW stations, for Quad4, flat and curved Quad8 | `BladeBuilder(mesh_surface=...)`, `BladeMesh.to_mid_surface` |
 
 All examples are linear static analyses, and each one compares its results with a
 reference: a closed-form or series solution, exact 3D elasticity, laminate or
