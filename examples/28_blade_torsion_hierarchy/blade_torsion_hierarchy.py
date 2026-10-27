@@ -126,12 +126,13 @@ def main():
 
     # ---------------------------------------------------------------- 1. Saint-Venant
     props = beam_section_properties(blade)
+    props_ribs = beam_section_properties(blade, end_ribs=0.2)
     mesh_r, _, sol_r = shell_case(blade, sec, ribs_at(0.5, tip=True), "rib")
     tw_r = np.array([0.0] + [shell_section_motion(sol_r, mesh_r, sections[float(z)], float(z)).twist for z in zs[1:]])
     mid = (zs >= 2.0) & (zs <= 4.0)
     rate = np.polyfit(zs[mid], tw_r[mid], 1)[0]
     gj = {"thin-wall Saint-Venant": sec.GJ, "shell, ribs every 0.5 m": TORQUE / rate,
-          "beam_section_properties (no ribs)": props.GJ}
+          "beam_section_properties (no ribs)": props.GJ, "beam_section_properties (end ribs)": props_ribs.GJ}
     print("GJ [N m2]: " + ", ".join(f"{k} {v:.4g} ({v / sec.GJ - 1:+.2%})" for k, v in gj.items()))
 
     # ---------------------------------------------------------------- 2. restrained warping, tip rib only
