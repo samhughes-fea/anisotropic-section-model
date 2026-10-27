@@ -7,7 +7,7 @@ distort in their own plane. This example takes the three-cell section of example
 and adds each contribution in turn. Each layer is checked against a shell model of
 the same blade segment.
 
-![The section: Saint-Venant shear flows in the three cells, the warping function, and the softest distortional modes](figures/blade_torsion_section.png)
+![The section: Saint-Venant shear flows in the three cells, the warping function, and distortional modes 1 to 5, softest first](figures/blade_torsion_section.png)
 
 ![1 · Saint-Venant twist and GJ. 2 · The bimoment near the clamped root and the warping stresses round the skin](figures/blade_torsion_warping.png)
 
@@ -102,7 +102,9 @@ sits 8 mm aft of the pitch axis.
 | Rigid section | 2.89 | 3.46 |
 | 1 distortional mode | 16.44 | 22.38 |
 | 2 modes | 21.23 | 57.38 |
+| 3 modes | 21.24 | 57.40 |
 | 4 modes | 19.83 | 70.33 |
+| 5 modes | 19.83 | 70.34 |
 | 8 modes | 21.80 | 78.47 |
 | All 167 modes | 21.94 | 80.59 |
 | All modes + wall stretching | 22.06 | 86.98 |
@@ -118,8 +120,11 @@ sits 8 mm aft of the pitch axis.
 - Put into the skins instead of through a rib, the same torque twists the tip 25
   times more. Almost all of that is the section distorting near the load: the
   trailing-edge cell shears and the panels bow (right-hand panel).
-- The distortional modes converge in order. Eight modes give the twist 1 m from the
-  load within about 1%. At the loaded section itself, the skins also stretch round the
+- The distortional modes converge in order. Modes 1, 2 and 4 are antisymmetric and
+  carry the response: mode 1 racks the whole section, modes 2 and 4 add waves in the
+  trailing-edge panels. Modes 3 and 5 are symmetric (the trailing-edge panels breathe),
+  so the antisymmetric skin couple does almost no work on them and they change the twist
+  by under 0.05%. Eight modes give the twist 1 m from the load within about 1%. At the loaded section itself, the skins also stretch round the
   contour under the local loads. Adding that (the extensible walls) brings the tip
   within 1.4% of the shell. Classical inextensible GBT is 6% stiff there.
 - Ribs confine the distortion to the bay that carries the load (middle panel, logarithmic
