@@ -159,22 +159,22 @@ thin-wall and published values against the shell.
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | | thin-wall | published | thin-wall | published | thin-wall | published | thin-wall | published | thin-wall |
 | 4.0 | −7.3% | −7.3% | −7.3% | −7.4% | 0.0% | −0.1% | 0.0% | 0.0% | (tube) |
-| 28.2 | −0.8% | +7.3% | +0.6% | +3.8% | +0.1% | +10.9% | +0.2% | −4.9% | +7.2% |
-| 44.3 | 0.0% | +6.6% | +1.3% | −2.7% | +0.4% | +2.1% | +1.0% | −7.3% | +6.1% |
-| 64.5 | −0.1% | +8.9% | +0.8% | −3.1% | +0.2% | +6.0% | +1.5% | −7.9% | +6.5% |
-| 84.7 | 0.0% | +13.1% | +3.4% | −15.3% | +0.4% | +11.1% | +1.5% | −6.3% | +4.5% |
-| 104.8 | −0.4% | +7.6% | +1.8% | −10.8% | +0.3% | +22.1% | +0.2% | +1.0% | −1.8% |
+| 28.2 | −0.9% | +6.9% | +0.5% | +3.7% | 0.0% | +10.5% | +0.1% | −5.5% | +7.5% |
+| 44.3 | 0.0% | +6.4% | +1.2% | −2.8% | +0.2% | +1.7% | +0.4% | −7.2% | +4.9% |
+| 64.5 | 0.0% | +8.7% | +0.4% | −3.2% | +0.3% | +5.7% | +0.5% | −7.8% | +3.9% |
+| 84.7 | +0.1% | +12.7% | +2.0% | −15.5% | +0.3% | +10.5% | +0.5% | −6.3% | +1.6% |
+| 104.8 | −0.5% | +7.2% | +1.5% | −10.9% | +0.1% | +21.5% | +0.1% | +1.0% | −2.3% |
 
 - **The package's two methods agree.** Outboard of the root, thin-wall theory and
-  the shell agree within 1% on flapwise shear, GJ and EA (1.5% on EA), within 3.4% on
-  edgewise shear, and within 7% on EΓ, on real blade sections with sandwich panels,
+  the shell agree within 1% on flapwise shear, GJ and EA, within 2% on
+  edgewise shear, and within 8% on EΓ, on real blade sections with sandwich panels,
   three cells and a flatback.
 - **The root tube** is where the shell is 7% stiffer in shear than both thin-wall
   theory and the published data: its triax glass has ν ≈ 0.4, and Cowper's thin-tube
   shear factor 2(1 + ν)/(4 + 3ν) is 7.5% above the energy value of 1/2. The published
   data sides with the energy definition. Torsion and EA agree to 0.1%.
 - **The published 6 × 6** is 7–13% stiffer than both in flapwise shear, between 4%
-  stiffer and 15% softer edgewise, and 2–22% stiffer in GJ outboard, with EA 5–8% lower
+  stiffer and 16% softer edgewise, and 2–22% stiffer in GJ outboard, with EA 5–8% lower
   except at the outermost station. Its couplings match the shell's in sign and size (at
   r = 64.5 m: shear-twist −0.25 against −0.26, the γx–γy coupling small in all three).
   The published data came from a different section model of the same layup, so these
@@ -183,7 +183,7 @@ thin-wall and published values against the shell.
   0.4% of the chord), and sits 1–3% of the chord further forward outboard; the
   two package methods agree within 0.2% of the chord.
 - **EΓ** is not in the published data. The shell's rigid-section fit and thin-wall
-  theory agree within 7% at every station.
+  theory agree within 8% at every station.
 
 ## Notes
 
