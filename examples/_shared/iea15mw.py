@@ -82,6 +82,11 @@ def airfoil(st):
     return Airfoil(pts, f"IEA 15 MW r = {st['r']:.1f} m")
 
 
+MERGE_CHORD = 0.003  # sector boundaries closer than this (in chords) are merged: slivers between
+# them, much narrower than the skin is thick, turn inside out when CalculiX expands
+# the mid-surface shells into bricks
+
+
 def build_segment(st, length, n_span, h_perimeter, element, tip_chord=None, twist=(0.0, 0.0), **builder_options):
     """A shell segment with the section of station ``st``, meshed on its PreComp sector boundaries.
 
@@ -99,7 +104,7 @@ def build_segment(st, length, n_span, h_perimeter, element, tip_chord=None, twis
     edges = np.unique(np.round(np.concatenate([st["upper"]["loc"], st["lower"]["loc"], [x for x, _ in webs_in]]), 6))
     bounds = [edges[0]]
     for v in edges[1:]:
-        if v - bounds[-1] > 2e-4:
+        if v - bounds[-1] > MERGE_CHORD:
             bounds.append(v)
     bounds[-1] = 1.0
 
