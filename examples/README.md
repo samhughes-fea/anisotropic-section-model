@@ -3,7 +3,8 @@
 Worked examples that exercise the package end to end, from a single plate
 solve to blade structures. Examples 01–19 cover the laminate mechanics underneath;
 20–26 are blade sections, spar caps and blade segments, with 24 to 26 validating
-them on the IEA 15 MW reference blade. Each one lives in its own folder with
+them on the IEA 15 MW reference blade; 27 and 28 take torsion beyond Saint-Venant,
+to restrained warping and cross-section distortion. Each one lives in its own folder with
 its script, the figures it produces and a README that walks through the model
 and how to read the results.
 
@@ -40,6 +41,8 @@ and how to read the results.
 | 24 | [IEA 15 MW section properties](24_iea15mw_section_properties/) | The published reference blade at six stations against PreComp and the published data; why skins are meshed on their mid-surface (torsion of offset skins on flat shells) | `BladeBuilder`, `beam_section_properties` |
 | 25 | [CalculiX on a blade segment](25_blade_calculix_crosscheck/) | A 20 m IEA 15 MW segment under operating loads: deflection, twist and ply stresses against CalculiX S8R | `CalculiXKernelAdapter`, `AnalysisModel` |
 | 26 | [Mid-surface meshing](26_mid_surface_meshing/) | Skins on the mould line with offsets or on their mid-surface: thick-tube torsion and six IEA 15 MW stations, for Quad4, flat and curved Quad8 | `BladeBuilder(mesh_surface=...)`, `BladeMesh.to_mid_surface` |
+| 27 | [Box spar torsion](27_box_spar_torsion/) | Saint-Venant, Vlasov, Benscoter and GBT on a clamped composite box against closed forms and a shell model: twist, bimoment, warping stress, distortion under a web force couple, ribs | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam` |
+| 28 | [Blade torsion hierarchy](28_blade_torsion_hierarchy/) | A three-cell blade section: Saint-Venant shear flows and GJ, the restrained-warping bimoment at the root, and GBT distortion under torque from skin loads, each against the shell | `ThinWalledSection.from_blade_mesh`, `GeneralizedBeam`, `SectionModes` |
 
 All examples are linear static analyses, and each one compares its results with a
 reference: a closed-form or series solution, exact 3D elasticity, laminate or
@@ -72,7 +75,8 @@ examples/
 │   ├── plotting.py             plot style, colours, save(), simply_supported()
 │   ├── analytical.py           Navier series solutions used as references
 │   ├── membrane.py             one-element membrane cell for failure envelopes and sweeps
-│   └── iea15mw.py              IEA 15 MW blade stations as BladeBuilder regions and laminates
+│   ├── iea15mw.py              IEA 15 MW blade stations as BladeBuilder regions and laminates
+│   └── torsion.py              box spar shell, ribs, shear-flow torques, shell twist and bimoment
 └── NN_<name>/
     ├── README.md               walkthrough with the figures
     ├── <name>.py               the script
