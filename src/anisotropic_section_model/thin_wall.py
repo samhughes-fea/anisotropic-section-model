@@ -70,6 +70,32 @@ def condensed_wall_stiffness(laminate: Laminate) -> np.ndarray:
     return K[np.ix_(keep, keep)] - np.outer(K[keep, 1], K[1, keep]) / K[1, 1]
 
 
+def _chain(strips, tol):
+    """Order open polylines into one closed loop: [(label, xy, reversed)], or None."""
+    if not strips:
+        return None
+    left = list(strips)
+    label, xy = left.pop(0)
+    out = [(label, xy, False)]
+    end = xy[-1]
+    while left:
+        for k, (lb, p) in enumerate(left):
+            if np.linalg.norm(p[0] - end) <= tol:
+                out.append((lb, p, False))
+                end = p[-1]
+                break
+            if np.linalg.norm(p[-1] - end) <= tol:
+                out.append((lb, p, True))
+                end = p[0]
+                break
+        else:
+            return None
+        left.pop(k)
+    if np.linalg.norm(end - xy[0]) > tol:
+        return None
+    return out
+
+
 def _line_integral(fi, fj, gi, gj, b):
     """Integral of the product of two functions linear along a wall of length b."""
     return b / 6.0 * (2.0 * fi * gi + fi * gj + fj * gi + 2.0 * fj * gj)
@@ -246,6 +272,113 @@ class ThinWalledSection:
         section = cls(P, walls, **options)
         section.mesh_nodes = order  # mesh node id of each section point
         section.z = float(z)
+        return section
+
+    @classmethod
+    def from_geometry(cls, cut, laminates, thickness_tol: float = 0.01, **options) -> "ThinWalledSection":
+        """The section of a ``blade_geometry_model.SectionCut`` (``BladeGeometry.section_at(z)``).
+
+        Walls follow the cut's wall midlines, one wall per midline segment, and take
+        their laminate by label from ``laminates``: the full label
+        (``"skin_suction_surface:bay_0"``), then its region (``"skin_suction_surface"``),
+        then its kind (``"skin"``, ``"web"``, ``"cap"``). A spar cap is merged with the
+        skin it is bonded to: along the bond the wall is the skin and cap stacked (cap
+        plies inside, skin plies outside) on their combined mid-surface, named after
+        the cap, as a cap laid on a skin is in a shell model. Laminates list their plies
+        from the inside of the section out: skin and cap normals point out of the
+        section, web normals towards the trailing edge.
+
+        The cut's skin and cap thicknesses place the walls, so each skin and cap
+        laminate must be within ``thickness_tol`` of them (webs end on the skin
+        midlines whatever their thickness, so a web laminate may differ).
+        """
+        tol = 1e-9 * max(1.0, max(float(np.abs(w.xy).max()) for w in cut.walls))
+
+        def laminate_for(wall):
+            for key in (wall.label, wall.label.split(":")[0], wall.kind):
+                if key in laminates:
+                    lam = laminates[key]
+                    break
+            else:
+                raise KeyError(f"no laminate for wall '{wall.label}' (tried '{wall.label}', "
+                               f"'{wall.label.split(':')[0]}', '{wall.kind}')")
+            if wall.kind != "web" and abs(lam.thickness - wall.thickness) > thickness_tol * wall.thickness:
+                raise ValueError(f"wall '{wall.label}' is {wall.thickness * 1e3:.4g} mm thick in the geometry but its "
+                                 f"laminate is {lam.thickness * 1e3:.4g} mm")
+            return lam
+
+        pts: List[np.ndarray] = []
+        lookup: Dict[Tuple[int, int], List[int]] = {}
+
+        def index(p):
+            key = (int(round(p[0] / (100 * tol))), int(round(p[1] / (100 * tol))))
+            for dk in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
+                for k in lookup.get((key[0] + dk[0], key[1] + dk[1]), ()):
+                    if np.linalg.norm(pts[k] - p) <= tol:
+                        return k
+            pts.append(np.array(p, float))
+            lookup.setdefault(key, []).append(len(pts) - 1)
+            return len(pts) - 1
+
+        skins = [w for w in cut.walls if w.kind == "skin"]
+        webs = [w for w in cut.walls if w.kind == "web"]
+        caps = [w for w in cut.walls if w.kind == "cap"]
+        # skins: orient every skin so its laminate normal (z x s) points out of the section
+        flip = {w.label: False for w in skins}
+        chain = _chain([(w.label, w.xy) for w in skins], tol)
+        if chain is not None:
+            loop = np.vstack([w_xy[::-1] if rev else w_xy for _, w_xy, rev in chain])
+            area = 0.5 * np.sum(loop[:, 0] * np.roll(loop[:, 1], -1) - np.roll(loop[:, 0], -1) * loop[:, 1])
+            for label, _, rev in chain:
+                flip[label] = rev != (area > 0.0)  # counter-clockwise: z x s points in
+        # caps: which skin vertices carry which cap, and where the stacked wall's mid-surface lies
+        capped: Dict[Tuple[str, int], Tuple[str, Laminate]] = {}
+        moved: Dict[Tuple[str, int], np.ndarray] = {}
+        skin_of = {w.label: w for w in skins}
+        for cap in caps:
+            lam_c = laminate_for(cap)
+            for host_label, (ic, ih) in cap.bonds.items():
+                host = skin_of.get(host_label)
+                if host is None:
+                    continue
+                f = cap.thickness / (cap.thickness + host.thickness)
+                for a, b in zip(ic, ih):
+                    capped[(host_label, int(b))] = (cap.label, lam_c)
+                    moved[(host_label, int(b))] = host.xy[b] + f * (cap.xy[a] - host.xy[b])
+        walls = []
+        shift: Dict[int, np.ndarray] = {}
+        for w in skins:
+            lam_s = laminate_for(w)
+            ids = [index(p) for p in w.xy]
+            for v, k in enumerate(ids):
+                if (w.label, v) in moved:
+                    shift[k] = moved[(w.label, v)]
+            for v in range(len(ids) - 1):
+                i, j = ids[v], ids[v + 1]
+                if i == j:
+                    continue
+                ca, cb = capped.get((w.label, v)), capped.get((w.label, v + 1))
+                if ca is not None and cb is not None and ca[0] == cb[0]:
+                    lam, name = Laminate(ca[1].plies + lam_s.plies, f"{ca[1].name}+{lam_s.name}"), ca[0]
+                else:
+                    lam, name = lam_s, w.label
+                walls.append(Wall(j, i, lam, name) if flip[w.label] else Wall(i, j, lam, name))
+        t = np.radians(getattr(cut, "twist", 0.0))
+        chord_dir = np.array([np.cos(t), -np.sin(t)])
+        for w in webs:
+            lam = laminate_for(w)
+            ids = [index(p) for p in w.xy]
+            for i, j in zip(ids[:-1], ids[1:]):
+                if i == j:
+                    continue
+                d = pts[j] - pts[i]
+                normal = np.array([-d[1], d[0]])
+                walls.append(Wall(i, j, lam, w.label) if normal @ chord_dir >= 0.0 else Wall(j, i, lam, w.label))
+        P = np.array(pts)
+        for k, p in shift.items():
+            P[k] = p
+        section = cls(P, walls, **options)
+        section.z = float(getattr(cut, "z", 0.0))
         return section
 
     # ------------------------------------------------------------ analysis
