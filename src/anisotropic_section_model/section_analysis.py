@@ -92,6 +92,15 @@ class SectionAnalysis:
     third_order_rate : ndarray (2, 6) or None
         Element-signed ``R``: the shear-strain rate ``gamma'`` of the Saint-Venant solution
         is ``R @ psi6`` (zero for an uncoupled section).
+    geometric_terms : ndarray (7, 6) or None
+        Second-order section terms ``[N, S_y, S_z, W, V_y, V_z, Q_r]`` (``GEOMETRIC_TERMS``)
+        per unit element-signed section force: ``geometric_terms @ F``. The terms are
+        integrals over the section in its own right-handed ``(y, z)`` and feed the
+        geometric stiffness (``docs/element_library/second_order.md``).
+    benscoter_geometric_terms : ndarray (7, 2) or None
+        The same terms per unit Benscoter strain ``[d, psi']`` (the bimoment's part).
+    third_order_geometric_terms : ndarray (7, 2) or None
+        The same terms per unit third-order strain ``[chi_y, chi_z]``.
     gbt_stiffness : ndarray or None
         Element-signed GBT stiffness, square of size ``6 + 2(n_sv + P) + 3M``, for
         ``[psi6, b'(n_sv + P), b(n_sv + P), a''(M), a'(M), a(M)]``.
@@ -117,6 +126,9 @@ class SectionAnalysis:
     gbt_sv_modes: int = 0
     third_order_stiffness: Optional[npt.NDArray[np.float64]] = None
     third_order_rate: Optional[npt.NDArray[np.float64]] = None
+    geometric_terms: Optional[npt.NDArray[np.float64]] = None
+    benscoter_geometric_terms: Optional[npt.NDArray[np.float64]] = None
+    third_order_geometric_terms: Optional[npt.NDArray[np.float64]] = None
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -151,7 +163,9 @@ class SectionAnalysis:
         ``y_sc``, ``z_sc`` are recorded as the shear centre only; the stiffness
         stays diagonal (each element keeps its own legacy shear-centre handling).
         The third-order shear terms assume a solid rectangle (Reddy's cubic shear
-        warping): ``EI_z / 84`` for ``chi_y`` and ``EI_y / 84`` for ``chi_z``.
+        warping): ``EI_z / 84`` for ``chi_y`` and ``EI_y / 84`` for ``chi_z``. The
+        second-order terms take the centroid at the origin and a doubly symmetric
+        section (Wagner term ``W = N I_p / A``); the cubic shear warping adds none.
         """
         D = np.diag([E * A, E * I_y, E * I_z, kappa * G * A, kappa * G * A, G * J_t])
         C = np.diag([E * A, E * I_y, E * I_z, G * J_t])
@@ -161,8 +175,15 @@ class SectionAnalysis:
         D8 = np.zeros((8, 8))
         D8[:6, :6] = D
         D8[6, 6], D8[7, 7] = E * I_z / 84.0, E * I_y / 84.0
+        H = np.zeros((7, 6))
+        H[0, 0] = 1.0                  # N
+        H[1, 2] = -1.0                 # S_y = int sigma y = -M_z
+        H[2, 1] = 1.0                  # S_z = int sigma z = M_y
+        H[3, 0] = I_p / A if A > 0 else 0.0
+        H[4, 3] = H[5, 4] = 1.0        # V_y, V_z
         return cls(D, C, E * Gamma, (float(y_sc), float(z_sc)), (0.0, 0.0), mass, "isotropic", None,
-                   third_order_stiffness=D8, third_order_rate=np.zeros((2, 6)))
+                   third_order_stiffness=D8, third_order_rate=np.zeros((2, 6)),
+                   geometric_terms=H @ ELEMENT_SIGN, third_order_geometric_terms=np.zeros((7, 2)))
 
     @classmethod
     def from_thin_walled(
@@ -191,6 +212,11 @@ class SectionAnalysis:
             R3 = analysis.third_order_rate @ ELEMENT_SIGN
         except ValueError:
             KB, w_inertia, K3, R3 = None, 0.0, None, None
+        H = analysis.geometric_terms @ ELEMENT_SIGN
+        try:
+            XB, X3 = analysis.benscoter_geometric_terms, analysis.third_order_geometric_terms
+        except ValueError:
+            XB = X3 = None
         K_gbt = M_gbt = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
@@ -221,6 +247,9 @@ class SectionAnalysis:
             int(n_sv),
             K3,
             R3,
+            H,
+            XB,
+            X3,
         )
         if M_gbt is not None:
             # rigid block with the walls' own rotary inertia, as mass_matrix()

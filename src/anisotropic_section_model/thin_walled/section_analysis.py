@@ -104,6 +104,8 @@ STRAINS: Tuple[str, ...] = ("eps", "kappa_y", "kappa_z", "gamma_xy", "gamma_xz",
 FORCES: Tuple[str, ...] = ("N", "M_y", "M_z", "V_y", "V_z", "T")
 CLASSICAL = (0, 1, 2, 5)  # [eps, kappa_y, kappa_z, phi]
 WALL_STRAINS: Tuple[str, ...] = ("eps_xx", "gamma_xs", "kappa_xx", "kappa_xs")
+#: second-order section terms (``ThinWalledSectionAnalysis.geometric_terms``)
+GEOMETRIC_TERMS: Tuple[str, ...] = ("N", "S_y", "S_z", "W", "V_y", "V_z", "Q_r")
 
 HOOP_OPTIONS = ("restrained", "free")
 
@@ -695,6 +697,98 @@ class ThinWalledSectionAnalysis:
             om, _ = self._omega_at(g)
             f += g.weight * np.array([px, py, pz, y * pz - z * py, z * px, -y * px, om * px])
         return f
+
+    # ------------------------------------------------------------------ #
+    # Second-order (geometric) section terms
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _geometric_rows(
+        g: _GaussPoint, G: npt.NDArray[np.float64], G_rate: npt.NDArray[np.float64] | None = None
+    ) -> npt.NDArray[np.float64]:
+        """Weighted ``GEOMETRIC_TERMS`` rows (7, n) at a Gauss point for wall strains ``G`` (4, n).
+
+        Through the thickness a point is at ``p + zeta n``, so ``int sigma f dzeta`` of a
+        field ``f(p + zeta n)`` is ``N_xx f + M_xx df/dn`` to first order in ``zeta``. The
+        shear flow is ``N_xs`` along the wall plus the Kirchhoff transverse shear force
+        ``Q_x = dM_xx/dx`` across it, from the wall strain rate ``G_rate`` when given.
+        """
+        s = g.K @ G
+        y, z = g.position
+        n_y, n_z = g.normal
+        t_y, t_z = n_z, -n_y
+        Nxx, Nxs, Mxx = s[0], s[1], s[2]
+        Qx = (g.K @ G_rate)[2] if G_rate is not None else np.zeros_like(Nxx)
+        return g.weight * np.vstack([
+            Nxx,
+            Nxx * y + Mxx * n_y,
+            Nxx * z + Mxx * n_z,
+            Nxx * (y * y + z * z) + 2.0 * Mxx * (y * n_y + z * n_z),
+            Nxs * t_y + Qx * n_y,
+            Nxs * t_z + Qx * n_z,
+            Nxs * (y * t_y + z * t_z) + Qx * (y * n_y + z * n_z),
+        ])
+
+    @cached_property
+    def _geometric(self) -> Dict[str, npt.NDArray[np.float64]]:
+        sol = self._solution
+        H = np.zeros((7, 6))
+        Xb = np.zeros((7, 2))
+        Xt = np.zeros((7, 2))
+        benscoter = third = True
+        for g in self._gauss_points:
+            Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B @ sol["W0"] + g.Nx @ sol["W1"]
+            # forces vary as F' = T_RATE F along the beam, so do the wall strains
+            H += self._geometric_rows(g, Phi, Phi @ T_RATE)
+            if benscoter:
+                try:
+                    Xb += self._geometric_rows(g, self._benscoter_wall_strains(g)[:, 6:])
+                except ValueError:  # the section cannot shear: no Benscoter terms
+                    benscoter = False
+            if third:
+                try:
+                    Xt += self._geometric_rows(g, g.Nx @ self._shear_warping)
+                except ValueError:
+                    third = False
+        return {"H": H, "benscoter": Xb if benscoter else None, "third_order": Xt if third else None}
+
+    @property
+    def geometric_terms(self) -> npt.NDArray[np.float64]:
+        """Second-order section terms (7, 6) per unit section force, order ``GEOMETRIC_TERMS``.
+
+        For the Saint-Venant wall stresses of forces ``F`` (order ``FORCES``), ``H @ F`` is
+        ``[N, S_y, S_z, W, V_y, V_z, Q_r]`` about the origin::
+
+            N = int sigma,  S_y = int sigma y,  S_z = int sigma z,
+            W = int sigma (y^2 + z^2)                       (Wagner term)
+            V_y = int q t_y,  V_z = int q t_z,  Q_r = int q (y t_y + z t_z)
+
+        with ``sigma`` the axial stress and ``q`` the shear flow. ``S_z = M_y`` and
+        ``S_y = -M_z``; ``W`` holds the polar term about the origin, its shift to the
+        shear centre and the Wagner coefficients of the bending moments. They are the
+        coefficients of the second-order strain energy of a section that is rigid in its
+        own plane (see ``docs/element_library/second_order.md``).
+        """
+        return self._geometric["H"].copy()
+
+    @property
+    def benscoter_geometric_terms(self) -> npt.NDArray[np.float64]:
+        """Second-order terms (7, 2) per unit Benscoter strain ``[d, psi']``.
+
+        The ``psi'`` column is the bimoment's contribution: the axial stress of the
+        restrained torsional warping ``E omega psi'`` enters the Wagner term ``W``.
+        """
+        X = self._geometric["benscoter"]
+        if X is None:
+            raise ValueError("the section has no Benscoter stiffness")
+        return X.copy()
+
+    @property
+    def third_order_geometric_terms(self) -> npt.NDArray[np.float64]:
+        """Second-order terms (7, 2) per unit third-order strain ``[chi_y, chi_z]``."""
+        X = self._geometric["third_order"]
+        if X is None:
+            raise ValueError("the section has no third-order stiffness")
+        return X.copy()
 
     # ------------------------------------------------------------------ #
     # Mass
