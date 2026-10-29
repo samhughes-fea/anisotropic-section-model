@@ -1,11 +1,17 @@
 # pre_processing/section_integration/thin_walled/__init__.py
-"""Thin-walled anisotropic sections: wall laminates, condensed wall laws, mid-line geometry."""
+"""Thin-walled anisotropic sections: wall laminates, condensed wall laws, mid-line geometry, Saint-Venant analysis."""
 
 from pre_processing.section_integration.thin_walled.laminate import (
     DEFAULT_SHEAR_CORRECTION,
     Ply,
     PlyMaterial,
     WallLaminate,
+)
+from pre_processing.section_integration.thin_walled.section_analysis import (
+    FORCES,
+    STRAINS,
+    ThinWalledSectionAnalysis,
+    stiffness_about,
 )
 from pre_processing.section_integration.thin_walled.thin_walled_geometry import (
     ThinWalledSection,
@@ -26,6 +32,10 @@ __all__ = [
     "Ply",
     "PlyMaterial",
     "WallLaminate",
+    "FORCES",
+    "STRAINS",
+    "ThinWalledSectionAnalysis",
+    "stiffness_about",
     "ThinWalledSection",
     "Wall",
     "WALL_RESULTANTS",
