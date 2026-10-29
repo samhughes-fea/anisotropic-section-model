@@ -596,6 +596,71 @@ class ThinWalledSectionAnalysis:
         """
         return self._benscoter[0].copy()
 
+    # ------------------------------------------------------------------ #
+    # Third-order shear (Reddy, Levinson): shear warping slaved to the shear strain
+    # ------------------------------------------------------------------ #
+    @cached_property
+    def _shear_warping(self) -> npt.NDArray[np.float64]:
+        """Saint-Venant warping (n_dof, 2) per unit ``[gamma_xy, gamma_xz]``.
+
+        ``W0 K[:, 3:5]`` with its rigid part (``1, y, z``) removed in the walls' axial
+        stiffness, so the axial stress of the slaved warping has no resultant ``N``,
+        ``M_y`` or ``M_z`` (the plane-section rotation stays the Timoshenko one).
+        """
+        Psi = self._solution["W0"] @ self._stiffness[:, 3:5]
+        Rm = self._rigid_modes
+        M = np.zeros((self.n_dof, self.n_dof))
+        for g in self._gauss_points:
+            M += g.weight * g.K[0, 0] * np.outer(g.Nx[0], g.Nx[0])
+        A = Rm.T @ M @ Rm
+        c = np.linalg.lstsq(A, Rm.T @ M @ Psi, rcond=1e-12)[0]
+        return Psi - Rm @ c
+
+    def _third_order_wall_strains(self, g: _GaussPoint) -> npt.NDArray[np.float64]:
+        """Wall strains (4, 8) at a Gauss point per unit third-order strain ``[psi6, chi_y, chi_z]``."""
+        sol = self._solution
+        Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B @ sol["W0"] + g.Nx @ sol["W1"]
+        G = np.zeros((4, 8))
+        G[:, :6] = Phi @ self._stiffness
+        G[:, 6:] = g.Nx @ self._shear_warping  # eps_xx = Psi(s) . chi
+        return G
+
+    @cached_property
+    def _third_order(self) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        K8 = np.zeros((8, 8))
+        for g in self._gauss_points:
+            G = self._third_order_wall_strains(g)
+            K8 += g.weight * G.T @ g.K @ G
+        K8 = 0.5 * (K8 + K8.T)
+        K8[:6, :6] = self._stiffness
+        F = self._solution["flexibility"]
+        R = (F @ T_RATE @ self._stiffness)[3:5, :]
+        return K8, R
+
+    @property
+    def third_order_stiffness(self) -> npt.NDArray[np.float64]:
+        """Third-order shear section stiffness (8, 8), right-handed, about the origin.
+
+        Strains ``[eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi, chi_y, chi_z]``. The
+        section warps with the Saint-Venant warping of the six beam strains, and the
+        shear part of that warping, ``Psi(s) gamma`` with ``Psi = W0 K[:, 3:5]``, is
+        slaved to the local shear strain. Where the shear strain changes along the
+        beam faster than in the Saint-Venant solution it stretches the walls:
+        ``eps_xx += Psi(s) . chi`` with ``chi = gamma' - third_order_rate @ psi6``.
+        For a solid rectangle ``Psi`` is Reddy's cubic ``z - 4 z^3 / 3h^2`` field and
+        ``K[7, 7] = E I_y / 84``. The leading 6 x 6 block is ``stiffness``.
+        """
+        return self._third_order[0].copy()
+
+    def third_order_wall_strains_at(self, wall_id: int, s: float) -> npt.NDArray[np.float64]:
+        """Wall strains (4, 8) at ``s`` along a wall per unit right-handed third-order strain."""
+        return self._third_order_wall_strains(self.point_at(wall_id, s))
+
+    @property
+    def third_order_rate(self) -> npt.NDArray[np.float64]:
+        """``R`` (2, 6): the shear-strain rate of the Saint-Venant solution, ``gamma'_SV = R psi6``."""
+        return self._third_order[1].copy()
+
     @property
     def warping_inertia(self) -> float:
         """Mass moment of the warping amplitude, ``int rho_A omega^2 ds`` per length."""

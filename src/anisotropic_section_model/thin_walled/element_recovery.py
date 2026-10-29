@@ -14,6 +14,8 @@ displacements, and their rate along the beam:
   ``eps_xx += omega psi'`` and ``gamma_xs += omega_s (psi - phi)``.
 - **GBT:** the plane-section strains, the warping-mode and the distortional-mode
   strains, including the hoop curvature ``kappa_ss``.
+- **Reddy, Levinson:** the Saint-Venant wall strains plus the slaved shear warping,
+  ``eps_xx += Psi(s) . chi``.
 
 For the Saint-Venant parts the rate along the beam follows beam equilibrium
 with no distributed load (``F' = T F``). The Benscoter warping terms and all GBT
@@ -53,7 +55,7 @@ def _sign(n: int) -> np.ndarray:
 
 def _kind(element) -> str:
     name = type(element).__name__
-    for key in ("GBT", "Benscoter", "Timoshenko", "EulerBernoulli"):
+    for key in ("GBT", "Benscoter", "Reddy", "Levinson", "Timoshenko", "EulerBernoulli"):
         if key in name:
             return key
     raise NotImplementedError(f"wall stress recovery does not support {name}")
@@ -96,6 +98,21 @@ def element_wall_field(element, U_e: npt.ArrayLike, xi: float, analysis, wall_id
             F = np.array([c[0], c[1], c[2], -dc[2], dc[1], c[3]])
         rec = SaintVenantRecovery(analysis)
         return rec.kept_field(wall_id, F), analysis.hoop
+
+    if kind in ("Reddy", "Levinson"):
+        S = _sign(8)
+
+        def e8(x):
+            return S * (element._B_at(x) @ U)
+
+        e = e8(xi)
+        ex = (e8(xi + h) - e8(xi - h)) / (2 * h) * (2.0 / element.L)
+
+        def field(s):
+            G = analysis.third_order_wall_strains_at(wall_id, s)
+            return G @ e, G @ ex
+
+        return field, analysis.hoop
 
     if kind == "Benscoter":
         S = _sign(8)

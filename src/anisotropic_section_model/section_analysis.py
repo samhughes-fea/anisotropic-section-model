@@ -84,6 +84,14 @@ class SectionAnalysis:
     gbt_sv_modes : int
         Warping modes spanning the Saint-Venant warping, ``n_sv`` (always carried by a GBT
         section; 0 without GBT matrices).
+    third_order_stiffness : ndarray (8, 8) or None
+        Element-signed third-order shear stiffness (Reddy, Levinson) for
+        ``[eps_x, kappa_y, kappa_z, gamma_xy, gamma_xz, phi_x, chi_y, chi_z]``, where
+        ``chi = gamma' - third_order_rate @ psi6`` stretches the walls through the slaved
+        shear warping. Its leading 6 x 6 block is ``stiffness``.
+    third_order_rate : ndarray (2, 6) or None
+        Element-signed ``R``: the shear-strain rate ``gamma'`` of the Saint-Venant solution
+        is ``R @ psi6`` (zero for an uncoupled section).
     gbt_stiffness : ndarray or None
         Element-signed GBT stiffness, square of size ``6 + 2(n_sv + P) + 3M``, for
         ``[psi6, b'(n_sv + P), b(n_sv + P), a''(M), a'(M), a(M)]``.
@@ -107,6 +115,8 @@ class SectionAnalysis:
     gbt_mass: Optional[npt.NDArray[np.float64]] = None
     gbt_shear_modes: int = 0
     gbt_sv_modes: int = 0
+    third_order_stiffness: Optional[npt.NDArray[np.float64]] = None
+    third_order_rate: Optional[npt.NDArray[np.float64]] = None
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -140,13 +150,19 @@ class SectionAnalysis:
 
         ``y_sc``, ``z_sc`` are recorded as the shear centre only; the stiffness
         stays diagonal (each element keeps its own legacy shear-centre handling).
+        The third-order shear terms assume a solid rectangle (Reddy's cubic shear
+        warping): ``EI_z / 84`` for ``chi_y`` and ``EI_y / 84`` for ``chi_z``.
         """
         D = np.diag([E * A, E * I_y, E * I_z, kappa * G * A, kappa * G * A, G * J_t])
         C = np.diag([E * A, E * I_y, E * I_z, G * J_t])
         I_p = I_x if I_x is not None else I_y + I_z
         mass = {"m": rho * A, "y_m": 0.0, "z_m": 0.0, "I_yy": rho * I_y,
                 "I_zz": rho * I_z, "I_yz": 0.0, "I_p": rho * I_p}
-        return cls(D, C, E * Gamma, (float(y_sc), float(z_sc)), (0.0, 0.0), mass, "isotropic", None)
+        D8 = np.zeros((8, 8))
+        D8[:6, :6] = D
+        D8[6, 6], D8[7, 7] = E * I_z / 84.0, E * I_y / 84.0
+        return cls(D, C, E * Gamma, (float(y_sc), float(z_sc)), (0.0, 0.0), mass, "isotropic", None,
+                   third_order_stiffness=D8, third_order_rate=np.zeros((2, 6)))
 
     @classmethod
     def from_thin_walled(
@@ -171,8 +187,10 @@ class SectionAnalysis:
             S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
             KB = S8 @ analysis.benscoter_stiffness @ S8
             w_inertia = float(analysis.warping_inertia)
+            K3 = S8 @ analysis.third_order_stiffness @ S8
+            R3 = analysis.third_order_rate @ ELEMENT_SIGN
         except ValueError:
-            KB, w_inertia = None, 0.0
+            KB, w_inertia, K3, R3 = None, 0.0, None, None
         K_gbt = M_gbt = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
@@ -201,6 +219,8 @@ class SectionAnalysis:
             M_gbt,
             int(gbt_shear_modes),
             int(n_sv),
+            K3,
+            R3,
         )
         if M_gbt is not None:
             # rigid block with the walls' own rotary inertia, as mass_matrix()
