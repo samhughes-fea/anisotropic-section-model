@@ -74,9 +74,11 @@ def element_wall_field(element, U_e: npt.ArrayLike, xi: float, analysis, wall_id
 
     Returns the field and the hoop condition to complete it with.
     """
+    from pre_processing.element_library.framed_element import local_state
     from pre_processing.section_integration.thin_walled.section_analysis import T_RATE
 
-    U = np.asarray(U_e, dtype=np.float64)
+    # a rotated element's displacements in its own axes; a curved one's sub-element at xi
+    element, U, xi = local_state(element, U_e, xi)
     kind = _kind(element)
     if not getattr(element, "has_thin_walled_section", False):
         raise ValueError(f"Element {element.element_id} has no thin-walled section")

@@ -306,6 +306,53 @@ class SectionAnalysis:
         off = np.abs(K - np.diag(np.diag(K)))
         return bool(np.any(off > 1e-12 * np.where(d > 0, d, 1.0)))
 
+    def with_pretwist(self, rate: float) -> "SectionAnalysis":
+        """This section on a beam pretwisted at ``rate`` (rad/m): the helical-fibre coupling added.
+
+        A fibre at ``(y, z)`` of a beam twisted by ``k`` per length lies on a helix, and a
+        change ``phi_x`` of the twist rate stretches it by ``k r^2 phi_x``
+        (``r^2 = y^2 + z^2`` about the beam axis). With the element-signed fibre strain
+        ``eps_x - z kappa_y - y kappa_z`` that adds::
+
+            D[j, 5] += k int E a_j r^2 dA,   a = (1, -z, -y) for rows (eps_x, kappa_y, kappa_z)
+            D[5, 5] += k^2 int E r^4 dA
+
+        to every stiffness carrying ``phi_x`` (the 6 x 6, classical, Benscoter and third-order
+        ones). The integrals use ``axial_points``. This is the extension-twist coupling of a
+        pretwisted strip (Rosen 1980; Hodges 2006, sec. 3.4); the frame's own turning along
+        the beam is in the element geometry, not here.
+        """
+        import dataclasses
+
+        if not rate:
+            return self
+        if self.axial_points is None:
+            raise ValueError("pretwist needs the section's axial_points (a section with area and inertias)")
+        if self.gbt_stiffness is not None and self.gbt_modes:
+            raise NotImplementedError("pretwist is not supported with GBT sections")
+        y, z, wE = np.asarray(self.axial_points, dtype=np.float64).T
+        r2 = y * y + z * z
+        c = rate * np.array([wE @ r2, -(wE @ (z * r2)), -(wE @ (y * r2))])   # rows eps_x, kappa_y, kappa_z
+        d = rate * rate * (wE @ (r2 * r2))
+
+        def add(K, rows, twist):
+            if K is None:
+                return None
+            K = np.array(K, dtype=np.float64, copy=True)
+            for cj, j in zip(c, rows):
+                K[j, twist] += cj
+                K[twist, j] += cj
+            K[twist, twist] += d
+            return K
+
+        return dataclasses.replace(
+            self,
+            stiffness=add(self.stiffness, (0, 1, 2), 5),
+            classical_stiffness=add(self.classical_stiffness, (0, 1, 2), 3),
+            benscoter_stiffness=add(self.benscoter_stiffness, (0, 1, 2), 5),
+            third_order_stiffness=add(self.third_order_stiffness, (0, 1, 2), 5),
+        )
+
     def euler_bernoulli_D(self) -> npt.NDArray[np.float64]:
         """6 x 6 ``D`` for shear-rigid elements: ``classical_stiffness`` on rows ``[0, 1, 2, 5]``, zero shear rows."""
         D = np.zeros((6, 6))
