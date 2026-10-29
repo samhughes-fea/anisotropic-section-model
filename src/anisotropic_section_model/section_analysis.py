@@ -150,6 +150,40 @@ class SectionAnalysis:
         off = np.abs(K - np.diag(np.diag(K)))
         return bool(np.any(off > 1e-12 * np.where(d > 0, d, 1.0)))
 
+    def euler_bernoulli_D(self) -> npt.NDArray[np.float64]:
+        """6 x 6 ``D`` for shear-rigid elements: ``classical_stiffness`` on rows ``[0, 1, 2, 5]``, zero shear rows."""
+        D = np.zeros((6, 6))
+        D[np.ix_(CLASSICAL_INDEX, CLASSICAL_INDEX)] = self.classical_stiffness
+        return D
+
+    def mass_matrix(self) -> npt.NDArray[np.float64]:
+        """Rigid-section mass per length (6, 6) for nodal fields ``[u_x, u_y, u_z, theta_x, theta_y, theta_z]``.
+
+        Rotations are right-handed (as the nodal DOFs). A point at ``(y, z)`` moves by
+        ``(u_x - y theta_z + z theta_y, u_y - z theta_x, u_z + y theta_x)``, so with
+        ``S_y = m z_m`` and ``S_z = m y_m``::
+
+            M[0,0] = M[1,1] = M[2,2] = m
+            M[0,4] = S_y,  M[0,5] = -S_z,  M[1,3] = -S_y,  M[2,3] = S_z
+            M[3,3] = I_p,  M[4,4] = I_yy,  M[5,5] = I_zz,  M[4,5] = -I_yz
+        """
+        mp = self.mass
+        if not mp:
+            raise ValueError("this SectionAnalysis has no mass properties")
+        m = mp["m"]
+        Sy, Sz = m * mp["z_m"], m * mp["y_m"]
+        M = np.zeros((6, 6))
+        M[0, 0] = M[1, 1] = M[2, 2] = m
+        M[0, 4] = M[4, 0] = Sy
+        M[0, 5] = M[5, 0] = -Sz
+        M[1, 3] = M[3, 1] = -Sy
+        M[2, 3] = M[3, 2] = Sz
+        M[3, 3] = mp["I_p"]
+        M[4, 4] = mp["I_yy"]
+        M[5, 5] = mp["I_zz"]
+        M[4, 5] = M[5, 4] = -mp["I_yz"]
+        return M
+
     def stress_resultants(self, strain: npt.ArrayLike) -> npt.NDArray[np.float64]:
         """``S = stiffness @ strain`` in element Voigt order."""
         return self.stiffness @ np.asarray(strain, dtype=np.float64)
