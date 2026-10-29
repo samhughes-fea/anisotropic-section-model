@@ -130,6 +130,14 @@ def _cubic_lagrange(xi: float) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.
     return N, dN
 
 
+def _solve(S: npt.NDArray[np.float64], rhs: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    """Solve the section system; a strain with no wall strain (shear-rigid direction) takes the minimum-norm value."""
+    try:
+        return np.linalg.solve(S, rhs)
+    except np.linalg.LinAlgError:
+        return np.linalg.lstsq(S, rhs, rcond=None)[0]
+
+
 def wall_law(laminate: WallLaminate, hoop: str = "restrained") -> npt.NDArray[np.float64]:
     """Wall stiffness (4, 4) in order ``WALL_STRAINS``.
 
@@ -307,13 +315,17 @@ class ThinWalledSectionAnalysis:
             Q += g.weight * g.Z.T @ KY
             M2 += g.weight * g.thickness * np.outer(g.Nx[0], g.Nx[0])
         D = M2 @ self._rigid_modes
+        # Collinear walls make the modes dependent (e.g. w = z vanishes on a strip at z = 0).
+        U, sv, _ = np.linalg.svd(D, full_matrices=False)
+        D = U[:, sv > 1e-12 * sv[0]]
         return {"E": E, "C": C, "R": R, "L": Lm, "Ly": Ly, "A": A, "Q": Q, "D": D}
 
     @cached_property
     def _system(self) -> npt.NDArray[np.float64]:
         m = self._matrices
         nd = self.n_dof
-        S = np.zeros((nd + 9, nd + 9))
+        nc = m["D"].shape[1]
+        S = np.zeros((nd + 6 + nc, nd + 6 + nc))
         S[:nd, :nd] = m["E"]
         S[:nd, nd:nd + 6] = m["R"]
         S[nd:nd + 6, :nd] = m["R"].T
@@ -329,15 +341,16 @@ class ThinWalledSectionAnalysis:
         C, Lm, Ly, Q = m["C"], m["L"], m["Ly"], m["Q"]
         S = self._system
 
-        rhs1 = np.zeros((nd + 9, 6))
+        n_tot = S.shape[0]
+        rhs1 = np.zeros((n_tot, 6))
         rhs1[nd:nd + 6] = T_RATE
-        X1 = np.linalg.solve(S, rhs1)
+        X1 = _solve(S, rhs1)
         W1, P1 = X1[:nd], X1[nd:nd + 6]
 
-        rhs0 = np.zeros((nd + 9, 6))
+        rhs0 = np.zeros((n_tot, 6))
         rhs0[:nd] = -(C - C.T) @ W1 + (Lm - Ly) @ P1
         rhs0[nd:nd + 6] = np.eye(6) - (Lm - Ly).T @ W1 - (Q - Q.T) @ P1
-        X0 = np.linalg.solve(S, rhs0)
+        X0 = _solve(S, rhs0)
         W0, P0 = X0[:nd], X0[nd:nd + 6]
 
         flex = np.zeros((6, 6))
@@ -357,7 +370,16 @@ class ThinWalledSectionAnalysis:
 
     @cached_property
     def _stiffness(self) -> npt.NDArray[np.float64]:
-        K = np.linalg.inv(self._solution["flexibility"])
+        F = self._solution["flexibility"]
+        ev = np.linalg.eigvalsh(F)
+        if ev[0] <= 1e-13 * ev[-1]:
+            raise ValueError(
+                f"section {self.section.section_id}: the 6 x 6 stiffness is unbounded because the "
+                "walls cannot shear in some direction (for example all walls are collinear, so "
+                "Kirchhoff walls carry no transverse shear across their thickness). "
+                "classical_stiffness is still available."
+            )
+        K = np.linalg.inv(F)
         return 0.5 * (K + K.T)
 
     @property
@@ -437,11 +459,12 @@ class ThinWalledSectionAnalysis:
         """
         m = self._matrices
         nd = self.n_dof
-        S = np.zeros((nd + 3, nd + 3))
+        nc = m["D"].shape[1]
+        S = np.zeros((nd + nc, nd + nc))
         S[:nd, :nd] = m["E"]
         S[:nd, nd:] = m["D"]
         S[nd:, :nd] = m["D"].T
-        rhs = np.zeros(nd + 3)
+        rhs = np.zeros(nd + nc)
         rhs[:nd] = -m["R"][:, 5]
         omega = np.linalg.solve(S, rhs)[:nd]
         # rigid axial fields [eps_xx, kappa_xx] for eps, kappa_y, kappa_z: [1,0], [z,n_z], [-y,-n_y]

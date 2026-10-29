@@ -277,3 +277,16 @@ def test_section_analyses_from_files(tmp_path):
     out = section_analyses_from_files(str(tmp_path / "laminate.txt"), str(tmp_path / "section_geometry.txt"), hoop="free")
     K = out[1].stiffness
     assert K[0, 0] == pytest.approx(E * 1.2 * 0.002, rel=1e-10)
+
+
+def test_flat_strip_has_classical_but_no_timoshenko_stiffness():
+    b, t = 0.3, 2e-3
+    flat = ThinWalledSection({1: (-b / 2, 0.0), 2: (b / 2, 0.0)}, [Wall(1, 1, 2, 1)])
+    sa = ThinWalledSectionAnalysis(flat, {1: iso(t)}, hoop="free")
+    K4 = sa.classical_stiffness
+    assert K4[0, 0] == pytest.approx(E * b * t)
+    assert K4[1, 1] == pytest.approx(E * b * t**3 / 12)
+    assert K4[2, 2] == pytest.approx(E * t * b**3 / 12)
+    assert K4[3, 3] == pytest.approx(G * b * t**3 / 3)
+    with pytest.raises(ValueError, match="cannot shear"):
+        sa.stiffness

@@ -22,3 +22,49 @@ def section_analyses_from_files(
         sid: ThinWalledSectionAnalysis(sec, laminates, hoop=hoop, n_sub=n_sub)
         for sid, sec in sections.items()
     }
+
+
+LAMINATE_FILE = "laminate.txt"
+SECTION_GEOMETRY_FILE = "section_geometry.txt"
+ELEMENT_SECTION_FILE = "element_section.txt"
+SECTION_ANALYSIS_KEY = "section_analysis_per_element"
+
+
+def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = "restrained") -> dict:
+    """Return ``element_dictionary`` with per-element ``SectionAnalysis`` entries when the job has thin-walled sections.
+
+    Looks for ``laminate.txt``, ``section_geometry.txt`` and ``element_section.txt``
+    in ``job_dir``. With none present the dictionary is returned unchanged. With
+    some but not all present, raises ``FileNotFoundError``. Otherwise adds key
+    ``"section_analysis_per_element"``: a tuple aligned with
+    ``element_dictionary["ids"]`` holding a ``SectionAnalysis`` for each assigned
+    element and ``None`` for the rest. Each section is analysed once.
+    """
+    import os
+
+    import numpy as np
+
+    from pre_processing.parsing.element_section_parser import parse_element_section_file
+    from pre_processing.section_integration.section_analysis import SectionAnalysis
+
+    paths = [os.path.join(job_dir, f) for f in (LAMINATE_FILE, SECTION_GEOMETRY_FILE, ELEMENT_SECTION_FILE)]
+    present = [os.path.exists(p) for p in paths]
+    if not any(present):
+        return element_dictionary
+    if not all(present):
+        missing = [os.path.basename(p) for p, ok in zip(paths, present) if not ok]
+        raise FileNotFoundError(
+            f"Thin-walled sections need laminate.txt, section_geometry.txt and element_section.txt; missing {missing}"
+        )
+    analyses = section_analyses_from_files(paths[0], paths[1], hoop=hoop)
+    assignment = parse_element_section_file(paths[2])
+    ids = [int(i) for i in np.asarray(element_dictionary["ids"]).ravel()]
+    unknown_el = sorted(set(assignment) - set(ids))
+    if unknown_el:
+        raise ValueError(f"element_section.txt names unknown elements {unknown_el}")
+    unknown_sec = sorted(set(assignment.values()) - set(analyses))
+    if unknown_sec:
+        raise ValueError(f"element_section.txt names unknown sections {unknown_sec}")
+    per_section = {sid: SectionAnalysis.from_thin_walled(a, sid) for sid, a in analyses.items()}
+    per_element = tuple(per_section[assignment[e]] if e in assignment else None for e in ids)
+    return {**element_dictionary, SECTION_ANALYSIS_KEY: per_element}
