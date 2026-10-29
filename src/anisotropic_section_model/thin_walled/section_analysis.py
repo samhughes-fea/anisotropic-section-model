@@ -752,6 +752,15 @@ class ThinWalledSectionAnalysis:
         return {"H": H, "benscoter": Xb if benscoter else None, "third_order": Xt if third else None}
 
     @property
+    def axial_points(self) -> npt.NDArray[np.float64]:
+        """Section quadrature ``(m, 3)`` of ``[y, z, k]`` with ``k`` the axial wall stiffness weight.
+
+        ``sum k f(y, z)`` approximates ``int E f dA`` along the mid-lines (``K_xx`` of the
+        condensed wall law). Used for the fourth-order (large twist) energy.
+        """
+        return np.array([[g.position[0], g.position[1], g.weight * g.K[0, 0]] for g in self._gauss_points])
+
+    @property
     def geometric_terms(self) -> npt.NDArray[np.float64]:
         """Second-order section terms (7, 6) per unit section force, order ``GEOMETRIC_TERMS``.
 

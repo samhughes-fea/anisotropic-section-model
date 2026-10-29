@@ -51,6 +51,16 @@ def to_element_voigt(K_rh: npt.ArrayLike) -> npt.NDArray[np.float64]:
     return ELEMENT_SIGN @ K @ ELEMENT_SIGN
 
 
+def _rectangle_points(E: float, A: float, I_y: float, I_z: float) -> Optional[npt.NDArray[np.float64]]:
+    """3 x 3 Gauss points ``[y, z, E dA]`` of the rectangle with the given ``A``, ``I_y``, ``I_z``."""
+    if A <= 0 or I_y <= 0 or I_z <= 0:
+        return None
+    h, b = np.sqrt(12.0 * I_y / A), np.sqrt(12.0 * I_z / A)
+    x, w = np.polynomial.legendre.leggauss(3)
+    return np.array([[0.5 * b * yi, 0.5 * h * zi, E * 0.25 * b * h * wy * wz]
+                     for yi, wy in zip(x, w) for zi, wz in zip(x, w)])
+
+
 @dataclass(frozen=True)
 class SectionAnalysis:
     """Section stiffness and properties in the element convention.
@@ -101,6 +111,8 @@ class SectionAnalysis:
         The same terms per unit Benscoter strain ``[d, psi']`` (the bimoment's part).
     third_order_geometric_terms : ndarray (7, 2) or None
         The same terms per unit third-order strain ``[chi_y, chi_z]``.
+    axial_points : ndarray (m, 3) or None
+        Section quadrature ``[y, z, k]`` with ``sum k f = int E f dA`` (fourth-order energy).
     gbt_stiffness : ndarray or None
         Element-signed GBT stiffness, square of size ``6 + 2(n_sv + P) + 3M``, for
         ``[psi6, b'(n_sv + P), b(n_sv + P), a''(M), a'(M), a(M)]``.
@@ -129,6 +141,7 @@ class SectionAnalysis:
     geometric_terms: Optional[npt.NDArray[np.float64]] = None
     benscoter_geometric_terms: Optional[npt.NDArray[np.float64]] = None
     third_order_geometric_terms: Optional[npt.NDArray[np.float64]] = None
+    axial_points: Optional[npt.NDArray[np.float64]] = None
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -183,7 +196,8 @@ class SectionAnalysis:
         H[4, 3] = H[5, 4] = 1.0        # V_y, V_z
         return cls(D, C, E * Gamma, (float(y_sc), float(z_sc)), (0.0, 0.0), mass, "isotropic", None,
                    third_order_stiffness=D8, third_order_rate=np.zeros((2, 6)),
-                   geometric_terms=H @ ELEMENT_SIGN, third_order_geometric_terms=np.zeros((7, 2)))
+                   geometric_terms=H @ ELEMENT_SIGN, third_order_geometric_terms=np.zeros((7, 2)),
+                   axial_points=_rectangle_points(E, A, I_y, I_z))
 
     @classmethod
     def from_thin_walled(
@@ -250,6 +264,7 @@ class SectionAnalysis:
             H,
             XB,
             X3,
+            analysis.axial_points,
         )
         if M_gbt is not None:
             # rigid block with the walls' own rotary inertia, as mass_matrix()
