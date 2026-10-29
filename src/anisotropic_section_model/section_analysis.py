@@ -2,10 +2,11 @@
 """Section constitutive data shared by every beam element: ``SectionAnalysis``.
 
 A ``SectionAnalysis`` holds the section stiffness that elements turn into
-their ``D`` matrices. It is built either from the classical isotropic inputs
-(``section.txt`` and ``material.txt``) or from a thin-walled anisotropic
+their ``D`` matrices. It is built from the classical isotropic inputs
+(``section.txt`` and ``material.txt``), from a thin-walled anisotropic
 section analysis (``laminate.txt``, ``section_geometry.txt`` and
-``element_section.txt``).
+``element_section.txt``) or from a 2D section mesh (``section_mesh_2d.txt``
+and ``element_section.txt``, ``solid/section_analysis.py``).
 
 Element Voigt order and signs
 -----------------------------
@@ -79,9 +80,9 @@ class SectionAnalysis:
     mass : dict
         ``m``, ``y_m``, ``z_m``, ``I_yy``, ``I_zz``, ``I_yz``, ``I_p`` per length.
     source : str
-        ``"isotropic"`` or ``"thin_walled"``.
+        ``"isotropic"``, ``"thin_walled"`` or ``"solid"`` (a section meshed in 2D).
     section_id : int or None
-        Thin-walled section id, when ``source == "thin_walled"``.
+        Section id, when ``source`` is ``"thin_walled"`` or ``"solid"``.
     benscoter_stiffness : ndarray (8, 8) or None
         Element-signed Benscoter stiffness for ``[eps_x, kappa_y, kappa_z, gamma_xy,
         gamma_xz, phi_x, d, psi']`` with ``d = psi - phi_x`` (thin-walled sections only).
@@ -270,6 +271,25 @@ class SectionAnalysis:
             # rigid block with the walls' own rotary inertia, as mass_matrix()
             M_gbt[:6, :6] = out.mass_matrix()
         return out
+
+    @classmethod
+    def from_solid(cls, analysis, section_id: Optional[int] = None) -> "SectionAnalysis":
+        """From a ``SolidSectionAnalysis`` (a section meshed in 2D; right-handed results mapped
+        to element signs). Carries the 6 x 6, classical stiffness, centres, ``E Gamma``, mass,
+        second-order terms and axial quadrature; no Benscoter, third-order or GBT data."""
+        S4 = np.diag([1.0, -1.0, 1.0, 1.0])
+        return cls(
+            to_element_voigt(analysis.stiffness),
+            S4 @ analysis.classical_stiffness @ S4,
+            float(analysis.warping_constant),
+            tuple(analysis.shear_centre),
+            tuple(analysis.tension_centre),
+            dict(analysis.mass_properties),
+            "solid",
+            None if section_id is None else int(section_id),
+            geometric_terms=analysis.geometric_terms @ ELEMENT_SIGN,
+            axial_points=analysis.axial_points,
+        )
 
     # ------------------------------------------------------------------ #
     def gbt_indices(self, n_modes: int, n_shear: int = 0) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:

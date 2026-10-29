@@ -1,5 +1,6 @@
 # pre_processing/section_integration/thin_walled/job_input.py
-"""Build section analyses from a job's ``laminate.txt`` and ``section_geometry.txt``."""
+"""Build section analyses from a job's ``laminate.txt`` and ``section_geometry.txt`` (thin-walled)
+and ``section_mesh_2d.txt`` (sections meshed in 2D)."""
 
 from __future__ import annotations
 
@@ -28,7 +29,26 @@ def section_analyses_from_files(
     }
 
 
+def solid_analyses_from_files(mesh_path: str, laminate_path=None) -> Dict[int, "SolidSectionAnalysis"]:
+    """Return ``{section_id: SolidSectionAnalysis}`` for every section in ``section_mesh_2d.txt``.
+
+    Material ids not in its ``[Solid_Material]`` block come from the ``[Ply_Material]`` block of
+    ``laminate.txt`` (``SolidMaterial.from_ply``).
+    """
+    from pre_processing.parsing.laminate_parser import parse_ply_material_file
+    from pre_processing.section_integration.solid.material import SolidMaterial
+    from pre_processing.section_integration.solid.mesh import parse_section_mesh_2d
+    from pre_processing.section_integration.solid.section_analysis import SolidSectionAnalysis
+
+    mats = {}
+    if laminate_path is not None:
+        mats = {mid: SolidMaterial.from_ply(m) for mid, m in parse_ply_material_file(laminate_path).items()}
+    return {sid: SolidSectionAnalysis(mesh) for sid, mesh in parse_section_mesh_2d(mesh_path, mats).items()}
+
+
 LAMINATE_FILE = "laminate.txt"
+SECTION_MESH_2D_FILE = "section_mesh_2d.txt"
+SOLID_KEY = "solid_analysis_per_element"
 SECTION_GEOMETRY_FILE = "section_geometry.txt"
 ELEMENT_SECTION_FILE = "element_section.txt"
 WALL_LOAD_FILE = "wall_load.txt"
@@ -54,6 +74,13 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     ``"extra_dofs"`` (``n_sv + shear_modes + 2 modes`` for those rows, ``n_sv`` the
     section's Saint-Venant warping modes) for the mesh DOF layout.
 
+    With ``section_mesh_2d.txt`` the sections it defines are analysed in 2D
+    (``SolidSectionAnalysis``, ``SectionAnalysis.from_solid``); they can be assigned in the
+    same ``element_section.txt`` as thin-walled ones (section ids must differ). Key
+    ``"solid_analysis_per_element"`` then holds the ``SolidSectionAnalysis`` behind each
+    (``None`` in ``"thin_walled_analysis_per_element"``). GBT rows and wall loads need
+    thin-walled sections.
+
     With ``wall_load.txt`` it also gains ``"wall_load_per_element"``: the generalised
     load per length of each loaded element (``None`` for the rest), in the order of the
     section's GBT mass for GBT rows, else ``[N, F_y, F_z, M_x, M_y, M_z, psi load]``.
@@ -67,14 +94,27 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
 
     paths = [os.path.join(job_dir, f) for f in (LAMINATE_FILE, SECTION_GEOMETRY_FILE, ELEMENT_SECTION_FILE)]
     present = [os.path.exists(p) for p in paths]
-    if not any(present):
+    mesh_path = os.path.join(job_dir, SECTION_MESH_2D_FILE)
+    has_mesh = os.path.exists(mesh_path)
+    if not any(present) and not has_mesh:
         return element_dictionary
-    if not all(present):
-        missing = [os.path.basename(p) for p, ok in zip(paths, present) if not ok]
+    if has_mesh:
+        # 2D sections: element_section.txt is needed; laminate.txt only for its ply materials
+        # (or with section_geometry.txt for thin-walled sections alongside)
+        need = [paths[2]] + ([paths[0]] if present[1] else [])
+    else:
+        need = paths
+    missing = [os.path.basename(p) for p in need if not os.path.exists(p)]
+    if missing:
         raise FileNotFoundError(
-            f"Thin-walled sections need laminate.txt, section_geometry.txt and element_section.txt; missing {missing}"
+            "Thin-walled sections need laminate.txt, section_geometry.txt and element_section.txt; "
+            f"2D sections need section_mesh_2d.txt and element_section.txt; missing {missing}"
         )
-    analyses = section_analyses_from_files(paths[0], paths[1], hoop=hoop)
+    analyses = section_analyses_from_files(paths[0], paths[1], hoop=hoop) if present[1] else {}
+    solid = solid_analyses_from_files(mesh_path, paths[0] if present[0] else None) if has_mesh else {}
+    both = sorted(set(analyses) & set(solid))
+    if both:
+        raise ValueError(f"sections {both} are defined in both section_geometry.txt and section_mesh_2d.txt")
     assignment_modes = parse_element_section_modes(paths[2])
     assignment = {e: v[0] for e, v in assignment_modes.items()}
     modes_of = {e: v[1] for e, v in assignment_modes.items()}
@@ -83,12 +123,15 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     unknown_el = sorted(set(assignment) - set(ids))
     if unknown_el:
         raise ValueError(f"element_section.txt names unknown elements {unknown_el}")
-    unknown_sec = sorted(set(assignment.values()) - set(analyses))
+    unknown_sec = sorted(set(assignment.values()) - set(analyses) - set(solid))
     if unknown_sec:
         raise ValueError(f"element_section.txt names unknown sections {unknown_sec}")
     types = element_dictionary.get("types")
     type_of = {} if types is None else {e: str(t) for e, t in zip(ids, np.asarray(types).ravel())}
     gbt_rows = {e for e in assignment if "GBT" in type_of.get(e, "") or modes_of[e] or shear_of[e]}
+    gbt_solid = sorted(e for e in gbt_rows if assignment[e] in solid)
+    if gbt_solid:
+        raise ValueError(f"GBT needs a thin-walled section; elements {gbt_solid} have 2D sections")
     not_gbt = sorted(e for e in gbt_rows if type_of and "GBT" not in type_of.get(e, ""))
     if not_gbt:
         raise ValueError(
@@ -108,12 +151,15 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
         )
         for sid, a in analyses.items()
     }
+    per_section.update({sid: SectionAnalysis.from_solid(a, sid) for sid, a in solid.items()})
     per_element = tuple(per_section[assignment[e]] if e in assignment else None for e in ids)
     out = {
         **element_dictionary,
         SECTION_ANALYSIS_KEY: per_element,
-        THIN_WALLED_KEY: tuple(analyses[assignment[e]] if e in assignment else None for e in ids),
+        THIN_WALLED_KEY: tuple(analyses.get(assignment[e]) if e in assignment else None for e in ids),
     }
+    if solid:
+        out[SOLID_KEY] = tuple(solid.get(assignment[e]) if e in assignment else None for e in ids)
     if gbt_rows:
         out["gbt_modes"] = np.array([modes_of.get(e, 0) for e in ids], dtype=int)
         out["gbt_shear_modes"] = np.array([shear_of.get(e, 0) for e in ids], dtype=int)
@@ -131,7 +177,7 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
         from pre_processing.section_integration.thin_walled.cross_section_modes import CrossSectionModes
 
         loads = parse_wall_load_file(wl_path)
-        not_thin = sorted(set(loads) - set(assignment))
+        not_thin = sorted(e for e in loads if e not in assignment or assignment[e] not in analyses)
         if not_thin:
             raise ValueError(f"wall_load.txt loads elements without a thin-walled section: {not_thin}")
         modes_cache = {}
