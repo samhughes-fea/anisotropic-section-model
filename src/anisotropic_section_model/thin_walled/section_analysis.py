@@ -481,12 +481,18 @@ class ThinWalledSectionAnalysis:
         """
         m = self._matrices
         nd = self.n_dof
-        nc = m["D"].shape[1]
-        S = np.zeros((nd + nc, nd + nc))
+        # Only the constant mode is fixed: w = y and w = z shear the walls, so constraining
+        # them would distort the warping of a twist about the origin (a pole off the
+        # shear centre). Their parts are removed afterwards in the axial energy.
+        M2 = np.zeros((nd, nd))
+        for g in self._gauss_points:
+            M2 += g.weight * g.thickness * np.outer(g.Nx[0], g.Nx[0])
+        D1 = (M2 @ self._rigid_modes[:, :1])
+        S = np.zeros((nd + 1, nd + 1))
         S[:nd, :nd] = m["E"]
-        S[:nd, nd:] = m["D"]
-        S[nd:, :nd] = m["D"].T
-        rhs = np.zeros(nd + nc)
+        S[:nd, nd:] = D1
+        S[nd:, :nd] = D1.T
+        rhs = np.zeros(nd + 1)
         rhs[:nd] = -m["R"][:, 5]
         omega = np.linalg.solve(S, rhs)[:nd]
         # rigid axial fields [eps_xx, kappa_xx] for eps, kappa_y, kappa_z: [1,0], [z,n_z], [-y,-n_y]
