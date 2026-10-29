@@ -77,6 +77,12 @@ class SectionAnalysis:
         gamma_xz, phi_x, d, psi']`` with ``d = psi - phi_x`` (thin-walled sections only).
     warping_inertia : float
         ``int rho_A omega^2 ds`` for the warping amplitude DOF.
+    gbt_modes : int
+        Cross-section distortional modes carried (0 when none were asked for).
+    gbt_stiffness : ndarray (8 + 3m, 8 + 3m) or None
+        Element-signed GBT stiffness for ``[Benscoter strains, a''(m), a'(m), a(m)]``.
+    gbt_mass : ndarray (7 + 2m, 7 + 2m) or None
+        Section mass for ``[u, v, w, theta_x, theta_y, theta_z, psi, a(m), a'(m)]``.
     """
 
     stiffness: npt.NDArray[np.float64]
@@ -89,6 +95,9 @@ class SectionAnalysis:
     section_id: Optional[int] = None
     benscoter_stiffness: Optional[npt.NDArray[np.float64]] = None
     warping_inertia: float = 0.0
+    gbt_modes: int = 0
+    gbt_stiffness: Optional[npt.NDArray[np.float64]] = None
+    gbt_mass: Optional[npt.NDArray[np.float64]] = None
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -131,8 +140,12 @@ class SectionAnalysis:
         return cls(D, C, E * Gamma, (float(y_sc), float(z_sc)), (0.0, 0.0), mass, "isotropic", None)
 
     @classmethod
-    def from_thin_walled(cls, analysis, section_id: Optional[int] = None) -> "SectionAnalysis":
-        """From a ``ThinWalledSectionAnalysis`` (right-handed results mapped to element signs)."""
+    def from_thin_walled(cls, analysis, section_id: Optional[int] = None, gbt_modes: int = 0) -> "SectionAnalysis":
+        """From a ``ThinWalledSectionAnalysis`` (right-handed results mapped to element signs).
+
+        ``gbt_modes > 0`` also builds the GBT matrices of that many distortional modes
+        (``CrossSectionModes``; the analysis must use ``hoop="restrained"``).
+        """
         K = to_element_voigt(analysis.stiffness)
         C_rh = analysis.classical_stiffness
         S4 = np.diag([1.0, -1.0, 1.0, 1.0])
@@ -143,7 +156,15 @@ class SectionAnalysis:
             w_inertia = float(analysis.warping_inertia)
         except ValueError:
             KB, w_inertia = None, 0.0
-        return cls(
+        K_gbt = M_gbt = None
+        if gbt_modes:
+            from pre_processing.section_integration.thin_walled.cross_section_modes import CrossSectionModes
+
+            modes = CrossSectionModes(analysis)
+            Sg = np.diag(np.r_[np.diag(S8), np.ones(3 * gbt_modes)])
+            K_gbt = Sg @ modes.stiffness(gbt_modes) @ Sg
+            M_gbt = modes.mass(gbt_modes)
+        out = cls(
             K,
             C,
             float(analysis.warping_constant),
@@ -154,9 +175,26 @@ class SectionAnalysis:
             None if section_id is None else int(section_id),
             KB,
             w_inertia,
+            int(gbt_modes),
+            K_gbt,
+            M_gbt,
         )
+        if M_gbt is not None:
+            # rigid block with the walls' own rotary inertia, as mass_matrix()
+            M_gbt[:6, :6] = out.mass_matrix()
+        return out
 
     # ------------------------------------------------------------------ #
+    def gbt_matrices(self, n_modes: int) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """GBT stiffness (8 + 3n) and mass (7 + 2n) of the first ``n_modes`` modes."""
+        M_all = self.gbt_modes
+        if self.gbt_stiffness is None or not 0 < n_modes <= M_all:
+            raise ValueError(f"section carries {M_all} cross-section modes; asked for {n_modes}")
+        k = np.arange(n_modes)
+        ik = np.r_[np.arange(8), 8 + k, 8 + M_all + k, 8 + 2 * M_all + k]
+        im = np.r_[np.arange(7), 7 + k, 7 + M_all + k]
+        return self.gbt_stiffness[np.ix_(ik, ik)].copy(), self.gbt_mass[np.ix_(im, im)].copy()
+
     @property
     def is_coupled(self) -> bool:
         """True when any off-diagonal stiffness term is non-zero (relative to its diagonal)."""

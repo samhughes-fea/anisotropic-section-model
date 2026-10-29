@@ -39,12 +39,16 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     ``"section_analysis_per_element"``: a tuple aligned with
     ``element_dictionary["ids"]`` holding a ``SectionAnalysis`` for each assigned
     element and ``None`` for the rest. Each section is analysed once.
+
+    With a ``[modes]`` column, sections also get their GBT matrices (as many modes as
+    any element asks for), and the dictionary gains ``"gbt_modes"`` and
+    ``"extra_dofs"`` (``1 + 2 modes`` for those rows) for the mesh DOF layout.
     """
     import os
 
     import numpy as np
 
-    from pre_processing.parsing.element_section_parser import parse_element_section_file
+    from pre_processing.parsing.element_section_parser import parse_element_section_modes
     from pre_processing.section_integration.section_analysis import SectionAnalysis
 
     paths = [os.path.join(job_dir, f) for f in (LAMINATE_FILE, SECTION_GEOMETRY_FILE, ELEMENT_SECTION_FILE)]
@@ -57,7 +61,9 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
             f"Thin-walled sections need laminate.txt, section_geometry.txt and element_section.txt; missing {missing}"
         )
     analyses = section_analyses_from_files(paths[0], paths[1], hoop=hoop)
-    assignment = parse_element_section_file(paths[2])
+    assignment_modes = parse_element_section_modes(paths[2])
+    assignment = {e: sid for e, (sid, _) in assignment_modes.items()}
+    modes_of = {e: m for e, (_, m) in assignment_modes.items()}
     ids = [int(i) for i in np.asarray(element_dictionary["ids"]).ravel()]
     unknown_el = sorted(set(assignment) - set(ids))
     if unknown_el:
@@ -65,6 +71,16 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     unknown_sec = sorted(set(assignment.values()) - set(analyses))
     if unknown_sec:
         raise ValueError(f"element_section.txt names unknown sections {unknown_sec}")
-    per_section = {sid: SectionAnalysis.from_thin_walled(a, sid) for sid, a in analyses.items()}
+    max_modes = {sid: 0 for sid in analyses}
+    for e, sid in assignment.items():
+        max_modes[sid] = max(max_modes[sid], modes_of[e])
+    per_section = {
+        sid: SectionAnalysis.from_thin_walled(a, sid, gbt_modes=max_modes[sid]) for sid, a in analyses.items()
+    }
     per_element = tuple(per_section[assignment[e]] if e in assignment else None for e in ids)
-    return {**element_dictionary, SECTION_ANALYSIS_KEY: per_element}
+    out = {**element_dictionary, SECTION_ANALYSIS_KEY: per_element}
+    if any(modes_of.values()):
+        gbt = np.array([modes_of.get(e, 0) for e in ids], dtype=int)
+        out["gbt_modes"] = gbt
+        out["extra_dofs"] = np.where(gbt > 0, 1 + 2 * gbt, 0)
+    return out

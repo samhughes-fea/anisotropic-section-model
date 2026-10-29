@@ -521,19 +521,25 @@ class ThinWalledSectionAnalysis:
         om_s = float(g.B[1] @ omega) - (c[1] * t_z - c[2] * t_y)
         return om, om_s
 
+    def _benscoter_wall_strains(self, g: _GaussPoint) -> npt.NDArray[np.float64]:
+        """Wall strains (4, 8) at a Gauss point per unit Benscoter strain ``[psi6, d, psi']``."""
+        sol = self._solution
+        Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B @ sol["W0"] + g.Nx @ sol["W1"]
+        om, om_s = self._omega_at(g)
+        G = np.zeros((4, 8))
+        G[:, :6] = Phi @ self._stiffness
+        G[1, 6] = om_s   # warping deviation d = psi - phi shears the walls
+        G[0, 7] = om     # warping amplitude gradient psi' stretches them
+        return G
+
     @cached_property
     def _benscoter(self) -> Tuple[npt.NDArray[np.float64], float]:
-        sol = self._solution
         K6 = self._stiffness
         K8 = np.zeros((8, 8))
         inertia = 0.0
         for g in self._gauss_points:
-            Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B @ sol["W0"] + g.Nx @ sol["W1"]
-            om, om_s = self._omega_at(g)
-            G = np.zeros((4, 8))
-            G[:, :6] = Phi @ K6
-            G[1, 6] = om_s   # warping deviation d = psi - phi shears the walls
-            G[0, 7] = om     # warping amplitude gradient psi' stretches them
+            G = self._benscoter_wall_strains(g)
+            om, _ = self._omega_at(g)
             K8 += g.weight * G.T @ g.K @ G
             lam = self.laminates[self.section.wall(g.wall_id).laminate_id]
             inertia += g.weight * lam.mass_per_area * om * om
