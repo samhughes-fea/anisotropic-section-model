@@ -33,10 +33,10 @@ import numpy as np
 from _shared.iea15mw import DATA, build_segment
 from _shared.plotting import DIVERGING, REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import add_rib, box_spar, section_nodes
-from laminate_modelling_package import (BoundaryConditions, Laminate, LoadCase, RestrainedTorsionBeam,
-                                        StructuralGlobalSolver, ThinWalledSection, add_reference_node,
-                                        beam_section_properties, create_default_library, rigid_link,
-                                        transform_beam_stiffness)
+from anisotropic_section_model import RestrainedTorsionBeam, ThinWalledSection
+from composite_laminate_model import (BoundaryConditions, Laminate, LoadCase,
+    StructuralGlobalSolver, add_reference_node, beam_section_properties, create_default_library,
+    rigid_link, transform_beam_stiffness)
 
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "data" / "results.json"
@@ -50,7 +50,7 @@ FORCES = ["Fx", "Fy", "N", "Mx", "My", "Mz"]
 # Models
 # ---------------------------------------------------------------------------
 def laminates(lib, cap_angle=0.0):
-    """Example 27's box: carbon caps, glass ±45 webs. ``cap_angle`` turns the caps' 0° plies."""
+    """Example 01's box: carbon caps, glass ±45 webs. ``cap_angle`` turns the caps' 0° plies."""
     carbon, glass = lib.get("T300/5208"), lib.get("E-glass/epoxy")
     a = cap_angle
     cap = Laminate.from_angles(carbon, [a, a, 45, -45, -45, 45, a, a], 0.5e-3, "cap")

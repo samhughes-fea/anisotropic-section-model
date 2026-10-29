@@ -1,7 +1,7 @@
 """Torsion of a blade section, layer by layer: Saint-Venant, restrained warping, distortion.
 
 A prismatic blade segment (NACA 0024, 1 m chord, 6 m long: glass skins, carbon spar
-caps, two glass shear webs, the section of example 20) is clamped at the root and
+caps, two glass shear webs, the section of composite-laminate-model's example 20) is clamped at the root and
 twisted at the tip. Each layer of torsion theory adds one physical contribution, and
 each is checked against a shell model of the same blade (curved Quad8 FSDT, skins on
 their mid-surface):
@@ -32,10 +32,10 @@ import numpy as np
 from _shared.plotting import DIVERGING, REFERENCE, SEQUENTIAL, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import (add_rib, contour_coordinate, loop_order, section_nodes, shell_bimoment,
                              shell_section_motion)
-from laminate_modelling_package import (Airfoil, BladeBuilder, BoundaryConditions, FSDTModel, GeneralizedBeam,
-                                        Laminate, LoadCase, ResultsExtractor, RestrainedTorsionBeam, ShearWeb,
-                                        SkinRegion, Station, StructuralGlobalSolver, ThinWalledSection,
-                                        beam_section_properties, create_default_library)
+from anisotropic_section_model import GeneralizedBeam, RestrainedTorsionBeam, ThinWalledSection
+from composite_laminate_model import (Airfoil, BladeBuilder, BoundaryConditions, FSDTModel,
+    Laminate, LoadCase, ResultsExtractor, ShearWeb, SkinRegion, Station, StructuralGlobalSolver,
+    beam_section_properties, create_default_library)
 
 CHORD, LENGTH, N_SPAN = 1.0, 6.0, 24
 REGIONS = [SkinRegion("le_panel", 0.0, 0.18, 4), SkinRegion("spar_cap", 0.18, 0.48, 6),

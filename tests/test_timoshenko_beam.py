@@ -3,8 +3,9 @@
 import numpy as np
 import pytest
 
-from laminate_modelling_package import (GeneralizedBeam, Laminate, ThinWalledSection, TimoshenkoBeam,
-                                        create_default_library, euler_bernoulli_beam)
+from anisotropic_section_model import (euler_bernoulli_beam, GeneralizedBeam, ThinWalledSection,
+    TimoshenkoBeam)
+from composite_laminate_model import Laminate, create_default_library
 
 EI, GA, EA, GJ, L = 2e6, 5e5, 1e8, 1e6, 3.0
 K = np.diag([GA, GA, EA, EI, EI, GJ])

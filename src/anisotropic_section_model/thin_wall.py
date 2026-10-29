@@ -250,7 +250,7 @@ class ThinWalledSection:
 
     @classmethod
     def from_geometry(cls, cut, laminates, thickness_tol: float = 0.01, **options) -> "ThinWalledSection":
-        """The section of a ``blade_geometry_model.SectionCut`` (``BladeGeometry.section_at(z)``).
+        """The section of an ``implicit_geometry_kernel.SectionCut`` (``BladeGeometry.section_at(z)``).
 
         Walls follow the cut's wall midlines, one wall per midline segment, and take
         their laminate by label from ``laminates``: the full label

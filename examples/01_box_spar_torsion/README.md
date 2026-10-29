@@ -1,4 +1,4 @@
-# 27 · Box spar torsion: Saint-Venant, restrained warping and distortion
+# 01 · Box spar torsion: Saint-Venant, restrained warping and distortion
 
 A box spar, the load-carrying box of a blade or wing, is clamped at the root and
 twisted at the tip. Three torsion theories are layered on top of each other. Each
@@ -70,7 +70,7 @@ distortion.
 | Twist | The least-squares rotation of the section's nodes, measured the same way in the shell and GBT (an RBE3 reference node measures it the same way) |
 
 ```bash
-python examples/27_box_spar_torsion/box_spar_torsion.py     # about 25 s
+python examples/01_box_spar_torsion/box_spar_torsion.py     # about 25 s
 ```
 
 ## Results

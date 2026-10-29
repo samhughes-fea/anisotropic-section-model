@@ -1,6 +1,6 @@
 """Bending and axial load beyond Euler-Bernoulli on a composite box spar.
 
-Example 27 took torsion from Saint-Venant through restrained warping to distortion.
+Example 01 took torsion from Saint-Venant through restrained warping to distortion.
 This example does the same for bending and axial load on the same carbon/glass box
 spar, checking each layer of beam theory against a shell model of the box (flat
 Quad8, FSDT):
@@ -41,9 +41,9 @@ import numpy as np
 
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import add_rib, box_spar, contour_coordinate, loop_order, shell_section_motion
-from laminate_modelling_package import (BoundaryConditions, GeneralizedBeam, Laminate, LoadCase,
-                                        ResultsExtractor, StructuralGlobalSolver, ThinWalledSection,
-                                        TimoshenkoBeam, create_default_library)
+from anisotropic_section_model import GeneralizedBeam, ThinWalledSection, TimoshenkoBeam
+from composite_laminate_model import (BoundaryConditions, Laminate, LoadCase, ResultsExtractor,
+    StructuralGlobalSolver, create_default_library)
 
 WIDTH, HEIGHT = 0.5, 0.25
 N_WIDTH, N_HEIGHT = 8, 4

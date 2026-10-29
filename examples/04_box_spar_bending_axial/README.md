@@ -1,6 +1,6 @@
-# 30 · Box spar bending and axial load: shear, shear lag, distortion and end effects
+# 04 · Box spar bending and axial load: shear, shear lag, distortion and end effects
 
-Example 27 took torsion from Saint-Venant through restrained warping to distortion.
+Example 01 took torsion from Saint-Venant through restrained warping to distortion.
 This example does the same for **bending** and **axial load**, on the same carbon/glass
 box spar, with a shell model of the box as the reference.
 
@@ -9,7 +9,7 @@ box spar, with a shell model of the box as the reference.
 1. **Euler-Bernoulli.** Plane sections stay plane and normal to the axis: the classical
    4 × 4 stiffness, no shear strain.
 2. **Timoshenko.** The section also shears. GA comes from the thin-wall shear flows
-   (`ThinWalledSection.timoshenko_stiffness`, example 29) and the beam is solved with
+   (`ThinWalledSection.timoshenko_stiffness`, example 03) and the beam is solved with
    `TimoshenkoBeam`.
 3. **Shear lag (GBT warping modes).** The caps' axial stress is not uniform across
    their width near the clamp, because the shear flow that feeds the stress in also
@@ -80,8 +80,8 @@ Section: EI_flap = 6.564 MN m², GA_y = 9.546 MN (the thin-wall shear stiffness 
 the shear centre).
 
 ```bash
-python examples/30_box_spar_bending_axial/box_spar_bending_axial.py           # about 12 min
-python examples/30_box_spar_bending_axial/box_spar_bending_axial.py --reuse   # redraw from data/results.json
+python examples/04_box_spar_bending_axial/box_spar_bending_axial.py           # about 12 min
+python examples/04_box_spar_bending_axial/box_spar_bending_axial.py --reuse   # redraw from data/results.json
 ```
 
 ## Results
@@ -138,7 +138,7 @@ python examples/30_box_spar_bending_axial/box_spar_bending_axial.py --reuse   # 
   it. The webs move with the beam, which is why a beam model is still right for the
   overall deflection and wrong for the skin.
 - 2 distortional modes give 61% of the cap deflection and 4 give 99.6%: the cap bowing
-  is spread over several modes, unlike the single racking mode of torsion (example 27).
+  is spread over several modes, unlike the single racking mode of torsion (example 01).
 - Ribs every 1 m remove it: the cap and web deflections come back together on the
   Timoshenko value, and shell and GBT agree within 1.5%.
 
@@ -177,7 +177,7 @@ far-field N_zz):
   0.2 m, about one box width, and is matched by the extensible GBT point for point.
   The inextensible run cannot show it at all.
 - The same effect is why the shell's shear stiffness runs a few percent above thin-wall
-  theory when ν > 0 (Cowper's correction, example 29).
+  theory when ν > 0 (Cowper's correction, example 03).
 
 ## Notes
 
@@ -190,4 +190,4 @@ far-field N_zz):
   instead of the inextensible subspace, so use it for end effects and point-load
   diffusion, not for the overall response.
 - Linear static, prismatic sections. The shell is the reference here, not an exact
-  solution; its own mesh convergence is covered by examples 03 and 26.
+  solution; its own mesh convergence is covered by composite-laminate-model's examples [03](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/03_result_fidelity) and [26](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/26_mid_surface_meshing).

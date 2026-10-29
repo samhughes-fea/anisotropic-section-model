@@ -1,10 +1,10 @@
-"""Build the reference data for example 24 from the published IEA 15 MW blade definition.
+"""Build the IEA 15 MW reference data (composite-laminate-model's example 24) from the published IEA 15 MW blade definition.
 
 This script is run once; its output, ``iea15mw_sections.json`` next to it, is committed so the
 example itself needs neither WISDEM nor a network connection. To regenerate it::
 
     pip install wisdem pyyaml
-    python examples/24_iea15mw_section_properties/data/prepare_reference_data.py
+    python examples/_shared/data/prepare_reference_data.py
 
 It does three things:
 

@@ -1,11 +1,11 @@
-# 32 · A blade from its implicit section geometry
+# 06 · A blade from its implicit section geometry
 
-`blade_geometry_model` holds an implicit (signed-distance) section geometry with 40
+`implicit_geometry_kernel` holds an implicit (signed-distance) section geometry with 40
 structural layouts: skins, spar caps, any number of shear webs, cap bands and boxes.
 This example lofts one of them along a blade, cuts it at any span position, and feeds
 the same cut to both downstream models. `ThinWalledSection.from_geometry` builds the
 beam section straight from the cut. `BladeBuilder.from_geometry` meshes the walls as
-shells along the span. Both are checked against example 20's region-based shell model
+shells along the span. Both are checked against composite-laminate-model's [example 20](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/20_blade_beam_properties), a region-based shell model
 of the same section, and then followed along a tapered, twisted segment.
 
 ![Sections of a tapered, twisted segment and its stiffness along the span](figures/tapered_segment.png)
@@ -24,8 +24,8 @@ of the same section, and then followed along a tapered, twisted segment.
 | References | example 20's `BladeBuilder` model with explicit regions and webs |
 
 ```bash
-python examples/32_blade_from_implicit_geometry/blade_from_implicit_geometry.py
-python examples/32_blade_from_implicit_geometry/blade_from_implicit_geometry.py --reuse  # redraw only
+python examples/06_blade_from_implicit_geometry/blade_from_implicit_geometry.py
+python examples/06_blade_from_implicit_geometry/blade_from_implicit_geometry.py --reuse  # redraw only
 ```
 
 ## Walkthrough
@@ -36,7 +36,7 @@ python examples/32_blade_from_implicit_geometry/blade_from_implicit_geometry.py 
    skin, and webs end on the skin mid-surface. Any thickness can be a function of z.
 
    ```python
-   from blade_geometry_model import BladeGeometry
+   from implicit_geometry_kernel import BladeGeometry
    geo = BladeGeometry(stations, "2D-F", skin_thickness=0.003, spar_cap_thickness=0.008,
                        shear_web_thickness=0.002, web_positions=(0.18, 0.48))
    cut = geo.section_at(3.0)  # wall midlines, thicknesses, labels and cells at z = 3 m
@@ -98,7 +98,7 @@ investigated here.
 
 Along the tapered segment, the thin-walled section from the geometry's shell mesh
 matches `from_geometry` to within 0.3% at every element-edge section. The root is 17
-times stiffer than the tip in torsion and 28 times in flapwise bending. Most of that
+times stiffer than the tip in torsion and 02 times in flapwise bending. Most of that
 comes from the chord: the section scales roughly with chord³ for bending and torsion.
 
 Any of the 40 layouts can be cut and meshed in the same way:

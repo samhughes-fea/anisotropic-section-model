@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from laminate_modelling_package import FEAMesh
+from composite_laminate_model import FEAMesh
 
 
 def box_spar(width, height, length, laminates, n_width=6, n_height=4, n_span=30, kinematics=None):
@@ -18,7 +18,7 @@ def box_spar(width, height, length, laminates, n_width=6, n_height=4, n_span=30,
     their mid-surfaces). Returns an object with ``mesh``, ``node_sets`` (root, tip),
     ``element_sets`` and ``span_positions``, usable with ``ThinWalledSection.from_blade_mesh``.
     """
-    from laminate_modelling_package import FSDTModel
+    from composite_laminate_model import FSDTModel
 
     kin = kinematics or FSDTModel()
     b, h = width, height
@@ -154,7 +154,7 @@ def add_rib(mesh, bcs, z, centre=(0.0, 0.0)):
     The section stays rigid in its plane and free to warp. Returns the reference node,
     whose rotation about z is the rib's twist and which takes a torque as a moment.
     """
-    from laminate_modelling_package import add_reference_node, rigid_link
+    from composite_laminate_model import add_reference_node, rigid_link
 
     ref = add_reference_node(mesh, (centre[0], centre[1], z))
     rigid_link(mesh, bcs, ref, section_nodes(mesh, z), dofs=(0, 1))

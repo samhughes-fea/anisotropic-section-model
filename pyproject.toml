@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anisotropic-section-model"
+dynamic = ["version"]
+description = "Beam-section theory for anisotropic thin-walled sections: Saint-Venant, Vlasov and Benscoter torsion, generalized beam theory, Timoshenko 6 x 6 and Timoshenko-Vlasov 7 x 7 stiffness, and exact Timoshenko beams."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Sam Hughes" }]
+requires-python = ">=3.11"
+# walls are laminates: Laminate and integrate_abd come from the laminate model
+dependencies = ["numpy>=1.22", "composite-laminate-model>=0.1.0"]
+keywords = ["composite", "thin-walled beam", "torsion", "warping", "generalized beam theory",
+            "Timoshenko", "wind turbine blade", "wing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+sparse = ["scipy>=1.8"]
+examples = ["scipy>=1.8", "matplotlib>=3.5"]
+dev = ["scipy>=1.8", "matplotlib>=3.5", "pytest>=7", "build>=1.0"]
+
+[project.urls]
+Homepage = "https://github.com/samhughes-fea/anisotropic-section-model"
+Source = "https://github.com/samhughes-fea/anisotropic-section-model"
+Issues = "https://github.com/samhughes-fea/anisotropic-section-model/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "anisotropic_section_model.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

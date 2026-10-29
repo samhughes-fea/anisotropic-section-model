@@ -1,7 +1,7 @@
-# 31 · Blade bending and axial load: shear, shear lag, distortion and diffusion
+# 05 · Blade bending and axial load: shear, shear lag, distortion and diffusion
 
-Example 30 took bending and axial load beyond Euler-Bernoulli on a rectangular box.
-This example does the same on the three-cell blade section of examples 20 and 28
+Example 04 took bending and axial load beyond Euler-Bernoulli on a rectangular box.
+This example does the same on the three-cell blade section of composite-laminate-model's [example 20](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/20_blade_beam_properties) and example 02
 (NACA 0024, 1 m chord, glass skins and webs, 16-ply carbon spar caps), where the caps
 are 22 times stiffer per unit length than the skins and the section is far from rigid
 in its plane. Everything is checked against a shell model of the same blade (curved
@@ -34,11 +34,11 @@ Quad8 FSDT, skins on their mid-surface).
 | Loads | 5 kN flapwise at the tip through a tip rib; 2 kPa suction on the upper skin; 50 kN axial into the caps alone at the tip |
 
 Section: EI_flap = 11.52 MN m², GA_flap = 11.64 MN (thin-wall) and 12.29 MN (the
-shell's own 6 × 6; the Poisson effect of example 29).
+shell's own 6 × 6; the Poisson effect of example 03).
 
 ```bash
-python examples/31_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.py           # about 6 min
-python examples/31_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.py --reuse   # redraw from data/results.json
+python examples/05_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.py           # about 6 min
+python examples/05_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.py --reuse   # redraw from data/results.json
 ```
 
 ## Results
@@ -58,7 +58,7 @@ python examples/31_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.p
 - At L/chord = 3 the shear deflection is a quarter of the total, and Euler-Bernoulli
   misses all of it. Both 6 × 6 matrices land within 1%: thin-wall theory 0.5% soft and
   the shell's own 6 × 6 0.9% stiff (its GA is 5.6% higher, the Poisson effect of
-  example 29, but it only changes a quarter of the answer).
+  example 03, but it only changes a quarter of the answer).
 - GBT with plane sections is 3.2% soft and with the shear-lag modes exact to three
   figures. Distortion adds 0.1%: a tip shear through a rib hardly distorts the
   section.
@@ -89,7 +89,7 @@ python examples/31_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.p
 
 (Timoshenko gives 2.671 mm.)
 
-- Unlike the box of example 30, the blade section's beam deflection and its distortion
+- Unlike the box of example 04, the blade section's beam deflection and its distortion
   are the same order: the skin moves 43% more than the beam does and the webs 15% less,
   because the suction also pulls the section open between the webs. A beam model gives
   neither number.
@@ -114,7 +114,7 @@ Far-field skin stress: shell 1.89 kN/m, extensible GBT 1.89, GBT with shear lag 
 plane sections 2.04 kN/m.
 
 - The load takes about 1.4 m, well over a chord, to reach the skins. That is much
-  further than the box spar's half metre in example 30, because the skins are so much
+  further than the box spar's half metre in example 04, because the skins are so much
   softer than the caps: the shear lag length grows with the stiffness ratio. A cap
   termination or a root insert needs that much span before plane sections hold.
 - Round the section (middle and right panels) the shell and GBT agree point for point

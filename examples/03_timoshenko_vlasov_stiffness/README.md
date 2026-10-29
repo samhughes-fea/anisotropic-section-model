@@ -1,8 +1,8 @@
-# 29 · Beam section stiffness: Timoshenko 6 × 6 and Timoshenko-Vlasov 7 × 7
+# 03 · Beam section stiffness: Timoshenko 6 × 6 and Timoshenko-Vlasov 7 × 7
 
 The classical section stiffness of a blade is a 4 × 4: it relates the axial force and
 the three moments [N, Mx, My, Mz] to extension, the two bending curvatures and the
-twist rate. Two deformations that examples 27 and 28 showed to matter are not in it:
+twist rate. Two deformations that examples 01 and 02 showed to matter are not in it:
 
 - **Transverse shear.** The Timoshenko 6 × 6 adds the two shear strains γx, γy and
   their forces Fx, Fy. It carries shear deflection and the coupling of shear with twist
@@ -59,7 +59,7 @@ details decide the numbers:
   box spar's chordwise GA 12% stiffer.
 - *End ribs.* The clamp and the rigid tip restrain warping, and with nothing to stop
   it the section distorts to relieve that restraint, over a length that reaches the
-  middle of the span: the box spar's GJ reads 4.9% high and example 28's blade 2.4%
+  middle of the span: the box spar's GJ reads 4.9% high and example 02's blade 2.4%
   low. `end_ribs=0.2` holds the sections over the end fifths rigid in their plane
   (free to warp), as ribs or bulkheads do; then GJ is the Saint-Venant value. It does
   not change EA or EI (0.02%).
@@ -80,10 +80,10 @@ shear centre, orthogonal to extension and bending, so the bimoment is uncoupled.
 
 | Item | Value |
 |---|---|
-| Box spar | Example 27's box: 0.5 × 0.25 m wall mid-lines, carbon caps [0₂/45/−45/−45/45/0₂] (8 × 0.5 mm), glass webs [±45]s (4 × 0.5 mm); a variant with 20° in place of the caps' 0° plies |
+| Box spar | Example 01's box: 0.5 × 0.25 m wall mid-lines, carbon caps [0₂/45/−45/−45/45/0₂] (8 × 0.5 mm), glass webs [±45]s (4 × 0.5 mm); a variant with 20° in place of the caps' 0° plies |
 | Box shell | Flat Quad8 FSDT, 6 across each cap, 3 up each web, 8 elements per metre along the span (12 at least); 4 m segment for the section stiffness |
 | Cantilevers | 0.5 to 6 m, root clamped, unit tip force through a rigid tip diaphragm |
-| IEA 15 MW | The six stations of example 24 as prismatic segments 8 chords long, curved Quad8 FSDT on the mid-surface (`mesh_surface="mid"`), chordwise size 1.5% of the perimeter, 32 along the span |
+| IEA 15 MW | The six stations of composite-laminate-model's [example 24](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/24_iea15mw_section_properties) as prismatic segments 8 chords long, curved Quad8 FSDT on the mid-surface (`mesh_surface="mid"`), chordwise size 1.5% of the perimeter, 32 along the span |
 | Published data | The windIO `elastic_properties` 6 × 6 of the IEA 15 MW yaml, turned into the shell's axes |
 
 The published axes are x flapwise and y chordwise aft, both from the pitch axis: a
@@ -92,8 +92,8 @@ y and, since moments are pseudo-vectors, flips their sign. With that, all three 
 have the same couplings with the same signs (last figure).
 
 ```bash
-python examples/29_timoshenko_vlasov_stiffness/timoshenko_vlasov_stiffness.py           # about 20 minutes
-python examples/29_timoshenko_vlasov_stiffness/timoshenko_vlasov_stiffness.py --reuse   # figures from data/results.json
+python examples/03_timoshenko_vlasov_stiffness/timoshenko_vlasov_stiffness.py           # about 20 minutes
+python examples/03_timoshenko_vlasov_stiffness/timoshenko_vlasov_stiffness.py --reuse   # figures from data/results.json
 ```
 
 ## Results
@@ -148,7 +148,7 @@ webs):
 shell's twist follows Benscoter's closed form with its own EΓ and S point for point,
 and with the thin-wall EΓ and S within 1 mm of GJ θ / T near the clamp. Vlasov's theory
 (the 7 × 7 with S = ∞) overstates the twist lost to the restraint more than twice, as
-example 27 found: a closed box is not shear-rigid in warping.
+example 01 found: a closed box is not shear-rigid in warping.
 
 ### IEA 15 MW blade
 
@@ -195,5 +195,5 @@ thin-wall and published values against the shell.
   curve to second order. The earlier behaviour, each wall also free to bend
   (`"free"`), was too soft for unsymmetric walls (a sandwich panel with one heavy face,
   a cap on one side of a core): GJ 16% and edgewise GA 31% low at r = 44.3 m. The two
-  are the same for symmetric walls, so examples 27 and 28 do not change.
+  are the same for symmetric walls, so examples 01 and 02 do not change.
 - The 6 × 6 and 7 × 7 describe prismatic sections. Linear static analysis only.

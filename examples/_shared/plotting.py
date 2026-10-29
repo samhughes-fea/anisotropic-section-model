@@ -82,7 +82,7 @@ def simply_supported(mesh, a, b, hard=True):
     Hard supports also fix the tangential rotation and, for zig-zag and layerwise
     models, the tangential enrichment amplitudes (the Navier / Pagano condition).
     """
-    from laminate_modelling_package import DOF, BoundaryConditions, EnrichedDOF
+    from composite_laminate_model import DOF, BoundaryConditions, EnrichedDOF
 
     bcs = BoundaryConditions()
     for n in mesh.nodes_on_line(0, 0.0) + mesh.nodes_on_line(0, a):

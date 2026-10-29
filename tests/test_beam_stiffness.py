@@ -5,18 +5,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from laminate_modelling_package import (
-    FEAMesh,
-    FSDTModel,
-    Laminate,
-    Ply,
-    ThinWalledSection,
-    beam_section_properties,
-    create_default_library,
-    transform_beam_stiffness,
-)
-from laminate_modelling_package.laminate_materials import MaterialCard
-from laminate_modelling_package.laminate_materials_3d import ElasticProperties3D, StrengthProperties3D
+from anisotropic_section_model import ThinWalledSection
+from composite_laminate_model import (FEAMesh, FSDTModel, Laminate, Ply, beam_section_properties,
+    create_default_library, transform_beam_stiffness)
+from composite_laminate_model.laminate_materials import MaterialCard
+from composite_laminate_model.laminate_materials_3d import ElasticProperties3D, StrengthProperties3D
 
 E, NU, T = 68.9e9, 0.33, 0.004
 G = E / (2 * (1 + NU))

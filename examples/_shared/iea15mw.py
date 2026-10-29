@@ -1,10 +1,10 @@
 """The IEA 15 MW reference blade as PreComp sections, rebuilt as shell models.
 
-``examples/24_iea15mw_section_properties/data/iea15mw_sections.json`` holds six
+``examples/_shared/data/iea15mw_sections.json`` holds six
 stations of the published blade layup as PreComp sees them: the airfoil, sector
 boundaries on each surface, the laminae of each sector and the webs. These helpers
-turn a station into ``BladeBuilder`` regions, webs and laminates. Examples 24 and 25
-use them.
+turn a station into ``BladeBuilder`` regions, webs and laminates. Example 03 uses them;
+the data are those of composite-laminate-model's example 24.
 """
 
 from __future__ import annotations
@@ -14,20 +14,12 @@ from pathlib import Path
 
 import numpy as np
 
-from laminate_modelling_package import (
-    Airfoil,
-    BladeBuilder,
-    FSDTModel,
-    Laminate,
-    Ply,
-    ShearWeb,
-    SkinRegion,
-    Station,
-)
-from laminate_modelling_package.laminate_materials import MaterialCard
-from laminate_modelling_package.laminate_materials_3d import ElasticProperties3D, StrengthProperties3D
+from composite_laminate_model import (Airfoil, BladeBuilder, FSDTModel, Laminate, Ply, ShearWeb,
+    SkinRegion, Station)
+from composite_laminate_model.laminate_materials import MaterialCard
+from composite_laminate_model.laminate_materials_3d import ElasticProperties3D, StrengthProperties3D
 
-DATA_FILE = Path(__file__).resolve().parents[1] / "24_iea15mw_section_properties" / "data" / "iea15mw_sections.json"
+DATA_FILE = Path(__file__).resolve().parent / "data" / "iea15mw_sections.json"
 DATA = json.loads(DATA_FILE.read_text())
 TE_CLOSE = 0.01  # trailing-edge gaps below this fraction of the chord are closed
 

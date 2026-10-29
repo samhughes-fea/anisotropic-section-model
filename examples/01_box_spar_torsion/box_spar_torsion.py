@@ -29,9 +29,9 @@ import numpy as np
 from _shared.plotting import DIVERGING, REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import (add_rib, box_spar, contour_coordinate, loop_order, section_nodes,
                              shell_bimoment, shell_section_motion)
-from laminate_modelling_package import (BoundaryConditions, GeneralizedBeam, Laminate, LoadCase,
-                                        ResultsExtractor, RestrainedTorsionBeam, StructuralGlobalSolver,
-                                        ThinWalledSection, create_default_library)
+from anisotropic_section_model import GeneralizedBeam, RestrainedTorsionBeam, ThinWalledSection
+from composite_laminate_model import (BoundaryConditions, Laminate, LoadCase, ResultsExtractor,
+    StructuralGlobalSolver, create_default_library)
 
 WIDTH, HEIGHT, LENGTH = 0.5, 0.25, 4.0
 N_WIDTH, N_HEIGHT, N_SPAN = 6, 3, 32

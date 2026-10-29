@@ -3,21 +3,10 @@
 import numpy as np
 import pytest
 
-from laminate_modelling_package import (
-    BoundaryConditions,
-    FEAMesh,
-    FSDTModel,
-    GeneralizedBeam,
-    Laminate,
-    LoadCase,
-    RestrainedTorsionBeam,
-    SectionModes,
-    StructuralGlobalSolver,
-    ThinWalledSection,
-    add_reference_node,
-    create_default_library,
-    rigid_link,
-)
+from anisotropic_section_model import (GeneralizedBeam, RestrainedTorsionBeam, SectionModes,
+    ThinWalledSection)
+from composite_laminate_model import (BoundaryConditions, FEAMesh, FSDTModel, Laminate, LoadCase,
+    StructuralGlobalSolver, add_reference_node, create_default_library, rigid_link)
 
 E, NU, T = 68.9e9, 0.33, 0.004
 G = E / (2 * (1 + NU))
