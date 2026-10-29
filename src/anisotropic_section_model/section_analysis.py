@@ -78,11 +78,18 @@ class SectionAnalysis:
     warping_inertia : float
         ``int rho_A omega^2 ds`` for the warping amplitude DOF.
     gbt_modes : int
-        Cross-section distortional modes carried (0 when none were asked for).
-    gbt_stiffness : ndarray (8 + 3m, 8 + 3m) or None
-        Element-signed GBT stiffness for ``[Benscoter strains, a''(m), a'(m), a(m)]``.
-    gbt_mass : ndarray (7 + 2m, 7 + 2m) or None
-        Section mass for ``[u, v, w, theta_x, theta_y, theta_z, psi, a(m), a'(m)]``.
+        Cross-section distortional modes carried, ``M`` (0 when none were asked for).
+    gbt_shear_modes : int
+        Extra shear-lag warping modes carried, ``P``.
+    gbt_sv_modes : int
+        Warping modes spanning the Saint-Venant warping, ``n_sv`` (always carried by a GBT
+        section; 0 without GBT matrices).
+    gbt_stiffness : ndarray or None
+        Element-signed GBT stiffness, square of size ``6 + 2(n_sv + P) + 3M``, for
+        ``[psi6, b'(n_sv + P), b(n_sv + P), a''(M), a'(M), a(M)]``.
+    gbt_mass : ndarray or None
+        Section mass, square of size ``6 + (n_sv + P) + 2M``, for
+        ``[u, v, w, theta_x, theta_y, theta_z, b(n_sv + P), a(M), a'(M)]``.
     """
 
     stiffness: npt.NDArray[np.float64]
@@ -98,6 +105,8 @@ class SectionAnalysis:
     gbt_modes: int = 0
     gbt_stiffness: Optional[npt.NDArray[np.float64]] = None
     gbt_mass: Optional[npt.NDArray[np.float64]] = None
+    gbt_shear_modes: int = 0
+    gbt_sv_modes: int = 0
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -140,10 +149,18 @@ class SectionAnalysis:
         return cls(D, C, E * Gamma, (float(y_sc), float(z_sc)), (0.0, 0.0), mass, "isotropic", None)
 
     @classmethod
-    def from_thin_walled(cls, analysis, section_id: Optional[int] = None, gbt_modes: int = 0) -> "SectionAnalysis":
+    def from_thin_walled(
+        cls,
+        analysis,
+        section_id: Optional[int] = None,
+        gbt_modes: int = 0,
+        gbt_shear_modes: int = 0,
+        gbt: bool = False,
+    ) -> "SectionAnalysis":
         """From a ``ThinWalledSectionAnalysis`` (right-handed results mapped to element signs).
 
-        ``gbt_modes > 0`` also builds the GBT matrices of that many distortional modes
+        ``gbt=True`` (implied by ``gbt_modes`` or ``gbt_shear_modes`` > 0) also builds the
+        GBT matrices with that many distortional and extra shear-lag modes
         (``CrossSectionModes``; the analysis must use ``hoop="restrained"``).
         """
         K = to_element_voigt(analysis.stiffness)
@@ -157,13 +174,17 @@ class SectionAnalysis:
         except ValueError:
             KB, w_inertia = None, 0.0
         K_gbt = M_gbt = None
-        if gbt_modes:
+        n_sv = 0
+        if gbt or gbt_modes or gbt_shear_modes:
             from pre_processing.section_integration.thin_walled.cross_section_modes import CrossSectionModes
 
             modes = CrossSectionModes(analysis)
-            Sg = np.diag(np.r_[np.diag(S8), np.ones(3 * gbt_modes)])
-            K_gbt = Sg @ modes.stiffness(gbt_modes) @ Sg
-            M_gbt = modes.mass(gbt_modes)
+            n_sv = modes.n_sv_warping
+            K_r = modes.stiffness(gbt_modes, gbt_shear_modes)
+            Sg = np.ones(K_r.shape[0])
+            Sg[1] = -1.0  # element sign of kappa_y
+            K_gbt = Sg[:, None] * K_r * Sg[None, :]
+            M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
         out = cls(
             K,
             C,
@@ -178,6 +199,8 @@ class SectionAnalysis:
             int(gbt_modes),
             K_gbt,
             M_gbt,
+            int(gbt_shear_modes),
+            int(n_sv),
         )
         if M_gbt is not None:
             # rigid block with the walls' own rotary inertia, as mass_matrix()
@@ -185,14 +208,30 @@ class SectionAnalysis:
         return out
 
     # ------------------------------------------------------------------ #
-    def gbt_matrices(self, n_modes: int) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-        """GBT stiffness (8 + 3n) and mass (7 + 2n) of the first ``n_modes`` modes."""
-        M_all = self.gbt_modes
-        if self.gbt_stiffness is None or not 0 < n_modes <= M_all:
-            raise ValueError(f"section carries {M_all} cross-section modes; asked for {n_modes}")
+    def gbt_indices(self, n_modes: int, n_shear: int = 0) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:
+        """Rows of the stored GBT stiffness and mass (or wall load) for the first modes.
+
+        The element carries the ``gbt_sv_modes`` Saint-Venant warping modes, the first
+        ``n_shear`` shear-lag modes and the first ``n_modes`` distortional modes.
+        """
+        M, P = self.gbt_modes, self.gbt_shear_modes
+        if self.gbt_stiffness is None or not (0 <= n_modes <= M and 0 <= n_shear <= P):
+            raise ValueError(
+                f"section carries {M} cross-section and {P} shear-lag modes"
+                f"{'' if self.gbt_stiffness is not None else ' (no GBT matrices)'}; "
+                f"asked for {n_modes} and {n_shear}"
+            )
+        Pt = self.gbt_sv_modes + P
+        j = np.arange(self.gbt_sv_modes + n_shear)
         k = np.arange(n_modes)
-        ik = np.r_[np.arange(8), 8 + k, 8 + M_all + k, 8 + 2 * M_all + k]
-        im = np.r_[np.arange(7), 7 + k, 7 + M_all + k]
+        oa = 6 + 2 * Pt
+        ik = np.r_[np.arange(6), 6 + j, 6 + Pt + j, oa + k, oa + M + k, oa + 2 * M + k]
+        im = np.r_[np.arange(6), 6 + j, 6 + Pt + k, 6 + Pt + M + k]
+        return ik, im
+
+    def gbt_matrices(self, n_modes: int, n_shear: int = 0) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """GBT stiffness and mass of the first modes (see ``gbt_indices``)."""
+        ik, im = self.gbt_indices(n_modes, n_shear)
         return self.gbt_stiffness[np.ix_(ik, ik)].copy(), self.gbt_mass[np.ix_(im, im)].copy()
 
     @property

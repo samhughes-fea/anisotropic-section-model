@@ -31,6 +31,25 @@ modes are the admissible vectors orthogonal to them in the warping stiffness
 ``C``, ordered by the generalised eigenproblem ``B x = lambda C x`` (``B`` the
 transverse wall-bending stiffness), lowest first.
 
+Warping modes (shear-deformable warping)
+----------------------------------------
+In the GBT element all out-of-plane warping is carried by warping modes
+``Omega_j(s)`` with their own amplitudes ``b_j(x)``: ``u_x += Omega_j b_j``, so
+``eps_xx += Omega_j b_j'`` and ``gamma_xs += Omega_j,s b_j``. The first modes span
+the Saint-Venant warping of the six beam strains (shear warping and torsional
+warping), so the Saint-Venant solution is recovered away from the ends; further
+shear-lag modes come from ``E x = mu A x`` (membrane shear vs axial stiffness) in
+the complement. A support with ``b = 0`` keeps the section plane there, which is
+what produces shear lag and the warping-restraint end effects. The modes use the
+warping discretisation of the ``ThinWalledSectionAnalysis`` (``n_sub`` cubic
+elements per wall).
+
+Wall loads
+----------
+A surface load ``p = p_x e_x + p_s t + p_n n`` on a wall does work
+``int p . u ds`` per unit length, which gives the generalised load on
+``[u, v, w, theta_x, theta_y, theta_z, b, a, a']``.
+
 Public API
 ----------
 CrossSectionModes.
@@ -270,7 +289,98 @@ class CrossSectionModes:
         return self._modes[1][:, :n_modes]
 
     # ------------------------------------------------------------------ #
-    # Coupled GBT section stiffness and mass
+    # Warping modes (shear-deformable warping)
+    # ------------------------------------------------------------------ #
+    @cached_property
+    def _axial_warping_stiffness(self) -> npt.NDArray[np.float64]:
+        """``A = int Nx_0^T K_00 Nx_0 ds`` on the warping DOFs of the Saint-Venant analysis."""
+        an = self.analysis
+        A = np.zeros((an.n_dof, an.n_dof))
+        for g in an._gauss_points:
+            A += g.weight * g.K[0, 0] * np.outer(g.Nx[0], g.Nx[0])
+        return 0.5 * (A + A.T)
+
+    @cached_property
+    def _warping_basis(self) -> Tuple[npt.NDArray[np.float64], int, npt.NDArray[np.float64]]:
+        """Warping modes on the Saint-Venant warping DOFs: ``(Omega, n_sv, mu)``.
+
+        The first ``n_sv`` columns span the Saint-Venant warping of the six beam
+        strains and their rates (``W0``, ``W1``), so uniform and linearly varying
+        section forces are reproduced exactly. The rest are shear-lag modes from
+        ``E x = mu A x`` in the complement, lowest first. All columns are
+        ``A``-orthogonal to the rigid axial fields ``1, y, z`` and to each other.
+        """
+        an = self.analysis
+        A = self._axial_warping_stiffness
+        E = an._matrices["E"]
+        R = an._rigid_modes
+        sol = an._solution
+
+        def deflate(W, Q):
+            if Q.shape[1] == 0:
+                return W
+            return W - Q @ np.linalg.solve(Q.T @ A @ Q, Q.T @ A @ W)
+
+        def orthonormal(W):
+            # scale columns first: the force and rate fields differ by many orders
+            nrm = np.sqrt(np.maximum(np.einsum("ik,ij,jk->k", W, A, W), 0.0))
+            big = nrm > 1e-12 * max(nrm.max(), 1e-300)
+            W = W[:, big] / nrm[big]
+            G = W.T @ A @ W
+            lam, V = np.linalg.eigh(0.5 * (G + G.T))
+            keep = lam > 1e-10 * max(lam.max(), 1e-300)
+            return W @ V[:, keep] / np.sqrt(lam[keep])
+
+        Rr = orthonormal(R)
+        Wsv = orthonormal(deflate(np.hstack([sol["W0"], sol["W1"]]), Rr))
+        # order the Saint-Venant modes by their shear stiffness too
+        mu_sv, Y = eigh(Wsv.T @ E @ Wsv, Wsv.T @ A @ Wsv)
+        Wsv = Wsv @ Y
+        Q = np.hstack([Rr, Wsv])
+        P = null_space((A @ Q).T)
+        if P.shape[1]:
+            X = P
+            for _ in range(3):
+                mu_x, Yx = eigh(X.T @ E @ X, X.T @ A @ X)
+                X = X @ Yx
+        else:
+            X, mu_x = np.zeros((an.n_dof, 0)), np.zeros(0)
+        Om = np.hstack([Wsv, X])
+        Om = Om / np.abs(Om).max(axis=0)
+        Om = Om * np.sign(Om[np.argmax(np.abs(Om), axis=0), np.arange(Om.shape[1])])
+        mu = np.einsum("ik,ij,jk->k", Om, E, Om) / np.einsum("ik,ij,jk->k", Om, A, Om)
+        return Om, Wsv.shape[1], mu
+
+    @property
+    def n_sv_warping(self) -> int:
+        """Warping modes always carried: the span of the Saint-Venant warping."""
+        return self._warping_basis[1]
+
+    @property
+    def n_shear_modes(self) -> int:
+        """Extra (shear-lag) warping modes available beyond the Saint-Venant ones."""
+        return self._warping_basis[0].shape[1] - self._warping_basis[1]
+
+    @property
+    def warping_eigenvalues(self) -> npt.NDArray[np.float64]:
+        """``E_jj / A_jj`` of each warping mode (1 / length^2): Saint-Venant ones, then shear-lag ones."""
+        return self._warping_basis[2].copy()
+
+    def warping_mode(self, j: int) -> npt.NDArray[np.float64]:
+        """Warping mode ``j`` on the Saint-Venant warping DOFs (``analysis.point_dof`` for section points)."""
+        return self._warping_basis[0][:, j].copy()
+
+    def _check_warping(self, n_shear: int) -> npt.NDArray[np.float64]:
+        if n_shear < 0 or n_shear > self.n_shear_modes:
+            raise ValueError(f"asked for {n_shear} shear-lag modes; the section has {self.n_shear_modes}")
+        return self._warping_basis[0][:, :self.n_sv_warping + n_shear]
+
+    def n_warping(self, n_shear: int = 0) -> int:
+        """Warping amplitudes per node for ``n_shear`` extra shear-lag modes."""
+        return self.n_sv_warping + n_shear
+
+    # ------------------------------------------------------------------ #
+    # GBT section stiffness, mass and wall loads
     # ------------------------------------------------------------------ #
     def _locate(self, wall_id: int, position: np.ndarray) -> Tuple[Dict, float]:
         els = self._wall_elements[wall_id]
@@ -280,61 +390,94 @@ class CrossSectionModes:
         e = self._elements[els[k]]
         return e, s / e["le"] - k
 
-    def stiffness(self, n_modes: int) -> npt.NDArray[np.float64]:
-        """Right-handed GBT section stiffness (8 + 3m, 8 + 3m).
+    def stiffness(self, n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
+        """Right-handed GBT section stiffness, square of size ``6 + 2p + 3m``.
 
-        Strains ``[psi6, d, psi', a''(m), a'(m), a(m)]``: the Benscoter strains followed
-        by the mode amplitude derivatives. The leading 8 x 8 block is
-        ``benscoter_stiffness``.
+        Strains ``[psi6, b'(p), b(p), a''(m), a'(m), a(m)]`` with ``p = n_warping(n_shear)``.
+        The beam strains act with plane-section kinematics; all warping is carried by
+        the amplitudes ``b`` of the warping modes, so a restrained end (``b = 0``) gives
+        shear lag and warping-restraint effects. Wall strains::
+
+            eps_xx   = Z_0 psi6 + Omega b' + u_k a_k''
+            gamma_xs = Z_1 psi6 + Omega_s b
+            kappa_xx = Z_2 psi6 - w_k a_k''
+            kappa_ss = -w_k,ss a_k
+            kappa_xs = -2 phi - 2 w_k,s a_k'
         """
         X = self._check(n_modes)
-        m = X.shape[1]
-        n = 8 + 3 * m
+        Om = self._check_warping(n_shear)
+        m, p = X.shape[1], Om.shape[1]
+        n = 6 + 2 * p + 3 * m
+        o_a = 6 + 2 * p
         K = np.zeros((n, n))
-        an = self.analysis
-        for g in an._gauss_points:
+        for g in self.analysis._gauss_points:
             H = np.zeros((5, n))
-            H[_BEAM_ROWS, :8] = an._benscoter_wall_strains(g)
+            H[_BEAM_ROWS, :6] = g.Z
+            H[0, 6:6 + p] = g.Nx[0] @ Om
+            H[1, 6 + p:o_a] = g.B[1] @ Om
             e, xi = self._locate(g.wall_id, g.position)
             f = self._fields(e, xi)
             q = X[self._element_dofs(e)]
-            H[0, 8:8 + m] = f["u"] @ q
-            H[2, 8:8 + m] = -(f["w"] @ q)
-            H[1, 8 + m:8 + 2 * m] = (f["u_s"] + f["v"]) @ q
-            H[4, 8 + m:8 + 2 * m] = -2.0 * (f["w_s"] @ q)
-            H[3, 8 + 2 * m:] = -(f["w_ss"] @ q)
+            H[0, o_a:o_a + m] = f["u"] @ q
+            H[2, o_a:o_a + m] = -(f["w"] @ q)
+            H[1, o_a + m:o_a + 2 * m] = (f["u_s"] + f["v"]) @ q
+            H[4, o_a + m:o_a + 2 * m] = -2.0 * (f["w_s"] @ q)
+            H[3, o_a + 2 * m:] = -(f["w_ss"] @ q)
             K += g.weight * H.T @ self._laws[e["wall"].laminate_id] @ H
-        K = 0.5 * (K + K.T)
-        K[:8, :8] = an.benscoter_stiffness
-        return K
+        return 0.5 * (K + K.T)
 
-    def mass(self, n_modes: int) -> npt.NDArray[np.float64]:
-        """Section mass (7 + 2m, 7 + 2m) for ``[u, v, w, theta_x, theta_y, theta_z, psi, a(m), a'(m)]``.
+    def _displacement_map(self, g, X, Om) -> Tuple[npt.NDArray[np.float64], Dict]:
+        """``Pi`` (3, 6 + p + 2m): wall displacement per ``[u, v, w, theta, b(p), a(m), a'(m)]``."""
+        m, p = X.shape[1], Om.shape[1]
+        n = 6 + p + 2 * m
+        y, z = g.position
+        e, xi = self._locate(g.wall_id, g.position)
+        f = self._fields(e, xi)
+        q = X[self._element_dofs(e)]
+        t, nn = e["t"], e["n"]
+        v_k, w_k, u_k = f["v"] @ q, f["w"] @ q, f["u"] @ q
+        Pi = np.zeros((3, n))
+        Pi[0, [0, 4, 5]] = [1.0, z, -y]
+        Pi[1, [1, 3]] = [1.0, -z]
+        Pi[2, [2, 3]] = [1.0, y]
+        Pi[0, 6:6 + p] = g.Nx[0] @ Om
+        o = 6 + p
+        Pi[1, o:o + m] = v_k * t[0] + w_k * nn[0]
+        Pi[2, o:o + m] = v_k * t[1] + w_k * nn[1]
+        Pi[0, o + m:] = u_k
+        return Pi, e
+
+    def mass(self, n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
+        """Section mass for ``[u, v, w, theta_x, theta_y, theta_z, b(p), a(m), a'(m)]``.
 
         Kinetic energy ``1/2 int rho_A |u_dot|^2 ds`` with the wall displacement
-        ``u_x = u - y theta_z + z theta_y + omega psi + u_k a_k'`` and
+        ``u_x = u - y theta_z + z theta_y + Omega_j b_j + u_k a_k'`` and
         ``(u_y, u_z) = (v - z theta_x, w + y theta_x) + d_k a_k``.
         """
-        X = self._check(n_modes)
-        m = X.shape[1]
-        n = 7 + 2 * m
+        X, Om = self._check(n_modes), self._check_warping(n_shear)
+        n = 6 + Om.shape[1] + 2 * X.shape[1]
         M = np.zeros((n, n))
-        an = self.analysis
-        for g in an._gauss_points:
-            y, z = g.position
-            om, _ = an._omega_at(g)
-            e, xi = self._locate(g.wall_id, g.position)
-            f = self._fields(e, xi)
-            q = X[self._element_dofs(e)]
-            t, nn = e["t"], e["n"]
-            v_k, w_k, u_k = f["v"] @ q, f["w"] @ q, f["u"] @ q
-            Pi = np.zeros((3, n))
-            Pi[0, [0, 4, 5, 6]] = [1.0, z, -y, om]
-            Pi[1, [1, 3]] = [1.0, -z]
-            Pi[2, [2, 3]] = [1.0, y]
-            Pi[0, 7 + m:] = u_k
-            Pi[1, 7:7 + m] = v_k * t[0] + w_k * nn[0]
-            Pi[2, 7:7 + m] = v_k * t[1] + w_k * nn[1]
-            rho = an.laminates[e["wall"].laminate_id].mass_per_area
+        for g in self.analysis._gauss_points:
+            Pi, e = self._displacement_map(g, X, Om)
+            rho = self.analysis.laminates[e["wall"].laminate_id].mass_per_area
             M += g.weight * rho * Pi.T @ Pi
         return 0.5 * (M + M.T)
+
+    def wall_load(self, loads: Dict[int, Tuple[float, float, float]], n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
+        """Generalised load per length from uniform wall surface loads, in the order of ``mass``.
+
+        ``loads`` maps ``wall_id`` to ``(p_x, p_s, p_n)`` (force per area along ``x``,
+        the wall tangent and the wall normal).
+        """
+        unknown = sorted(set(loads) - {w.wall_id for w in self.section.walls})
+        if unknown:
+            raise ValueError(f"wall loads name unknown walls {unknown}")
+        X, Om = self._check(n_modes), self._check_warping(n_shear)
+        f = np.zeros(6 + Om.shape[1] + 2 * X.shape[1])
+        for g in self.analysis._gauss_points:
+            if g.wall_id not in loads:
+                continue
+            Pi, e = self._displacement_map(g, X, Om)
+            px, ps, pn = loads[g.wall_id]
+            f += g.weight * Pi.T @ np.array([px, ps * e["t"][0] + pn * e["n"][0], ps * e["t"][1] + pn * e["n"][1]])
+        return f

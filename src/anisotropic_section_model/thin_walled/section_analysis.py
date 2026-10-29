@@ -488,6 +488,19 @@ class ThinWalledSectionAnalysis:
         rn = y * g.normal[1] - z * g.normal[0]
         return np.array([g.Nx[0] @ omega, -rn]) - Mg @ c
 
+    def omega_at(self, wall_id: int, s: float) -> float:
+        """Torsional warping ``omega`` (as ``point_warping``) at distance ``s`` along a wall."""
+        omega, c = self._torsion_warping
+        w = self.section.wall(wall_id)
+        a, _ = self.section.endpoints(w)
+        t = self.section.tangent(w)
+        le = self.section.length(w) / self.n_sub
+        k = min(max(int(s / le), 0), self.n_sub - 1)
+        xi = 2.0 * (s / le - k) - 1.0
+        Nsh, _ = _cubic_lagrange(xi)
+        y, z = a + s * t
+        return float(Nsh @ omega[self._wall_dofs[wall_id][3 * k:3 * k + 4]] - (c[0] + c[1] * z - c[2] * y))
+
     def point_warping(self) -> Dict[int, float]:
         """Torsional warping ``omega`` at each section point (per unit twist rate).
 
@@ -565,6 +578,30 @@ class ThinWalledSectionAnalysis:
     def warping_inertia(self) -> float:
         """Mass moment of the warping amplitude, ``int rho_A omega^2 ds`` per length."""
         return self._benscoter[1]
+
+    def wall_load_resultant(self, loads: Mapping[int, Tuple[float, float, float]]) -> npt.NDArray[np.float64]:
+        """Generalised load per length (7,) on ``[u, v, w, theta_x, theta_y, theta_z, psi]``.
+
+        ``loads`` maps ``wall_id`` to a uniform surface load ``(p_x, p_s, p_n)`` along
+        ``x``, the wall tangent and the wall normal. The load is the work-conjugate of
+        the rigid-section displacement plus the torsional warping ``omega psi``, so its
+        first six entries are ``[N, F_y, F_z, M_x, M_y, M_z]`` per length about the origin.
+        """
+        unknown = sorted(set(loads) - {w.wall_id for w in self.section.walls})
+        if unknown:
+            raise ValueError(f"wall loads name unknown walls {unknown}")
+        f = np.zeros(7)
+        for g in self._gauss_points:
+            if g.wall_id not in loads:
+                continue
+            px, ps, pn = loads[g.wall_id]
+            n_y, n_z = g.normal
+            t_y, t_z = n_z, -n_y
+            py, pz = ps * t_y + pn * n_y, ps * t_z + pn * n_z
+            y, z = g.position
+            om, _ = self._omega_at(g)
+            f += g.weight * np.array([px, py, pz, y * pz - z * py, z * px, -y * px, om * px])
+        return f
 
     # ------------------------------------------------------------------ #
     # Mass
