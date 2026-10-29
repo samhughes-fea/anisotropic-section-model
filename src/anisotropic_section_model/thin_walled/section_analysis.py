@@ -242,41 +242,52 @@ class ThinWalledSectionAnalysis:
         self.n_dof = n
         self.point_dof = point_dof
 
+    def _point(self, w, k: int, xg: float, weight: float = 0.0) -> _GaussPoint:
+        """Strain operators at natural coordinate ``xg`` of element ``k`` of wall ``w``."""
+        sec = self.section
+        a, _ = sec.endpoints(w)
+        t = sec.tangent(w)
+        nrm = sec.normal(w)
+        le = sec.length(w) / self.n_sub
+        dof = self._wall_dofs[w.wall_id][3 * k: 3 * k + 4]
+        Nsh, dN = _cubic_lagrange(xg)
+        s = le * (k + 0.5 * (1.0 + xg))
+        p = a + s * t
+        y, z = p
+        h = y * t[1] - z * t[0]
+        rn = y * nrm[1] - z * nrm[0]
+        Z = np.zeros((4, 6))
+        Z[0, 0], Z[0, 1], Z[0, 2] = 1.0, z, -y
+        Z[1, 3], Z[1, 4], Z[1, 5] = t[0], t[1], h
+        Z[2, 1], Z[2, 2] = nrm[1], -nrm[0]
+        Z[3, 5] = -2.0
+        Y = np.zeros((4, 6))
+        Y[2, 3], Y[2, 4], Y[2, 5] = -nrm[0], -nrm[1], -rn
+        B = np.zeros((4, self.n_dof))
+        B[1, dof] += dN * 2.0 / le
+        Nx = np.zeros((4, self.n_dof))
+        Nx[0, dof] += Nsh
+        return _GaussPoint(Z, Y, B, Nx, self._wall_laws[w.laminate_id], weight * 0.5 * le, w.wall_id, p, nrm,
+                           self.laminates[w.laminate_id].thickness)
+
     @cached_property
     def _gauss_points(self) -> List[_GaussPoint]:
-        sec = self.section
         out: List[_GaussPoint] = []
-        nd = self.n_dof
-        for w in sec.walls:
-            a, _ = sec.endpoints(w)
-            t = sec.tangent(w)
-            nrm = sec.normal(w)
-            le = sec.length(w) / self.n_sub
-            K = self._wall_laws[w.laminate_id]
-            th = self.laminates[w.laminate_id].thickness
-            wd = self._wall_dofs[w.wall_id]
+        for w in self.section.walls:
             for k in range(self.n_sub):
-                dof = wd[3 * k: 3 * k + 4]
                 for xg, wg in zip(_GAUSS_X, _GAUSS_W):
-                    Nsh, dN = _cubic_lagrange(xg)
-                    s = le * (k + 0.5 * (1.0 + xg))
-                    p = a + s * t
-                    y, z = p
-                    h = y * t[1] - z * t[0]
-                    rn = y * nrm[1] - z * nrm[0]
-                    Z = np.zeros((4, 6))
-                    Z[0, 0], Z[0, 1], Z[0, 2] = 1.0, z, -y
-                    Z[1, 3], Z[1, 4], Z[1, 5] = t[0], t[1], h
-                    Z[2, 1], Z[2, 2] = nrm[1], -nrm[0]
-                    Z[3, 5] = -2.0
-                    Y = np.zeros((4, 6))
-                    Y[2, 3], Y[2, 4], Y[2, 5] = -nrm[0], -nrm[1], -rn
-                    B = np.zeros((4, nd))
-                    B[1, dof] += dN * 2.0 / le
-                    Nx = np.zeros((4, nd))
-                    Nx[0, dof] += Nsh
-                    out.append(_GaussPoint(Z, Y, B, Nx, K, wg * 0.5 * le, w.wall_id, p, nrm, th))
+                    out.append(self._point(w, k, xg, wg))
         return out
+
+    def point_at(self, wall_id: int, s: float) -> _GaussPoint:
+        """Strain operators at distance ``s`` along wall ``wall_id`` (zero weight)."""
+        w = self.section.wall(wall_id)
+        L = self.section.length(w)
+        if not -1e-12 * L <= s <= L * (1 + 1e-12):
+            raise ValueError(f"s = {s} is outside wall {wall_id} (length {L})")
+        le = L / self.n_sub
+        k = min(max(int(s / le), 0), self.n_sub - 1)
+        return self._point(w, k, 2.0 * (s / le - k) - 1.0)
 
     @cached_property
     def _rigid_modes(self) -> npt.NDArray[np.float64]:
@@ -416,6 +427,17 @@ class ThinWalledSectionAnalysis:
             (g.wall_id, g.position.copy(), g.Z @ p0 + g.Y @ p1 + g.B @ w0 + g.Nx @ w1)
             for g in self._gauss_points
         ]
+
+    def wall_strains_at(self, wall_id: int, s: float, forces: npt.ArrayLike) -> npt.NDArray[np.float64]:
+        """Wall strains (4,) in order ``WALL_STRAINS`` at distance ``s`` along a wall.
+
+        The section forces vary along the beam as with no distributed load
+        (``F' = T F``), as in ``wall_strains``.
+        """
+        sol = self._solution
+        f = np.asarray(forces, dtype=np.float64)
+        g = self.point_at(wall_id, s)
+        return g.Z @ (sol["P0"] @ f) + g.Y @ (sol["P1"] @ f) + g.B @ (sol["W0"] @ f) + g.Nx @ (sol["W1"] @ f)
 
     # ------------------------------------------------------------------ #
     # Centres

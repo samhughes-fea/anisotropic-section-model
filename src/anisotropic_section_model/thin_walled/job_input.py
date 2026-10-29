@@ -33,6 +33,7 @@ SECTION_GEOMETRY_FILE = "section_geometry.txt"
 ELEMENT_SECTION_FILE = "element_section.txt"
 WALL_LOAD_FILE = "wall_load.txt"
 SECTION_ANALYSIS_KEY = "section_analysis_per_element"
+THIN_WALLED_KEY = "thin_walled_analysis_per_element"
 
 
 def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = "restrained") -> dict:
@@ -43,7 +44,9 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     some but not all present, raises ``FileNotFoundError``. Otherwise adds key
     ``"section_analysis_per_element"``: a tuple aligned with
     ``element_dictionary["ids"]`` holding a ``SectionAnalysis`` for each assigned
-    element and ``None`` for the rest. Each section is analysed once.
+    element and ``None`` for the rest. Each section is analysed once. Key
+    ``"thin_walled_analysis_per_element"`` holds the ``ThinWalledSectionAnalysis``
+    behind each, for stress recovery.
 
     Rows of ``LinearGBTBeamElement3D`` (or rows with ``[modes]`` / ``[shear_modes]``
     columns) make their sections build GBT matrices with as many modes as any element
@@ -106,7 +109,11 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
         for sid, a in analyses.items()
     }
     per_element = tuple(per_section[assignment[e]] if e in assignment else None for e in ids)
-    out = {**element_dictionary, SECTION_ANALYSIS_KEY: per_element}
+    out = {
+        **element_dictionary,
+        SECTION_ANALYSIS_KEY: per_element,
+        THIN_WALLED_KEY: tuple(analyses[assignment[e]] if e in assignment else None for e in ids),
+    }
     if gbt_rows:
         out["gbt_modes"] = np.array([modes_of.get(e, 0) for e in ids], dtype=int)
         out["gbt_shear_modes"] = np.array([shear_of.get(e, 0) for e in ids], dtype=int)

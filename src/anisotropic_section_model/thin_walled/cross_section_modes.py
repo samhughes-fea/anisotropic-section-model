@@ -408,23 +408,38 @@ class CrossSectionModes:
         Om = self._check_warping(n_shear)
         m, p = X.shape[1], Om.shape[1]
         n = 6 + 2 * p + 3 * m
-        o_a = 6 + 2 * p
         K = np.zeros((n, n))
         for g in self.analysis._gauss_points:
-            H = np.zeros((5, n))
-            H[_BEAM_ROWS, :6] = g.Z
-            H[0, 6:6 + p] = g.Nx[0] @ Om
-            H[1, 6 + p:o_a] = g.B[1] @ Om
-            e, xi = self._locate(g.wall_id, g.position)
-            f = self._fields(e, xi)
-            q = X[self._element_dofs(e)]
-            H[0, o_a:o_a + m] = f["u"] @ q
-            H[2, o_a:o_a + m] = -(f["w"] @ q)
-            H[1, o_a + m:o_a + 2 * m] = (f["u_s"] + f["v"]) @ q
-            H[4, o_a + m:o_a + 2 * m] = -2.0 * (f["w_s"] @ q)
-            H[3, o_a + 2 * m:] = -(f["w_ss"] @ q)
+            H, e = self._strain_map(g, X, Om)
             K += g.weight * H.T @ self._laws[e["wall"].laminate_id] @ H
         return 0.5 * (K + K.T)
+
+    def _strain_map(self, g, X, Om) -> Tuple[npt.NDArray[np.float64], Dict]:
+        """``H`` (5, 6 + 2p + 3m): GBT wall strains per strain of ``stiffness`` at a section point."""
+        m, p = X.shape[1], Om.shape[1]
+        n = 6 + 2 * p + 3 * m
+        o_a = 6 + 2 * p
+        H = np.zeros((5, n))
+        H[_BEAM_ROWS, :6] = g.Z
+        H[0, 6:6 + p] = g.Nx[0] @ Om
+        H[1, 6 + p:o_a] = g.B[1] @ Om
+        e, xi = self._locate(g.wall_id, g.position)
+        f = self._fields(e, xi)
+        q = X[self._element_dofs(e)]
+        H[0, o_a:o_a + m] = f["u"] @ q
+        H[2, o_a:o_a + m] = -(f["w"] @ q)
+        H[1, o_a + m:o_a + 2 * m] = (f["u_s"] + f["v"]) @ q
+        H[4, o_a + m:o_a + 2 * m] = -2.0 * (f["w_s"] @ q)
+        H[3, o_a + 2 * m:] = -(f["w_ss"] @ q)
+        return H, e
+
+    def wall_strain_map(self, wall_id: int, s: float, n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
+        """Right-handed GBT wall strains (5, ...) per strain of ``stiffness(n_modes, n_shear)`` at ``s`` on a wall.
+
+        Rows ``[eps_xx, gamma_xs, kappa_xx, kappa_ss, kappa_xs]``.
+        """
+        g = self.analysis.point_at(wall_id, s)
+        return self._strain_map(g, self._check(n_modes), self._check_warping(n_shear))[0]
 
     def _displacement_map(self, g, X, Om) -> Tuple[npt.NDArray[np.float64], Dict]:
         """``Pi`` (3, 6 + p + 2m): wall displacement per ``[u, v, w, theta, b(p), a(m), a'(m)]``."""
