@@ -72,6 +72,11 @@ class SectionAnalysis:
         ``"isotropic"`` or ``"thin_walled"``.
     section_id : int or None
         Thin-walled section id, when ``source == "thin_walled"``.
+    benscoter_stiffness : ndarray (8, 8) or None
+        Element-signed Benscoter stiffness for ``[eps_x, kappa_y, kappa_z, gamma_xy,
+        gamma_xz, phi_x, d, psi']`` with ``d = psi - phi_x`` (thin-walled sections only).
+    warping_inertia : float
+        ``int rho_A omega^2 ds`` for the warping amplitude DOF.
     """
 
     stiffness: npt.NDArray[np.float64]
@@ -82,6 +87,8 @@ class SectionAnalysis:
     mass: Dict[str, float] = field(default_factory=dict)
     source: str = "isotropic"
     section_id: Optional[int] = None
+    benscoter_stiffness: Optional[npt.NDArray[np.float64]] = None
+    warping_inertia: float = 0.0
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -130,6 +137,12 @@ class SectionAnalysis:
         C_rh = analysis.classical_stiffness
         S4 = np.diag([1.0, -1.0, 1.0, 1.0])
         C = S4 @ C_rh @ S4
+        try:
+            S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+            KB = S8 @ analysis.benscoter_stiffness @ S8
+            w_inertia = float(analysis.warping_inertia)
+        except ValueError:
+            KB, w_inertia = None, 0.0
         return cls(
             K,
             C,
@@ -139,6 +152,8 @@ class SectionAnalysis:
             dict(analysis.mass_properties),
             "thin_walled",
             None if section_id is None else int(section_id),
+            KB,
+            w_inertia,
         )
 
     # ------------------------------------------------------------------ #

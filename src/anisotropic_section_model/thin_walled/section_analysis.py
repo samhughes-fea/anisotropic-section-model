@@ -510,6 +510,57 @@ class ThinWalledSectionAnalysis:
         return float(total)
 
     # ------------------------------------------------------------------ #
+    # Benscoter (restrained warping with an independent warping amplitude)
+    # ------------------------------------------------------------------ #
+    def _omega_at(self, g: _GaussPoint) -> Tuple[float, float]:
+        """Torsional warping ``omega`` (about the shear centre, orthogonalised) and ``d omega / ds`` at a Gauss point."""
+        omega, c = self._torsion_warping
+        y, z = g.position
+        t_y, t_z = g.normal[1], -g.normal[0]
+        om = float(g.Nx[0] @ omega) - (c[0] + c[1] * z - c[2] * y)
+        om_s = float(g.B[1] @ omega) - (c[1] * t_z - c[2] * t_y)
+        return om, om_s
+
+    @cached_property
+    def _benscoter(self) -> Tuple[npt.NDArray[np.float64], float]:
+        sol = self._solution
+        K6 = self._stiffness
+        K8 = np.zeros((8, 8))
+        inertia = 0.0
+        for g in self._gauss_points:
+            Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B @ sol["W0"] + g.Nx @ sol["W1"]
+            om, om_s = self._omega_at(g)
+            G = np.zeros((4, 8))
+            G[:, :6] = Phi @ K6
+            G[1, 6] = om_s   # warping deviation d = psi - phi shears the walls
+            G[0, 7] = om     # warping amplitude gradient psi' stretches them
+            K8 += g.weight * G.T @ g.K @ G
+            lam = self.laminates[self.section.wall(g.wall_id).laminate_id]
+            inertia += g.weight * lam.mass_per_area * om * om
+        K8 = 0.5 * (K8 + K8.T)
+        K8[:6, :6] = K6
+        return K8, float(inertia)
+
+    @property
+    def benscoter_stiffness(self) -> npt.NDArray[np.float64]:
+        """Benscoter section stiffness (8, 8), right-handed, about the origin.
+
+        Strains ``[eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi, d, psi']`` where the
+        warping is the Saint-Venant warping of ``psi[:6]`` plus ``omega * d`` with
+        ``d = psi - phi`` (``psi`` the warping amplitude, ``omega`` the torsional warping
+        about the shear centre). Then ``eps_xx += omega psi'`` and ``gamma_xs += omega_s d``.
+        The leading 6 x 6 block is ``stiffness``; ``K[6, 6]`` is the warping shear stiffness
+        (``G (I_p - J)``-like) and ``K[7, 7]`` the primary ``E Gamma``. Secondary
+        (through-thickness) warping is not included.
+        """
+        return self._benscoter[0].copy()
+
+    @property
+    def warping_inertia(self) -> float:
+        """Mass moment of the warping amplitude, ``int rho_A omega^2 ds`` per length."""
+        return self._benscoter[1]
+
+    # ------------------------------------------------------------------ #
     # Mass
     # ------------------------------------------------------------------ #
     @cached_property
