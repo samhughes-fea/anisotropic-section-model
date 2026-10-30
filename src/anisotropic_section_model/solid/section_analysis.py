@@ -559,6 +559,84 @@ class SolidSectionAnalysis:
         return self._state(_Point(q, dofs, self.mesh.element_stiffness(element)), forces, benscoter)
 
     # ------------------------------------------------------------------ #
+    # Interlaminar stresses on ply interfaces
+    # ------------------------------------------------------------------ #
+    @cached_property
+    def _row_neighbours(self) -> Dict[Tuple[int, int], int]:
+        """Layered ``Q8`` rows: ``(e, +1)`` is the element on top of ``e`` (its edge ``eta = +1``,
+        nodes 3-2), ``(e, -1)`` the one below (edge ``eta = -1``, nodes 0-1)."""
+        mesh = self.mesh
+        bottom, top = {}, {}
+        for e, (conn, kind) in enumerate(zip(mesh.elements, mesh.kinds)):
+            if kind != "Q8":
+                continue
+            bottom[frozenset((int(conn[0]), int(conn[1])))] = e
+            top[frozenset((int(conn[3]), int(conn[2])))] = e
+        out = {}
+        for key, e in top.items():
+            f = bottom.get(key)
+            if f is not None:
+                out[(e, +1)] = f
+                out[(f, -1)] = e
+        return out
+
+    def _same_ply(self, e: int, f: int) -> bool:
+        m = self.mesh
+        return m.material_ids[e] == m.material_ids[f] and m.theta[e] == m.theta[f] and m.alpha[e] == m.alpha[f]
+
+    def ply_interfaces(self) -> List[Tuple[int, int]]:
+        """``(below, above)`` element pairs of a layered ``Q8`` mesh whose shared edge is a ply
+        interface (a change of material, ply angle or wall direction)."""
+        nb = self._row_neighbours
+        return sorted((e, f) for (e, side), f in nb.items() if side == +1 and not self._same_ply(e, f))
+
+    def _side_fit(self, e: int, eta_edge: float, xi: float, forces, benscoter) -> Tuple[np.ndarray, np.ndarray]:
+        """Interlaminar stresses (3,) of the ply below or above an interface, at the interface:
+        a quadratic in the distance from it through the values at the Gauss lines of the two
+        rows of that ply nearest the interface (a linear fit with one row), and the point."""
+        rows = [e]
+        f = self._row_neighbours.get((e, -int(eta_edge)))
+        if f is not None and self._same_ply(e, f):
+            rows.append(f)
+        p0 = self.stress_at(e, xi, eta_edge, forces=forces, benscoter=benscoter)
+        x0 = np.array([p0.y, p0.z])
+        g = 1.0 / np.sqrt(3.0)
+        d, v = [], []
+        for r in rows:
+            for eta in (-g, g):
+                q = self.stress_at(r, xi, eta, forces=forces, benscoter=benscoter)
+                d.append(float(np.hypot(q.y - x0[0], q.z - x0[1])))
+                v.append(q.interlaminar)
+        d, v = np.asarray(d), np.asarray(v)
+        coef = np.polyfit(d, v, min(d.size - 1, 2))
+        return coef[-1], x0
+
+    def interface_stress(self, below: int, above: int, xi: float = 0.0, forces: Optional[npt.ArrayLike] = None,
+                         benscoter: Optional[npt.ArrayLike] = None) -> Tuple[float, float, np.ndarray]:
+        """``(y, z, [sigma_nn, tau_sn, tau_xn])`` on the interface between elements ``below`` and
+        ``above`` (``ply_interfaces``) at ``xi`` along it, in the wall axes of ``below``.
+
+        Each ply's stresses are fitted through its two rows nearest the interface and taken to
+        the interface; the two plies' values are averaged. With two rows per ply this is exact
+        for the quadratic shear of a layered beam, where the raw edge values of the elements
+        need six rows per ply for 2 %.
+        """
+        a, x0 = self._side_fit(below, 1.0, xi, forces, benscoter)
+        same = int(self.mesh.elements[below][3]) == int(self.mesh.elements[above][0])
+        b, _ = self._side_fit(above, -1.0, xi if same else -xi, forces, benscoter)
+        return float(x0[0]), float(x0[1]), 0.5 * (a + b)
+
+    def interface_stresses(self, forces: Optional[npt.ArrayLike] = None, benscoter: Optional[npt.ArrayLike] = None,
+                           xi: Sequence[float] = (0.0,)) -> List[Tuple[int, int, float, float, np.ndarray]]:
+        """``interface_stress`` on every ply interface: ``(below, above, y, z, stresses)``."""
+        out = []
+        for e, f in self.ply_interfaces():
+            for x in xi:
+                y, z, s = self.interface_stress(e, f, x, forces=forces, benscoter=benscoter)
+                out.append((e, f, y, z, s))
+        return out
+
+    # ------------------------------------------------------------------ #
     # Second-order terms, axial quadrature and mass
     # ------------------------------------------------------------------ #
     @cached_property
