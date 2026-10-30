@@ -231,11 +231,15 @@ class WallLaminate:
         return float(sum(p.material.rho * p.thickness for p in self.plies))
 
     def _moment(self, power: int) -> npt.NDArray[np.float64]:
-        z = self._interfaces
-        out = np.zeros((3, 3), dtype=np.float64)
-        for k, ply in enumerate(self.plies):
-            out += ply.rotated_stiffness() * (z[k + 1] ** power - z[k] ** power) / power
-        return out
+        # the laminate is immutable, so its moments are computed once (stress recovery asks often)
+        cache = self.__dict__.setdefault("_moment_cache", {})
+        if power not in cache:
+            z = self._interfaces
+            out = np.zeros((3, 3), dtype=np.float64)
+            for k, ply in enumerate(self.plies):
+                out += ply.rotated_stiffness() * (z[k + 1] ** power - z[k] ** power) / power
+            cache[power] = out
+        return cache[power].copy()
 
     def A(self) -> npt.NDArray[np.float64]:
         """Membrane stiffness (3, 3)."""

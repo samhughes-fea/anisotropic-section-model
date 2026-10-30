@@ -166,14 +166,31 @@ def wall_law(laminate: WallLaminate, hoop: str = "free") -> npt.NDArray[np.float
 class _GaussPoint:
     Z: npt.NDArray[np.float64]       # (4, 6)  strains from psi
     Y: npt.NDArray[np.float64]       # (4, 6)  strains from psi'
-    B: npt.NDArray[np.float64]       # (4, ndof) strains from warping
-    Nx: npt.NDArray[np.float64]      # (4, ndof) strains from warping'
+    B_local: npt.NDArray[np.float64]   # (4, 4) strains from the element's warping dofs
+    Nx_local: npt.NDArray[np.float64]  # (4, 4) strains from their x-derivatives
+    dofs: npt.NDArray[np.int64]      # (4,) the element's warping dofs
+    n_dof: int
     K: npt.NDArray[np.float64]       # (4, 4)
     weight: float                    # ds weight
     wall_id: int
     position: npt.NDArray[np.float64]
     normal: npt.NDArray[np.float64]
     thickness: float
+
+    def _dense(self, local: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        out = np.zeros((4, self.n_dof))
+        np.add.at(out, (slice(None), self.dofs), local)
+        return out
+
+    @property
+    def B(self) -> npt.NDArray[np.float64]:
+        """(4, ndof) strains from warping."""
+        return self._dense(self.B_local)
+
+    @property
+    def Nx(self) -> npt.NDArray[np.float64]:
+        """(4, ndof) strains from warping'."""
+        return self._dense(self.Nx_local)
 
 
 class ThinWalledSectionAnalysis:
@@ -266,12 +283,12 @@ class ThinWalledSectionAnalysis:
         Z[3, 5] = -2.0
         Y = np.zeros((4, 6))
         Y[2, 3], Y[2, 4], Y[2, 5] = -nrm[0], -nrm[1], -rn
-        B = np.zeros((4, self.n_dof))
-        B[1, dof] += dN * 2.0 / le
-        Nx = np.zeros((4, self.n_dof))
-        Nx[0, dof] += Nsh
-        return _GaussPoint(Z, Y, B, Nx, self._wall_laws[w.laminate_id], weight * 0.5 * le, w.wall_id, p, nrm,
-                           self.laminates[w.laminate_id].thickness)
+        B = np.zeros((4, 4))
+        B[1] = dN * 2.0 / le
+        Nx = np.zeros((4, 4))
+        Nx[0] = Nsh
+        return _GaussPoint(Z, Y, B, Nx, np.asarray(dof, dtype=np.int64), self.n_dof, self._wall_laws[w.laminate_id],
+                           weight * 0.5 * le, w.wall_id, p, nrm, self.laminates[w.laminate_id].thickness)
 
     @cached_property
     def _gauss_points(self) -> List[_GaussPoint]:
@@ -317,17 +334,20 @@ class ThinWalledSectionAnalysis:
         Q = np.zeros((6, 6))
         M2 = np.zeros((nd, nd))
         for g in self._gauss_points:
-            KB = g.K @ g.B
+            # B and Nx are nonzero only on the element's four dofs: assemble by scatter
+            d, wt = g.dofs, g.weight
+            KB = g.K @ g.B_local
             KZ = g.K @ g.Z
             KY = g.K @ g.Y
-            E += g.weight * g.B.T @ KB
-            C += g.weight * KB.T @ g.Nx
-            R += g.weight * g.B.T @ KZ
-            Lm += g.weight * g.Nx.T @ KZ
-            Ly += g.weight * g.B.T @ KY
-            A += g.weight * g.Z.T @ KZ
-            Q += g.weight * g.Z.T @ KY
-            M2 += g.weight * g.thickness * np.outer(g.Nx[0], g.Nx[0])
+            ix = np.ix_(d, d)
+            np.add.at(E, ix, wt * g.B_local.T @ KB)
+            np.add.at(C, ix, wt * KB.T @ g.Nx_local)
+            np.add.at(R, d, wt * g.B_local.T @ KZ)
+            np.add.at(Lm, d, wt * g.Nx_local.T @ KZ)
+            np.add.at(Ly, d, wt * g.B_local.T @ KY)
+            A += wt * g.Z.T @ KZ
+            Q += wt * g.Z.T @ KY
+            np.add.at(M2, ix, wt * g.thickness * np.outer(g.Nx_local[0], g.Nx_local[0]))
         D = M2 @ self._rigid_modes
         # Collinear walls make the modes dependent (e.g. w = z vanishes on a strip at z = 0).
         U, sv, _ = np.linalg.svd(D, full_matrices=False)
@@ -369,7 +389,7 @@ class ThinWalledSectionAnalysis:
 
         flex = np.zeros((6, 6))
         for g in self._gauss_points:
-            Phi = g.Z @ P0 + g.Y @ P1 + g.B @ W0 + g.Nx @ W1
+            Phi = g.Z @ P0 + g.Y @ P1 + g.B_local @ W0[g.dofs] + g.Nx_local @ W1[g.dofs]
             flex += g.weight * Phi.T @ g.K @ Phi
         flex = 0.5 * (flex + flex.T)
         return {"W0": W0, "W1": W1, "P0": P0, "P1": P1, "flexibility": flex}
@@ -427,7 +447,7 @@ class ThinWalledSectionAnalysis:
         p0, p1 = sol["P0"] @ f, sol["P1"] @ f
         w0, w1 = sol["W0"] @ f, sol["W1"] @ f
         return [
-            (g.wall_id, g.position.copy(), g.Z @ p0 + g.Y @ p1 + g.B @ w0 + g.Nx @ w1)
+            (g.wall_id, g.position.copy(), g.Z @ p0 + g.Y @ p1 + g.B_local @ w0[g.dofs] + g.Nx_local @ w1[g.dofs])
             for g in self._gauss_points
         ]
 
@@ -440,7 +460,7 @@ class ThinWalledSectionAnalysis:
         sol = self._solution
         f = np.asarray(forces, dtype=np.float64)
         g = self.point_at(wall_id, s)
-        return g.Z @ (sol["P0"] @ f) + g.Y @ (sol["P1"] @ f) + g.B @ (sol["W0"] @ f) + g.Nx @ (sol["W1"] @ f)
+        return g.Z @ (sol["P0"] @ f) + g.Y @ (sol["P1"] @ f) + g.B_local @ (sol["W0"] @ f)[g.dofs] + g.Nx_local @ (sol["W1"] @ f)[g.dofs]
 
     # ------------------------------------------------------------------ #
     # Centres
@@ -489,7 +509,7 @@ class ThinWalledSectionAnalysis:
         # shear centre). Their parts are removed afterwards in the axial energy.
         M2 = np.zeros((nd, nd))
         for g in self._gauss_points:
-            M2 += g.weight * g.thickness * np.outer(g.Nx[0], g.Nx[0])
+            np.add.at(M2, np.ix_(g.dofs, g.dofs), g.weight * g.thickness * np.outer(g.Nx_local[0], g.Nx_local[0]))
         D1 = (M2 @ self._rigid_modes[:, :1])
         S = np.zeros((nd + 1, nd + 1))
         S[:nd, :nd] = m["E"]
@@ -506,7 +526,7 @@ class ThinWalledSectionAnalysis:
             y, z = g.position
             Mg = np.array([[1.0, z, -y], [0.0, g.normal[1], -g.normal[0]]])
             rn = y * g.normal[1] - z * g.normal[0]
-            ag = np.array([g.Nx[0] @ omega, -rn])
+            ag = np.array([g.Nx_local[0] @ omega[g.dofs], -rn])
             G += g.weight * Mg.T @ Kax @ Mg
             b += g.weight * Mg.T @ Kax @ ag
         c = np.linalg.solve(G, b)
@@ -517,7 +537,7 @@ class ThinWalledSectionAnalysis:
         y, z = g.position
         Mg = np.array([[1.0, z, -y], [0.0, g.normal[1], -g.normal[0]]])
         rn = y * g.normal[1] - z * g.normal[0]
-        return np.array([g.Nx[0] @ omega, -rn]) - Mg @ c
+        return np.array([g.Nx_local[0] @ omega[g.dofs], -rn]) - Mg @ c
 
     def omega_at(self, wall_id: int, s: float) -> float:
         """Torsional warping ``omega`` (as ``point_warping``) at distance ``s`` along a wall."""
@@ -561,14 +581,14 @@ class ThinWalledSectionAnalysis:
         omega, c = self._torsion_warping
         y, z = g.position
         t_y, t_z = g.normal[1], -g.normal[0]
-        om = float(g.Nx[0] @ omega) - (c[0] + c[1] * z - c[2] * y)
-        om_s = float(g.B[1] @ omega) - (c[1] * t_z - c[2] * t_y)
+        om = float(g.Nx_local[0] @ omega[g.dofs]) - (c[0] + c[1] * z - c[2] * y)
+        om_s = float(g.B_local[1] @ omega[g.dofs]) - (c[1] * t_z - c[2] * t_y)
         return om, om_s
 
     def _benscoter_wall_strains(self, g: _GaussPoint) -> npt.NDArray[np.float64]:
         """Wall strains (4, 8) at a Gauss point per unit Benscoter strain ``[psi6, d, psi']``."""
         sol = self._solution
-        Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B @ sol["W0"] + g.Nx @ sol["W1"]
+        Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B_local @ sol["W0"][g.dofs] + g.Nx_local @ sol["W1"][g.dofs]
         om, om_s = self._omega_at(g)
         G = np.zeros((4, 8))
         G[:, :6] = Phi @ self._stiffness
@@ -620,7 +640,7 @@ class ThinWalledSectionAnalysis:
         Rm = self._rigid_modes
         M = np.zeros((self.n_dof, self.n_dof))
         for g in self._gauss_points:
-            M += g.weight * g.K[0, 0] * np.outer(g.Nx[0], g.Nx[0])
+            np.add.at(M, np.ix_(g.dofs, g.dofs), g.weight * g.K[0, 0] * np.outer(g.Nx_local[0], g.Nx_local[0]))
         A = Rm.T @ M @ Rm
         c = np.linalg.lstsq(A, Rm.T @ M @ Psi, rcond=1e-12)[0]
         return Psi - Rm @ c
@@ -628,10 +648,10 @@ class ThinWalledSectionAnalysis:
     def _third_order_wall_strains(self, g: _GaussPoint) -> npt.NDArray[np.float64]:
         """Wall strains (4, 8) at a Gauss point per unit third-order strain ``[psi6, chi_y, chi_z]``."""
         sol = self._solution
-        Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B @ sol["W0"] + g.Nx @ sol["W1"]
+        Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B_local @ sol["W0"][g.dofs] + g.Nx_local @ sol["W1"][g.dofs]
         G = np.zeros((4, 8))
         G[:, :6] = Phi @ self._stiffness
-        G[:, 6:] = g.Nx @ self._shear_warping  # eps_xx = Psi(s) . chi
+        G[:, 6:] = g.Nx_local @ self._shear_warping[g.dofs]  # eps_xx = Psi(s) . chi
         return G
 
     @cached_property
@@ -737,7 +757,7 @@ class ThinWalledSectionAnalysis:
         Xt = np.zeros((7, 2))
         benscoter = third = True
         for g in self._gauss_points:
-            Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B @ sol["W0"] + g.Nx @ sol["W1"]
+            Phi = g.Z @ sol["P0"] + g.Y @ sol["P1"] + g.B_local @ sol["W0"][g.dofs] + g.Nx_local @ sol["W1"][g.dofs]
             # forces vary as F' = T_RATE F along the beam, so do the wall strains
             H += self._geometric_rows(g, Phi, Phi @ T_RATE)
             if benscoter:
@@ -747,7 +767,7 @@ class ThinWalledSectionAnalysis:
                     benscoter = False
             if third:
                 try:
-                    Xt += self._geometric_rows(g, g.Nx @ self._shear_warping)
+                    Xt += self._geometric_rows(g, g.Nx_local @ self._shear_warping[g.dofs])
                 except ValueError:
                     third = False
         return {"H": H, "benscoter": Xb if benscoter else None, "third_order": Xt if third else None}

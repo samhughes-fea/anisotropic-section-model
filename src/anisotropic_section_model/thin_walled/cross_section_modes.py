@@ -299,7 +299,7 @@ class CrossSectionModes:
         an = self.analysis
         A = np.zeros((an.n_dof, an.n_dof))
         for g in an._gauss_points:
-            A += g.weight * g.K[0, 0] * np.outer(g.Nx[0], g.Nx[0])
+            np.add.at(A, np.ix_(g.dofs, g.dofs), g.weight * g.K[0, 0] * np.outer(g.Nx_local[0], g.Nx_local[0]))
         return 0.5 * (A + A.T)
 
     @cached_property
@@ -423,8 +423,8 @@ class CrossSectionModes:
         o_a = 6 + 2 * p
         H = np.zeros((5, n))
         H[_BEAM_ROWS, :6] = g.Z
-        H[0, 6:6 + p] = g.Nx[0] @ Om
-        H[1, 6 + p:o_a] = g.B[1] @ Om
+        H[0, 6:6 + p] = g.Nx_local[0] @ Om[g.dofs]
+        H[1, 6 + p:o_a] = g.B_local[1] @ Om[g.dofs]
         e, xi = self._locate(g.wall_id, g.position)
         f = self._fields(e, xi)
         q = X[self._element_dofs(e)]
@@ -457,7 +457,7 @@ class CrossSectionModes:
         Pi[0, [0, 4, 5]] = [1.0, z, -y]
         Pi[1, [1, 3]] = [1.0, -z]
         Pi[2, [2, 3]] = [1.0, y]
-        Pi[0, 6:6 + p] = g.Nx[0] @ Om
+        Pi[0, 6:6 + p] = g.Nx_local[0] @ Om[g.dofs]
         o = 6 + p
         Pi[1, o:o + m] = v_k * t[0] + w_k * nn[0]
         Pi[2, o:o + m] = v_k * t[1] + w_k * nn[1]
