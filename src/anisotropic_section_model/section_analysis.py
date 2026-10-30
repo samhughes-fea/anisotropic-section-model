@@ -385,6 +385,37 @@ class SectionAnalysis:
             third_order_stiffness=add(self.third_order_stiffness, (0, 1, 2), 5),
         )
 
+    def with_taper(self, taper) -> "SectionAnalysis":
+        """This section in a tapered beam: the Resal coupling of ``taper`` added.
+
+        ``taper`` is a ``thin_walled.taper.SectionTaper`` (right-handed). Its 6 x 6
+        (``taper.matrix()``, coupling the axial and bending strains with the shear strains)
+        goes into every stiffness that carries the shear strains: the 6 x 6 and the leading
+        blocks of the Benscoter and third-order ones. The classical (shear-rigid) stiffness is
+        unchanged: the coupling acts through the shear strains only.
+        """
+        import dataclasses
+
+        dK = to_element_voigt(taper.matrix())
+        if not np.any(dK):
+            return self
+        if self.gbt_stiffness is not None and self.gbt_modes:
+            raise NotImplementedError("taper is not supported with GBT sections")
+
+        def add(K):
+            if K is None:
+                return None
+            K = np.array(K, dtype=np.float64, copy=True)
+            K[:6, :6] += dK
+            return K
+
+        return dataclasses.replace(
+            self,
+            stiffness=add(self.stiffness),
+            benscoter_stiffness=add(self.benscoter_stiffness),
+            third_order_stiffness=add(self.third_order_stiffness),
+        )
+
     def euler_bernoulli_D(self) -> npt.NDArray[np.float64]:
         """6 x 6 ``D`` for shear-rigid elements: ``classical_stiffness`` on rows ``[0, 1, 2, 5]``, zero shear rows."""
         D = np.zeros((6, 6))

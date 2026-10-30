@@ -52,6 +52,7 @@ SOLID_KEY = "solid_analysis_per_element"
 SECTION_GEOMETRY_FILE = "section_geometry.txt"
 ELEMENT_SECTION_FILE = "element_section.txt"
 WALL_LOAD_FILE = "wall_load.txt"
+SECTION_TAPER_FILE = "section_taper.txt"
 SECTION_ANALYSIS_KEY = "section_analysis_per_element"
 THIN_WALLED_KEY = "thin_walled_analysis_per_element"
 
@@ -84,6 +85,9 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     ``"solid_analysis_per_element"`` then holds the ``SolidSectionAnalysis`` behind each
     (``None`` in ``"thin_walled_analysis_per_element"``). GBT rows and wall loads need
     thin-walled sections.
+
+    With ``section_taper.txt`` the listed elements' sections gain the taper (Resal) coupling
+    (``SectionAnalysis.with_taper``).
 
     With ``wall_load.txt`` it also gains ``"wall_load_per_element"``: the generalised
     load per length of each loaded element (``None`` for the rest), in the order of the
@@ -161,6 +165,18 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     }
     per_section.update({sid: SectionAnalysis.from_solid(a, sid) for sid, a in solid.items()})
     per_element = tuple(per_section[assignment[e]] if e in assignment else None for e in ids)
+    taper_path = os.path.join(job_dir, SECTION_TAPER_FILE)
+    if os.path.exists(taper_path):
+        from pre_processing.parsing.section_taper_parser import parse_section_taper_file
+
+        tapers = parse_section_taper_file(taper_path)
+        unassigned = sorted(e for e in tapers if e not in assignment)
+        if unassigned:
+            raise ValueError(f"section_taper.txt names elements without a section in element_section.txt: {unassigned}")
+        gbt_tapered = sorted(e for e in tapers if e in gbt_rows)
+        if gbt_tapered:
+            raise ValueError(f"taper is not supported on GBT elements: {gbt_tapered}")
+        per_element = tuple(sa.with_taper(tapers[e]) if e in tapers else sa for e, sa in zip(ids, per_element))
     out = {
         **element_dictionary,
         SECTION_ANALYSIS_KEY: per_element,
