@@ -14,7 +14,7 @@ from pre_processing.section_integration.thin_walled.section_analysis import (
 
 
 def section_analyses_from_files(
-    laminate_path: str, geometry_path: str, hoop: str = "restrained", n_sub: int = 1
+    laminate_path: str, geometry_path: str, hoop: str = "free", n_sub: int = 1
 ) -> Dict[int, ThinWalledSectionAnalysis]:
     """Return ``{section_id: ThinWalledSectionAnalysis}`` for every section in the files.
 
@@ -56,7 +56,7 @@ SECTION_ANALYSIS_KEY = "section_analysis_per_element"
 THIN_WALLED_KEY = "thin_walled_analysis_per_element"
 
 
-def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = "restrained") -> dict:
+def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = "free") -> dict:
     """Return ``element_dictionary`` with per-element ``SectionAnalysis`` entries when the job has thin-walled sections.
 
     Looks for ``laminate.txt``, ``section_geometry.txt`` and ``element_section.txt``
@@ -73,6 +73,10 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     asks for. The dictionary then gains ``"gbt_modes"``, ``"gbt_shear_modes"`` and
     ``"extra_dofs"`` (``n_sv + shear_modes + 2 modes`` for those rows, ``n_sv`` the
     section's Saint-Venant warping modes) for the mesh DOF layout.
+
+    Thin-walled sections use ``hoop`` (default ``"free"``, which the 2D and shell
+    models match), except sections that a GBT row uses: the cross-section modes carry
+    the hoop bending, so those are analysed with ``hoop="restrained"``.
 
     With ``section_mesh_2d.txt`` the sections it defines are analysed in 2D
     (``SolidSectionAnalysis``, ``SectionAnalysis.from_solid``); they can be assigned in the
@@ -138,6 +142,10 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
             f"element_section.txt gives [modes] / [shear_modes] to elements that are not "
             f"LinearGBTBeamElement3D: {not_gbt}"
         )
+    for sid in {assignment[e] for e in gbt_rows}:
+        if analyses[sid].hoop != "restrained":
+            a = analyses[sid]
+            analyses[sid] = ThinWalledSectionAnalysis(a.section, a.laminates, hoop="restrained", n_sub=a.n_sub)
     max_modes = {sid: 0 for sid in analyses}
     max_shear = {sid: 0 for sid in analyses}
     gbt_sections = {assignment[e] for e in gbt_rows}

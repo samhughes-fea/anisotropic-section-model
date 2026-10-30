@@ -213,8 +213,15 @@ class SectionAnalysis:
 
         ``gbt=True`` (implied by ``gbt_modes`` or ``gbt_shear_modes`` > 0) also builds the
         GBT matrices with that many distortional and extra shear-lag modes
-        (``CrossSectionModes``; the analysis must use ``hoop="restrained"``).
+        (``CrossSectionModes``). The modes carry the hoop bending, so a GBT section is
+        analysed with ``hoop="restrained"``: an analysis with another hoop option is
+        rebuilt that way first.
         """
+        if (gbt or gbt_modes or gbt_shear_modes) and analysis.hoop != "restrained":
+            from pre_processing.section_integration.thin_walled.section_analysis import ThinWalledSectionAnalysis
+
+            analysis = ThinWalledSectionAnalysis(analysis.section, analysis.laminates, hoop="restrained",
+                                                 n_sub=analysis.n_sub)
         K = to_element_voigt(analysis.stiffness)
         C_rh = analysis.classical_stiffness
         S4 = np.diag([1.0, -1.0, 1.0, 1.0])

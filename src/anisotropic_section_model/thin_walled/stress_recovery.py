@@ -58,7 +58,7 @@ Array = npt.NDArray[np.float64]
 
 
 def mid_surface_strains(
-    laminate: WallLaminate, kept: npt.ArrayLike, hoop: str = "restrained"
+    laminate: WallLaminate, kept: npt.ArrayLike, hoop: str = "free"
 ) -> Array:
     """All six mid-surface strains from the strains a beam theory carries.
 
@@ -258,7 +258,7 @@ def wall_point_stress(
     s: float,
     position: npt.ArrayLike,
     element_span: Tuple[float, float],
-    hoop: str = "restrained",
+    hoop: str = "free",
     points_per_ply: int = 3,
 ) -> WallPointStress:
     """Recover the state at ``s`` from a kept-strain field along the wall.

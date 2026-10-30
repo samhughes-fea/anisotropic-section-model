@@ -140,13 +140,14 @@ def _solve(S: npt.NDArray[np.float64], rhs: npt.NDArray[np.float64]) -> npt.NDAr
         return np.linalg.lstsq(S, rhs, rcond=None)[0]
 
 
-def wall_law(laminate: WallLaminate, hoop: str = "restrained") -> npt.NDArray[np.float64]:
+def wall_law(laminate: WallLaminate, hoop: str = "free") -> npt.NDArray[np.float64]:
     """Wall stiffness (4, 4) in order ``WALL_STRAINS``.
 
-    ``hoop="restrained"`` (default): the section keeps its shape, so the wall's
-    hoop curvature is zero (``kappa_ss = 0``) while the hoop force is free
-    (``N_ss = 0``). ``hoop="free"``: the hoop moment is free too (``M_ss = 0``),
-    which is softer. For walls with ``B = 0`` the two differ only in the wall
+    ``hoop="free"`` (default): the hoop force and moment are free (``N_ss = 0``,
+    ``M_ss = 0``), as in a 2D section or shell model of the same walls.
+    ``hoop="restrained"``: the wall's hoop curvature is held at zero
+    (``kappa_ss = 0``) while the hoop force stays free, which is stiffer; GBT
+    cross-section modes need it, since the modes carry the hoop bending. For walls with ``B = 0`` the two differ only in the wall
     plate-bending terms (through ``D12`` and ``D26``); for unsymmetric walls the
     membrane terms differ too.
     """
@@ -185,7 +186,7 @@ class ThinWalledSectionAnalysis:
     laminates : mapping int -> WallLaminate
         Laminate of each ``laminate_id`` used by the walls.
     hoop : {"restrained", "free"}, optional
-        Hoop behaviour of the walls; see ``wall_law``. Default ``"restrained"``.
+        Hoop behaviour of the walls; see ``wall_law``. Default ``"free"``.
     n_sub : int, optional
         Cubic elements per wall (default 1, exact for straight walls).
 
@@ -206,7 +207,7 @@ class ThinWalledSectionAnalysis:
         self,
         section: ThinWalledSection,
         laminates: Mapping[int, WallLaminate],
-        hoop: str = "restrained",
+        hoop: str = "free",
         n_sub: int = 1,
     ) -> None:
         if n_sub < 1:

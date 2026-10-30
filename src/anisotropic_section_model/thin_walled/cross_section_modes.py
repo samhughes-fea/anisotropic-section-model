@@ -89,8 +89,9 @@ class CrossSectionModes:
     ----------
     analysis : ThinWalledSectionAnalysis
         Saint-Venant analysis of the section. Its ``n_sub`` sets the frame
-        subdivision (``n_sub > 1`` adds local plate-bending modes). Its hoop
-        option must be ``"restrained"``: the modes carry the hoop bending.
+        subdivision (``n_sub > 1`` adds local plate-bending modes). The modes
+        carry the hoop bending, so an analysis with ``hoop="free"`` (the default)
+        is rebuilt with ``hoop="restrained"`` first; ``self.analysis`` is that one.
 
     Attributes
     ----------
@@ -104,7 +105,8 @@ class CrossSectionModes:
 
     def __init__(self, analysis: ThinWalledSectionAnalysis) -> None:
         if analysis.hoop != "restrained":
-            raise ValueError("cross-section modes need hoop='restrained' (the modes carry the hoop bending)")
+            analysis = ThinWalledSectionAnalysis(analysis.section, analysis.laminates, hoop="restrained",
+                                                 n_sub=analysis.n_sub)
         self.analysis = analysis
         self.section = analysis.section
         self.n_sub = analysis.n_sub
