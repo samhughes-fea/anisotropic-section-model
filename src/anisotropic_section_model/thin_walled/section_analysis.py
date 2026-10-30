@@ -132,8 +132,21 @@ def _cubic_lagrange(xi: float) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.
     return N, dN
 
 
+_SPARSE_FROM = 400   # systems this size and larger are factorised sparse (a blade cut has thousands of DOFs)
+
+
 def _solve(S: npt.NDArray[np.float64], rhs: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Solve the section system; a strain with no wall strain (shear-rigid direction) takes the minimum-norm value."""
+    if S.shape[0] >= _SPARSE_FROM:
+        import scipy.sparse as sp
+        import scipy.sparse.linalg as spla
+
+        try:
+            x = spla.splu(sp.csc_matrix(S)).solve(np.asarray(rhs, dtype=np.float64))
+            if np.all(np.isfinite(x)):
+                return x
+        except RuntimeError:            # exactly singular
+            pass
     try:
         return np.linalg.solve(S, rhs)
     except np.linalg.LinAlgError:
@@ -517,7 +530,7 @@ class ThinWalledSectionAnalysis:
         S[nd:, :nd] = D1.T
         rhs = np.zeros(nd + 1)
         rhs[:nd] = -m["R"][:, 5]
-        omega = np.linalg.solve(S, rhs)[:nd]
+        omega = _solve(S, rhs)[:nd]
         # rigid axial fields [eps_xx, kappa_xx] for eps, kappa_y, kappa_z: [1,0], [z,n_z], [-y,-n_y]
         G = np.zeros((3, 3))
         b = np.zeros(3)
