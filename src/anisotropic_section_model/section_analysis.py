@@ -276,8 +276,10 @@ class SectionAnalysis:
     def from_solid(cls, analysis, section_id: Optional[int] = None) -> "SectionAnalysis":
         """From a ``SolidSectionAnalysis`` (a section meshed in 2D; right-handed results mapped
         to element signs). Carries the 6 x 6, classical stiffness, centres, ``E Gamma``, mass,
-        second-order terms and axial quadrature; no Benscoter, third-order or GBT data."""
+        second-order terms, axial quadrature and the Benscoter (restrained warping) data; no
+        third-order or GBT data."""
         S4 = np.diag([1.0, -1.0, 1.0, 1.0])
+        S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
         return cls(
             to_element_voigt(analysis.stiffness),
             S4 @ analysis.classical_stiffness @ S4,
@@ -287,7 +289,10 @@ class SectionAnalysis:
             dict(analysis.mass_properties),
             "solid",
             None if section_id is None else int(section_id),
+            benscoter_stiffness=S8 @ analysis.benscoter_stiffness @ S8,
+            warping_inertia=float(analysis.warping_inertia),
             geometric_terms=analysis.geometric_terms @ ELEMENT_SIGN,
+            benscoter_geometric_terms=analysis.benscoter_geometric_terms,
             axial_points=analysis.axial_points,
         )
 

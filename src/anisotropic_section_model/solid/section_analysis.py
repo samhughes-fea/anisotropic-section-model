@@ -41,9 +41,17 @@ the thin-walled system with its ``Y`` terms zero. With ``eps = Phi F0`` at ``x =
 flexibility is ``int Phi^T C Phi dA``. Tied nodes (``SectionMesh.ties``, where a wall's end
 joins another wall's strip) are eliminated before the solve.
 
+Stresses and restrained warping
+-------------------------------
+``point_stresses`` and ``stress_at`` give the 3D stresses anywhere in the section, in
+section, material and wall axes; the wall-axes ``sigma_nn``, ``tau_sn``, ``tau_xn`` are the
+interlaminar stresses of laminated walls and the material-axes stresses those of cores.
+``benscoter_stiffness`` extends the 6 x 6 with the torsional warping amplitude ``psi``
+(Benscoter / Vlasov), in the thin-walled order. Cross-section distortion is left to GBT.
+
 Public API
 ----------
-SolidSectionAnalysis.
+SolidSectionAnalysis, PointStress, BENSCOTER_STRAINS.
 
 See Also
 --------
@@ -52,18 +60,24 @@ docs/element_library/solid_section_analysis.md
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import cached_property
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import numpy.typing as npt
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
+from pre_processing.section_integration.solid.elements import shape
+from pre_processing.section_integration.solid.material import bond_matrix, material_axes
 from pre_processing.section_integration.solid.mesh import SectionMesh
 from pre_processing.section_integration.thin_walled.section_analysis import CLASSICAL, GEOMETRIC_TERMS, T_RATE
 
-__all__ = ["SolidSectionAnalysis"]
+__all__ = ["SolidSectionAnalysis", "PointStress", "BENSCOTER_STRAINS"]
+
+#: generalised strains of the restrained-warping (Benscoter) section, as the thin-walled one
+BENSCOTER_STRAINS: Tuple[str, ...] = ("eps", "kappa_y", "kappa_z", "gamma_xy", "gamma_xz", "phi", "d", "psi'")
 
 _XX, _YY, _ZZ, _YZ, _XZ, _XY = range(6)
 
@@ -101,6 +115,49 @@ class _Point:
         self.N = q.N
         self.Z, self.B, self.Nx = _operators(q.y, q.z, q.N, q.dN)
         self.C = C
+
+
+@dataclass(frozen=True)
+class PointStress:
+    """3D state at a point of the section.
+
+    All vectors are Voigt-ordered with engineering shear strains:
+
+    - ``strain``, ``stress``: section axes ``[xx, yy, zz, yz, xz, xy]``;
+    - ``stress_material``: material axes ``[11, 22, 33, 23, 13, 12]`` (ply or core axes);
+    - ``stress_wall``: wall axes ``[xx, ss, nn, sn, xn, xs]`` (``s`` the element's wall
+      direction ``alpha``, ``n = x cross s``). ``sigma_nn``, ``tau_sn`` and ``tau_xn`` are
+      the interlaminar (through-thickness) stresses of a laminated wall.
+    """
+
+    element: int
+    y: float
+    z: float
+    strain: npt.NDArray[np.float64]
+    stress: npt.NDArray[np.float64]
+    stress_material: npt.NDArray[np.float64]
+    stress_wall: npt.NDArray[np.float64]
+
+    @property
+    def interlaminar(self) -> Tuple[float, float, float]:
+        """``(sigma_nn, tau_sn, tau_xn)`` in wall axes."""
+        return float(self.stress_wall[2]), float(self.stress_wall[3]), float(self.stress_wall[4])
+
+
+class _NaturalPoint:
+    """``QuadraturePoint``-like data at natural coordinates ``(xi, eta)`` of element ``e`` (zero weight)."""
+
+    def __init__(self, mesh: SectionMesh, e: int, xi: float, eta: float):
+        conn = mesh.elements[e]
+        X = mesh.nodes[conn]
+        N, dNn = shape(mesh.kinds[e], xi, eta)
+        J = dNn @ X
+        if np.linalg.det(J) <= 0.0:
+            raise ValueError(f"({xi}, {eta}) is outside element {e} or the element is degenerate there")
+        self.element = e
+        self.y, self.z = (float(v) for v in N @ X)
+        self.weight = 0.0
+        self.N, self.dN, self.nodes = N, np.linalg.solve(J, dNn), conn
 
 
 class SolidSectionAnalysis:
@@ -379,13 +436,127 @@ class SolidSectionAnalysis:
 
     @property
     def warping_constant(self) -> float:
-        """Vlasov warping stiffness ``E Gamma = int E_x omega^2 dA`` (``E_x`` as ``axial_points``)."""
+        """Vlasov warping stiffness ``E Gamma``: the axial energy of a unit warping gradient,
+        the section relaxing in its own plane (``benscoter_stiffness[7, 7]``). It includes the
+        warping through the wall thickness (secondary warping)."""
+        return float(self._benscoter[0][7, 7])
+
+    # ------------------------------------------------------------------ #
+    # Restrained warping (Benscoter): the 7th beam DOF psi, warping amplitude
+    # ------------------------------------------------------------------ #
+    @cached_property
+    def _omega_tilde(self) -> npt.NDArray[np.float64]:
+        """Torsional warping (n_full,) about the shear centre, its extension and bending parts removed."""
         omega, c = self._torsion_warping
-        total = 0.0
+        return omega - self._full_modes[:, [0, 4, 5]] @ c
+
+    @cached_property
+    def _relaxed_gradient(self) -> npt.NDArray[np.float64]:
+        """Warping (n_full,) that lets the section relax in its own plane (and in shear) under the
+        axial strain ``N_x omega`` of a unit warping gradient ``psi'``: the Poisson contraction of
+        restrained warping. Without it ``K[7, 7]`` would use the laterally constrained ``C_xx``."""
+        m = self._matrices
+        nd = self.n_dof
+        free_dofs = (3 * self._free_nodes[:, None] + np.arange(3)[None, :]).ravel()
+        om_free = self._omega_tilde[free_dofs]
+        # only the strain-free fields are fixed (g_x = y, z would hold the shear strains)
+        D = self._independent(m["D_modes"][:, :4])
+        lu = self._saddle(D, with_psi=False)
+        rhs = np.zeros(nd + D.shape[1])
+        rhs[:nd] = -(m["Cx"] @ om_free)
+        return self.T @ lu.solve(rhs)[:nd]
+
+    def _benscoter_operator(self, p) -> npt.NDArray[np.float64]:
+        """3D strains (6, 8) at a point per unit Benscoter strain ``[psi6, d, psi']`` (``BENSCOTER_STRAINS``)."""
+        sol = self._solution
+        om = self._omega_tilde[p.dofs]
+        G = np.zeros((6, 8))
+        G[:, :6] = self._phi(p, sol["P0"], sol["W0"], sol["W1"]) @ self._stiffness
+        G[:, 6] = p.B @ om        # warping deviation d = psi - phi strains the section in shear
+        # warping amplitude gradient psi' stretches it; the section relaxes in its own plane
+        G[:, 7] = p.Nx @ om + p.B @ self._relaxed_gradient[p.dofs]
+        return G
+
+    @cached_property
+    def _benscoter(self) -> Tuple[npt.NDArray[np.float64], float, npt.NDArray[np.float64]]:
+        K8 = np.zeros((8, 8))
+        X = np.zeros((len(GEOMETRIC_TERMS), 2))
+        inertia = 0.0
+        mesh = self.mesh
         for p in self._points:
-            om = p.N @ omega[p.dofs[0::3]] - (c[0] + c[1] * p.z - c[2] * p.y)
-            total += p.weight * self._axial_modulus[p.element] * om * om
-        return float(total)
+            G = self._benscoter_operator(p)
+            K8 += p.weight * G.T @ p.C @ G
+            X += self._geometric_rows(p, p.C @ G[:, 6:])
+            om = p.N @ self._omega_tilde[p.dofs[0::3]]
+            inertia += p.weight * mesh.materials[mesh.material_ids[p.element]].rho * om * om
+        K8 = 0.5 * (K8 + K8.T)
+        K8[:6, :6] = self._stiffness
+        return K8, float(inertia), X
+
+    @property
+    def benscoter_stiffness(self) -> npt.NDArray[np.float64]:
+        """Restrained-warping section stiffness (8, 8), right-handed, about the origin.
+
+        Strains ``BENSCOTER_STRAINS``: the Saint-Venant section of ``psi6`` plus the torsional
+        warping ``omega`` (all three components, about the shear centre) times
+        ``d = psi - phi``, with ``psi`` the warping amplitude. Then ``eps += N_x omega psi'``
+        and ``eps += B omega d``. The order and meaning are those of
+        ``ThinWalledSectionAnalysis.benscoter_stiffness``; here the warping also varies
+        through the wall thickness (secondary warping). The leading 6 x 6 block is
+        ``stiffness``; ``K[7, 7]`` is ``warping_constant``.
+        """
+        return self._benscoter[0].copy()
+
+    @property
+    def warping_inertia(self) -> float:
+        """Mass moment of the warping amplitude, ``int rho omega_x^2 dA`` per length."""
+        return self._benscoter[1]
+
+    @property
+    def benscoter_geometric_terms(self) -> npt.NDArray[np.float64]:
+        """Second-order terms (7, 2) per unit Benscoter strain ``[d, psi']``."""
+        return self._benscoter[2].copy()
+
+    # ------------------------------------------------------------------ #
+    # 3D stresses over the section
+    # ------------------------------------------------------------------ #
+    def _state(self, p, forces: Optional[npt.ArrayLike], benscoter: Optional[npt.ArrayLike]) -> PointStress:
+        if (forces is None) == (benscoter is None):
+            raise ValueError("give either section forces (6,) or Benscoter strains (8,)")
+        if benscoter is not None:
+            eps = self._benscoter_operator(p) @ np.asarray(benscoter, dtype=np.float64)
+        else:
+            sol = self._solution
+            eps = self._phi(p, sol["P0"], sol["W0"], sol["W1"]) @ np.asarray(forces, dtype=np.float64)
+        e = p.element
+        C = self.mesh.element_stiffness(e)
+        sig = C @ eps
+        th, al = self.mesh.theta[e], self.mesh.alpha[e]
+        s_mat = np.linalg.solve(bond_matrix(material_axes(th, al)), sig)
+        s_wall = np.linalg.solve(bond_matrix(material_axes(0.0, al)), sig)
+        return PointStress(e, float(p.y), float(p.z), eps, sig, s_mat, s_wall)
+
+    def point_stresses(self, forces: Optional[npt.ArrayLike] = None,
+                       benscoter: Optional[npt.ArrayLike] = None) -> List[PointStress]:
+        """3D state at every quadrature point (``PointStress``).
+
+        Give the right-handed section forces ``forces`` (6,), order ``FORCES``, for the
+        Saint-Venant state (forces varying along the beam as with no distributed load, so
+        the transverse shear and interlaminar stresses of the bending gradient are in), or
+        the right-handed Benscoter strains ``benscoter`` (8,) for restrained warping.
+        """
+        return [self._state(p, forces, benscoter) for p in self._points]
+
+    def stress_at(self, element: int, xi: float, eta: float, forces: Optional[npt.ArrayLike] = None,
+                  benscoter: Optional[npt.ArrayLike] = None) -> PointStress:
+        """3D state at natural coordinates ``(xi, eta)`` of a mesh element (as ``point_stresses``).
+
+        On a ``SectionMesh.from_thin_walled`` mesh ``eta`` runs through the thickness, so a
+        ply interface is at ``eta = +1`` of one row and ``eta = -1`` of the next.
+        """
+        q = _NaturalPoint(self.mesh, element, xi, eta)
+        dofs = (3 * q.nodes[:, None] + np.arange(3)[None, :]).ravel()
+        return self._state(_Point(q, dofs, self.mesh.element_stiffness(element)), forces, benscoter)
 
     # ------------------------------------------------------------------ #
     # Second-order terms, axial quadrature and mass
@@ -397,12 +568,16 @@ class SolidSectionAnalysis:
         sol = self._solution
         H = np.zeros((len(GEOMETRIC_TERMS), 6))
         for p in self._points:
-            s = p.C @ self._phi(p, sol["P0"], sol["W0"], sol["W1"])
-            sxx, txz, txy = s[_XX], s[_XZ], s[_XY]
-            y, z = p.y, p.z
-            H += p.weight * np.vstack([sxx, sxx * y, sxx * z, sxx * (y * y + z * z),
-                                       txy, txz, txy * y + txz * z])
+            H += self._geometric_rows(p, p.C @ self._phi(p, sol["P0"], sol["W0"], sol["W1"]))
         return H
+
+    @staticmethod
+    def _geometric_rows(p, s: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+        """Weighted ``GEOMETRIC_TERMS`` rows (7, n) at a point for stresses ``s`` (6, n)."""
+        sxx, txz, txy = s[_XX], s[_XZ], s[_XY]
+        y, z = p.y, p.z
+        return p.weight * np.vstack([sxx, sxx * y, sxx * z, sxx * (y * y + z * z),
+                                     txy, txz, txy * y + txz * z])
 
     @property
     def axial_points(self) -> npt.NDArray[np.float64]:
