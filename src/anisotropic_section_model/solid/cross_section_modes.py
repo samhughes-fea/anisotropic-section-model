@@ -313,6 +313,37 @@ class SolidCrossSectionModes:
             M += p.weight * rho * Pi.T @ Pi
         return 0.5 * (M + M.T)
 
+    def geometric_tensor(self, n_modes: int, n_shear: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+        """Second-order terms of the in-plane motion ``q = [v, w, theta_x, a(m)]``, as
+        ``CrossSectionModes.geometric_tensor``: ``X = int sigma_xx Pi^T Pi dA`` and
+        ``Y = int (tau_xy Pi^T Pi_,y + tau_xz Pi^T Pi_,z) dA`` per unit GBT strain (each
+        ``(3 + m, 3 + m, 6 + 2p + 3m)``, right-handed). The Poisson part ``S psi6`` of the
+        in-plane motion is left out of ``Pi``, as in the beam's own second-order terms.
+        """
+        self._check(n_modes, n_shear)
+        Om, D, U, S = self._fields(n_modes)
+        m = n_modes
+        nq, nE = 3 + m, 6 + 2 * Om.shape[1] + 3 * m
+        TX = np.zeros((nq, nq, nE))
+        TY = np.zeros((nq, nq, nE))
+        for p in self.analysis._points:
+            sig = p.C @ self._H(p, Om, D, U, S)                    # 3D stresses per unit E
+            d = p.dofs
+            dNy, dNz = p.B[1, 1::3], p.B[2, 2::3]                   # dN/dy, dN/dz
+            Pi = np.zeros((2, nq))
+            Pi[0, [0, 2]] = [1.0, -p.z]
+            Pi[1, [1, 2]] = [1.0, p.y]
+            Pi[0, 3:] = p.N @ D[d[1::3]]
+            Pi[1, 3:] = p.N @ D[d[2::3]]
+            Py = np.zeros((2, nq))
+            Pz = np.zeros((2, nq))
+            Py[1, 2], Pz[0, 2] = 1.0, -1.0
+            Py[0, 3:], Py[1, 3:] = dNy @ D[d[1::3]], dNy @ D[d[2::3]]
+            Pz[0, 3:], Pz[1, 3:] = dNz @ D[d[1::3]], dNz @ D[d[2::3]]
+            TX += p.weight * np.einsum("ia,ib,e->abe", Pi, Pi, sig[0])
+            TY += p.weight * (np.einsum("ia,ib,e->abe", Pi, Py, sig[5]) + np.einsum("ia,ib,e->abe", Pi, Pz, sig[4]))
+        return TX, TY
+
 
 def _orthonormal(W: np.ndarray, A) -> np.ndarray:
     """Columns spanning ``W``, orthonormal in ``A`` (dependent columns dropped)."""

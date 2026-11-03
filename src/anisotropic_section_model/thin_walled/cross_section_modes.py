@@ -480,6 +480,42 @@ class CrossSectionModes:
             M += g.weight * rho * Pi.T @ Pi
         return 0.5 * (M + M.T)
 
+    def geometric_tensor(self, n_modes: int, n_shear: int = 0) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Second-order (geometric) terms of the in-plane motion, linear in the GBT strains.
+
+        The in-plane wall displacement is ``d = Pi q`` with ``q = [v, w, theta_x, a(m)]``
+        (``Pi`` the rows ``u_y, u_z`` of ``_displacement_map``). Its quadratic strains
+        against the prebuckling membrane resultants ``N_xx``, ``N_xs`` of a GBT strain
+        state ``E`` (the strains of ``stiffness``) do the work
+
+            1/2 q'^T X(E) q' + q'^T Y(E) q,   X = int N_xx Pi^T Pi ds,   Y = int N_xs Pi^T Pi_s ds,
+
+        from ``eps_xx^(2) = 1/2 |d'|^2`` and ``gamma_xs^(2) = d' . d_,s``. Returns ``X`` and
+        ``Y`` (each ``(3 + m, 3 + m, 6 + 2p + 3m)``) per unit ``E``, right-handed. For the
+        rigid rows these are the terms of ``geometric_terms`` (``docs/element_library/
+        second_order.md``) evaluated on the GBT stresses; the mode rows give local and
+        distortional buckling.
+        """
+        X, Om = self._check(n_modes), self._check_warping(n_shear)
+        m, p = X.shape[1], Om.shape[1]
+        nq, nE = 3 + m, 6 + 2 * p + 3 * m
+        TX = np.zeros((nq, nq, nE))
+        TY = np.zeros((nq, nq, nE))
+        for g in self.analysis._gauss_points:
+            H, e = self._strain_map(g, X, Om)
+            R = self._laws[e["wall"].laminate_id][:2] @ H          # [N_xx, N_xs] per unit E
+            Pi, _ = self._displacement_map(g, X, Om)
+            Pi = Pi[1:, np.r_[1, 2, 3, 6 + p:6 + p + m]]           # (2, nq) on [v, w, theta, a]
+            ex, xi = self._locate(g.wall_id, g.position)
+            w_s = self._fields(ex, xi)["w_s"] @ X[self._element_dofs(ex)]
+            t, nn = ex["t"], ex["n"]
+            Ps = np.zeros((2, nq))
+            Ps[:, 2] = [-t[1], t[0]]
+            Ps[:, 3:] = np.outer(nn, w_s)
+            TX += g.weight * np.einsum("ia,ib,e->abe", Pi, Pi, R[0])
+            TY += g.weight * np.einsum("ia,ib,e->abe", Pi, Ps, R[1])
+        return TX, TY
+
     def wall_load(self, loads: Dict[int, Tuple[float, float, float]], n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
         """Generalised load per length from uniform wall surface loads, in the order of ``mass``.
 

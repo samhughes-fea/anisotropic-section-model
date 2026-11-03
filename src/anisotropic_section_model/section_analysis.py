@@ -120,6 +120,11 @@ class SectionAnalysis:
     gbt_mass : ndarray or None
         Section mass, square of size ``6 + (n_sv + P) + 2M``, for
         ``[u, v, w, theta_x, theta_y, theta_z, b(n_sv + P), a(M), a'(M)]``.
+    gbt_geometric : (ndarray, ndarray) or None
+        GBT second-order terms ``(X, Y)``, each ``(3 + M, 3 + M, n_gbt)``: the in-plane
+        motion ``q = [v, w, theta_x, a(M)]`` does the work ``1/2 q'^T X q' + q'^T Y q``
+        per length against the stresses of the element-signed GBT strains (``X @ E``).
+        See ``gbt_geometric_terms``.
     """
 
     stiffness: npt.NDArray[np.float64]
@@ -143,6 +148,7 @@ class SectionAnalysis:
     benscoter_geometric_terms: Optional[npt.NDArray[np.float64]] = None
     third_order_geometric_terms: Optional[npt.NDArray[np.float64]] = None
     axial_points: Optional[npt.NDArray[np.float64]] = None
+    gbt_geometric: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -239,7 +245,7 @@ class SectionAnalysis:
             XB, X3 = analysis.benscoter_geometric_terms, analysis.third_order_geometric_terms
         except ValueError:
             XB = X3 = None
-        K_gbt = M_gbt = None
+        K_gbt = M_gbt = G_gbt = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
             from pre_processing.section_integration.thin_walled.cross_section_modes import CrossSectionModes
@@ -251,6 +257,7 @@ class SectionAnalysis:
             Sg[1] = -1.0  # element sign of kappa_y
             K_gbt = Sg[:, None] * K_r * Sg[None, :]
             M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
+            G_gbt = tuple(T * Sg for T in modes.geometric_tensor(gbt_modes, gbt_shear_modes))
         out = cls(
             K,
             C,
@@ -273,6 +280,7 @@ class SectionAnalysis:
             XB,
             X3,
             analysis.axial_points,
+            G_gbt,
         )
         if M_gbt is not None:
             # rigid block with the walls' own rotary inertia, as mass_matrix()
@@ -293,7 +301,7 @@ class SectionAnalysis:
         """
         S4 = np.diag([1.0, -1.0, 1.0, 1.0])
         S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        K_gbt = M_gbt = None
+        K_gbt = M_gbt = G_gbt = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
             from pre_processing.section_integration.solid.cross_section_modes import SolidCrossSectionModes
@@ -305,6 +313,7 @@ class SectionAnalysis:
             Sg[1] = -1.0  # element sign of kappa_y
             K_gbt = Sg[:, None] * K_r * Sg[None, :]
             M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
+            G_gbt = tuple(T * Sg for T in modes.geometric_tensor(gbt_modes, gbt_shear_modes))
         out = cls(
             to_element_voigt(analysis.stiffness),
             S4 @ analysis.classical_stiffness @ S4,
@@ -324,6 +333,7 @@ class SectionAnalysis:
             gbt_mass=M_gbt,
             gbt_shear_modes=int(gbt_shear_modes),
             gbt_sv_modes=int(n_sv),
+            gbt_geometric=G_gbt,
         )
         if M_gbt is not None:
             M_gbt[:6, :6] = out.mass_matrix()
@@ -355,6 +365,15 @@ class SectionAnalysis:
         """GBT stiffness and mass of the first modes (see ``gbt_indices``)."""
         ik, im = self.gbt_indices(n_modes, n_shear)
         return self.gbt_stiffness[np.ix_(ik, ik)].copy(), self.gbt_mass[np.ix_(im, im)].copy()
+
+    def gbt_geometric_terms(self, n_modes: int, n_shear: int = 0) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """GBT second-order terms ``(X, Y)`` of the first modes, on ``q = [v, w, theta_x, a(n_modes)]``
+        and the strains of ``gbt_matrices(n_modes, n_shear)``."""
+        if self.gbt_geometric is None:
+            raise ValueError("the section has no GBT second-order terms")
+        ik, _ = self.gbt_indices(n_modes, n_shear)
+        iq = np.r_[0, 1, 2, 3 + np.arange(n_modes)]
+        return tuple(T[np.ix_(iq, iq, ik)].copy() for T in self.gbt_geometric)
 
     @property
     def is_coupled(self) -> bool:
