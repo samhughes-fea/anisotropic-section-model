@@ -83,8 +83,9 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     (``SolidSectionAnalysis``, ``SectionAnalysis.from_solid``); they can be assigned in the
     same ``element_section.txt`` as thin-walled ones (section ids must differ). Key
     ``"solid_analysis_per_element"`` then holds the ``SolidSectionAnalysis`` behind each
-    (``None`` in ``"thin_walled_analysis_per_element"``). GBT rows and wall loads need
-    thin-walled sections.
+    (``None`` in ``"thin_walled_analysis_per_element"``). GBT rows on 2D sections use the
+    2D section's own modes (``solid.cross_section_modes``) without extra shear-lag modes;
+    wall loads need thin-walled sections.
 
     With ``section_taper.txt`` the listed elements' sections gain the taper (Resal) coupling
     (``SectionAnalysis.with_taper``).
@@ -137,21 +138,21 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     types = element_dictionary.get("types")
     type_of = {} if types is None else {e: str(t) for e, t in zip(ids, np.asarray(types).ravel())}
     gbt_rows = {e for e in assignment if "GBT" in type_of.get(e, "") or modes_of[e] or shear_of[e]}
-    gbt_solid = sorted(e for e in gbt_rows if assignment[e] in solid)
-    if gbt_solid:
-        raise ValueError(f"GBT needs a thin-walled section; elements {gbt_solid} have 2D sections")
+    gbt_solid_shear = sorted(e for e in gbt_rows if assignment[e] in solid and shear_of[e])
+    if gbt_solid_shear:
+        raise ValueError(f"2D sections offer no extra shear-lag modes; elements {gbt_solid_shear} ask for [shear_modes]")
     not_gbt = sorted(e for e in gbt_rows if type_of and "GBT" not in type_of.get(e, ""))
     if not_gbt:
         raise ValueError(
             f"element_section.txt gives [modes] / [shear_modes] to elements that are not "
             f"LinearGBTBeamElement3D: {not_gbt}"
         )
-    for sid in {assignment[e] for e in gbt_rows}:
+    for sid in {assignment[e] for e in gbt_rows} - set(solid):
         if analyses[sid].hoop != "restrained":
             a = analyses[sid]
             analyses[sid] = ThinWalledSectionAnalysis(a.section, a.laminates, hoop="restrained", n_sub=a.n_sub)
-    max_modes = {sid: 0 for sid in analyses}
-    max_shear = {sid: 0 for sid in analyses}
+    max_modes = {sid: 0 for sid in (*analyses, *solid)}
+    max_shear = {sid: 0 for sid in (*analyses, *solid)}
     gbt_sections = {assignment[e] for e in gbt_rows}
     for e in gbt_rows:
         sid = assignment[e]
@@ -163,7 +164,10 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
         )
         for sid, a in analyses.items()
     }
-    per_section.update({sid: SectionAnalysis.from_solid(a, sid) for sid, a in solid.items()})
+    per_section.update({
+        sid: SectionAnalysis.from_solid(a, sid, gbt_modes=max_modes[sid], gbt=sid in gbt_sections)
+        for sid, a in solid.items()
+    })
     per_element = tuple(per_section[assignment[e]] if e in assignment else None for e in ids)
     taper_path = os.path.join(job_dir, SECTION_TAPER_FILE)
     if os.path.exists(taper_path):

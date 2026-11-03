@@ -280,14 +280,32 @@ class SectionAnalysis:
         return out
 
     @classmethod
-    def from_solid(cls, analysis, section_id: Optional[int] = None) -> "SectionAnalysis":
+    def from_solid(cls, analysis, section_id: Optional[int] = None, gbt_modes: int = 0,
+                   gbt_shear_modes: int = 0, gbt: bool = False) -> "SectionAnalysis":
         """From a ``SolidSectionAnalysis`` (a section meshed in 2D; right-handed results mapped
         to element signs). Carries the 6 x 6, classical stiffness, centres, ``E Gamma``, mass,
         second-order terms, axial quadrature and the Benscoter (restrained warping) data; no
-        third-order or GBT data."""
+        third-order data.
+
+        ``gbt=True`` (implied by ``gbt_modes`` > 0) also builds the GBT matrices of the 2D
+        section with that many distortional modes (``solid.cross_section_modes``). 2D
+        sections have no extra shear-lag modes, so ``gbt_shear_modes`` must be 0.
+        """
         S4 = np.diag([1.0, -1.0, 1.0, 1.0])
         S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        return cls(
+        K_gbt = M_gbt = None
+        n_sv = 0
+        if gbt or gbt_modes or gbt_shear_modes:
+            from pre_processing.section_integration.solid.cross_section_modes import SolidCrossSectionModes
+
+            modes = SolidCrossSectionModes(analysis, max_modes=max(int(gbt_modes), 1))
+            n_sv = modes.n_sv_warping
+            K_r = modes.stiffness(gbt_modes, gbt_shear_modes)
+            Sg = np.ones(K_r.shape[0])
+            Sg[1] = -1.0  # element sign of kappa_y
+            K_gbt = Sg[:, None] * K_r * Sg[None, :]
+            M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
+        out = cls(
             to_element_voigt(analysis.stiffness),
             S4 @ analysis.classical_stiffness @ S4,
             float(analysis.warping_constant),
@@ -301,7 +319,15 @@ class SectionAnalysis:
             geometric_terms=analysis.geometric_terms @ ELEMENT_SIGN,
             benscoter_geometric_terms=analysis.benscoter_geometric_terms,
             axial_points=analysis.axial_points,
+            gbt_modes=int(gbt_modes),
+            gbt_stiffness=K_gbt,
+            gbt_mass=M_gbt,
+            gbt_shear_modes=int(gbt_shear_modes),
+            gbt_sv_modes=int(n_sv),
         )
+        if M_gbt is not None:
+            M_gbt[:6, :6] = out.mass_matrix()
+        return out
 
     # ------------------------------------------------------------------ #
     def gbt_indices(self, n_modes: int, n_shear: int = 0) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.int64]]:
