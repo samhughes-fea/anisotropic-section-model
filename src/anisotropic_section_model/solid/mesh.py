@@ -140,24 +140,34 @@ class SectionMesh:
 
         ``junctions`` says how walls meet at a section point:
 
-        - ``"mitre"``: each strip runs between the lines that bisect its corners, so a ply
-          row of one wall meets the same row of the next wall there and the two share their
-          nodes. The mesh is conforming, with no ties. It needs a closed section in which
-          every point joins exactly two walls, the walls run around it in one direction, and
-          all laminates have the same ply thicknesses.
-        - ``"tie"``: each strip runs between its end points on the mid-line and later walls'
-          end edges are tied into earlier walls' strips (``ties``). Part of a tied end edge
-          lies outside the master strip and is pinned to its end, which stiffens the corner:
-          distortional (GBT) modes come out too stiff, and so do long 3D extrusions.
-        - ``"auto"`` (default): ``"mitre"`` when the section allows it, else ``"tie"``.
+        - ``"mitre"``: at a point where exactly two walls meet, one ending and the next
+          starting there, with the same ply thicknesses in the same order, both strips end on
+          the line that bisects the corner. Each ply row then meets the same row of the other
+          wall there, and the two rows share their nodes: conforming, with no ties.
+        - ``"tie"``: strips end on their mid-line points, and later walls' end edges are tied
+          into the earlier walls' strips (``ties``): each tied node moves with the master
+          strip at its own position. Where part of an end edge lies outside the master strip
+          (at a corner), that part is pinned to the strip's end, which stiffens the corner:
+          distortional (GBT) modes come out too stiff, and so do long 3D extrusions. At a
+          T-junction away from a wall end the whole edge lies inside the master strip, and
+          the tie is exact.
+        - ``"auto"`` (default): mitre every point that allows it and tie the others
+          (T-junctions, and corners whose walls differ in ply thickness or run against each
+          other). ``"mitre"`` refuses a section with any junction it cannot mitre.
         """
         if junctions not in ("auto", "mitre", "tie"):
             raise ValueError(f"junctions must be 'auto', 'mitre' or 'tie', not {junctions!r}")
-        corners = _mitre_corners(section, laminates)
-        if junctions == "mitre" and corners is None:
-            raise ValueError("junctions='mitre' needs a closed section of two-wall corners, walls running "
-                             "one way round, and laminates with the same ply thicknesses")
-        mitre = corners is not None and junctions != "tie"
+        corners = _mitre_points(section, laminates)
+        joined = [pid for pid in section.points
+                  if sum(pid in (w.start, w.end) for w in section.walls) > 1]
+        if junctions == "mitre" and set(joined) - set(corners):
+            raise ValueError(f"junctions='mitre': points {sorted(set(joined) - set(corners))} cannot be "
+                             "mitred (they need exactly two walls, one ending and one starting there, "
+                             "with the same ply thicknesses)")
+        if junctions == "tie":
+            corners = {}
+        normal_of = {w.wall_id: _wall_normal(section, w) for w in section.walls}
+        extend = _butt_extensions(section, laminates, corners) if junctions == "auto" else {}
         all_nodes: List[np.ndarray] = []
         elements: List[np.ndarray] = []
         strips: Dict[int, List[int]] = {}                   # wall id -> its element indices
@@ -182,19 +192,19 @@ class SectionMesh:
             ply_of_row = np.repeat(np.arange(len(lam.plies)), rows_per_ply)
             L = float(np.linalg.norm(b - a))
 
-            if mitre:
-                n0, n1 = corners[w.wall_id]                  # normals of the walls before and after
+            # normals of the walls before and after, where the corner is mitred
+            n0 = normal_of[corners[w.start][0]] if w.start in corners else None
+            n1 = normal_of[corners[w.end][1]] if w.end in corners else None
 
             def at(u, v):
                 # v in [0, 1] runs over the rows; map piecewise linearly onto the ply bounds
                 r = np.interp(v * (len(rows) - 1), np.arange(len(rows)), rows)
-                if mitre:
-                    # offset r from both walls' mid-lines: the corner's bisector
-                    pa = a + r * (n_vec + n0) / (1.0 + n_vec @ n0)
-                    pb = b + r * (n_vec + n1) / (1.0 + n_vec @ n1)
-                    p = pa + u * (pb - pa)
-                else:
-                    p = a + u * L * t + r * n_vec
+                # a mitred end sits at offset r from both walls' mid-lines (the bisector)
+                pa = a + r * (n_vec if n0 is None else (n_vec + n0) / (1.0 + n_vec @ n0)) \
+                    - extend.get((w.wall_id, w.start), 0.0) * t
+                pb = b + r * (n_vec if n1 is None else (n_vec + n1) / (1.0 + n_vec @ n1)) \
+                    + extend.get((w.wall_id, w.end), 0.0) * t
+                p = pa + u * (pb - pa)
                 return p[0], p[1]
 
             nodes, elems = _structured_q8(at, elements_along, len(rows) - 1)
@@ -221,7 +231,7 @@ class SectionMesh:
         nodes = np.vstack(all_nodes)
         nodes, elements, rank = _merge_nodes(nodes, elements, return_map=True)
         edges = {k: [int(rank[n]) for n in v] for k, v in edges.items()}
-        ties = {} if mitre else _junction_ties(section, nodes, elements, strips, edges)
+        ties = _junction_ties(section, nodes, elements, strips, edges, skip=set(corners))
         return cls(nodes, elements, kinds, mids, thetas, alphas, mats, getattr(section, "section_id", None), ties)
 
     @classmethod
@@ -268,42 +278,57 @@ def _structured_q8(at, n_u: int, n_v: int) -> Tuple[np.ndarray, List[np.ndarray]
     return np.array(pts, dtype=np.float64), elems
 
 
-def _mitre_corners(section, laminates) -> Optional[Dict[int, Tuple[np.ndarray, np.ndarray]]]:
-    """For a section that can be meshed with mitred corners, the unit normals of the walls
-    before and after each wall (``{wall id: (n_before, n_after)}``); else ``None``."""
-    walls = list(section.walls)
-    starts: Dict[int, object] = {}
-    ends: Dict[int, object] = {}
-    for w in walls:
-        if w.start in starts or w.end in ends:
-            return None
-        starts[w.start], ends[w.end] = w, w
-    if set(starts) != set(ends) or set(starts) != set(section.points):
-        return None
-    ref = None
-    for w in walls:
-        lam = laminates[w.laminate_id]
-        th = np.array([p.thickness for p in lam.plies])
-        if ref is None:
-            ref = th
-        elif th.shape != ref.shape or not np.allclose(th, ref, rtol=1e-12, atol=0.0):
-            return None
+def _wall_normal(section, w) -> np.ndarray:
+    a, b = (np.asarray(p, dtype=float) for p in section.endpoints(w))
+    t = (b - a) / np.linalg.norm(b - a)
+    return np.array([-t[1], t[0]])
 
-    def normal(w):
-        a, b = (np.asarray(p, dtype=float) for p in section.endpoints(w))
-        t = (b - a) / np.linalg.norm(b - a)
-        return np.array([-t[1], t[0]])
 
+def _mitre_points(section, laminates) -> Dict[int, Tuple[int, int]]:
+    """Section points that can be mitred: ``{point: (wall ending there, wall starting there)}``
+    for points joining exactly two walls, one ending and one starting there (so their
+    normals are on the same side), with the same ply thicknesses and a corner no sharper
+    than about 37 degrees."""
     out = {}
-    for w in walls:
-        n0, n, n1 = normal(ends[w.start]), normal(w), normal(starts[w.end])
-        if min(1.0 + n @ n0, 1.0 + n @ n1) < 0.2:             # a corner sharper than about 37 degrees
-            return None
-        out[w.wall_id] = (n0, n1)
+    for pid in section.points:
+        ending = [w for w in section.walls if w.end == pid]
+        starting = [w for w in section.walls if w.start == pid]
+        if len(ending) != 1 or len(starting) != 1 or ending[0] is starting[0]:
+            continue
+        w0, w1 = ending[0], starting[0]
+        t0 = np.array([p.thickness for p in laminates[w0.laminate_id].plies])
+        t1 = np.array([p.thickness for p in laminates[w1.laminate_id].plies])
+        if t0.shape != t1.shape or not np.allclose(t0, t1, rtol=1e-12, atol=0.0):
+            continue
+        if 1.0 + _wall_normal(section, w0) @ _wall_normal(section, w1) < 0.2:
+            continue
+        out[pid] = (w0.wall_id, w1.wall_id)
     return out
 
 
-def _junction_ties(section, nodes, elements, strips, edges) -> Dict[int, List[Tuple[int, float]]]:
+def _butt_extensions(section, laminates, corners) -> Dict[Tuple[int, int], float]:
+    """For a corner of two walls that is not mitred, how far the first wall listed (the
+    master of the tie) runs past the corner point: half the other wall's thickness across
+    it, so the other wall's tied end edge lies inside the master strip (a butt joint)
+    instead of being partly pinned to its end. ``{(wall id, point): length}``."""
+    out = {}
+    for pid in section.points:
+        if pid in corners:
+            continue
+        walls = [w for w in section.walls if pid in (w.start, w.end)]
+        if len(walls) != 2:
+            continue
+        master, other = walls
+        n0, n1 = _wall_normal(section, master), _wall_normal(section, other)
+        s = abs(float(n0[0] * n1[1] - n0[1] * n1[0]))
+        if s < 0.3:                                          # nearly collinear: nothing to cover
+            continue
+        out[(master.wall_id, pid)] = 0.5 * laminates[other.laminate_id].thickness / s
+    return out
+
+
+def _junction_ties(section, nodes, elements, strips, edges,
+                   skip=frozenset()) -> Dict[int, List[Tuple[int, float]]]:
     """Tie each wall's end edge into the strips of the walls listed before it at that point.
 
     At a section point the first wall listed is the master. Every later wall's end-edge
@@ -313,6 +338,8 @@ def _junction_ties(section, nodes, elements, strips, edges) -> Dict[int, List[Tu
     """
     ties: Dict[int, List[Tuple[int, float]]] = {}
     for pid in section.points:
+        if pid in skip:
+            continue
         walls = [w.wall_id for w in section.walls if pid in (w.start, w.end)]
         for k, wid in enumerate(walls[1:], start=1):
             earlier = [e for v in walls[:k] for e in strips[v]]

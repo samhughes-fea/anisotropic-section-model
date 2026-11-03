@@ -200,3 +200,52 @@ def test_wall_junctions_are_tied():
         # inside the flange the tie reproduces the node's position
         if abs(abs(m.nodes[n][1]) - 0.15) <= 4e-3:
             np.testing.assert_allclose(p, m.nodes[n], atol=1e-12)
+
+
+def _l_section():
+    """An L of two walls with different thicknesses: its corner cannot be mitred."""
+    pts = {1: (0.1, 0.0), 2: (0.0, 0.0), 3: (0.0, 0.15)}
+    walls = [Wall(1, 1, 2, 1), Wall(2, 2, 3, 2)]
+    lams = {1: WallLaminate([Ply(CFRP, a, 1e-3) for a in (0, 45, -45, 0, 0, -45, 45, 0)]),
+            2: WallLaminate([Ply(CFRP, a, 1e-3) for a in (45, -45, -45, 45)])}
+    return ThinWalledSection(pts, walls), lams
+
+
+def _two_cell_box():
+    """A box with a middle web: four mitred corners and two T-junctions."""
+    pts = {1: (-0.2, -0.05), 2: (0.0, -0.05), 3: (0.2, -0.05), 4: (0.2, 0.05), 5: (0.0, 0.05), 6: (-0.2, 0.05)}
+    walls = [Wall(1, 1, 2, 1), Wall(2, 2, 3, 1), Wall(3, 3, 4, 1), Wall(4, 4, 5, 1), Wall(5, 5, 6, 1),
+             Wall(6, 6, 1, 1), Wall(7, 2, 5, 2)]
+    lams = {1: WallLaminate([Ply(CFRP, a, 1e-3) for a in (45, -45, -45, 45)]),
+            2: WallLaminate([Ply(CFRP, a, 1e-3) for a in (0, 90, 90, 0)])}
+    return ThinWalledSection(pts, walls), lams
+
+
+@pytest.mark.parametrize("make, n_ties", [(_i_section, 16), (_l_section, 8), (_two_cell_box, 16)])
+def test_auto_junctions_never_pin_a_tied_node(make, n_ties):
+    """With ``junctions="auto"`` every tied node lies inside its master strip, so the tie
+    reproduces its position: T-junctions are embedded, two-wall corners are mitred, and a
+    corner that cannot be mitred (different thicknesses) is a butt joint whose master wall
+    runs on over the other wall's end."""
+    sec, lams = make()
+    m = SectionMesh.from_thin_walled(sec, lams, elements_along=6)
+    assert len(m.ties) == n_ties
+    for n, row in m.ties.items():
+        assert sum(c for _, c in row) == pytest.approx(1.0)
+        np.testing.assert_allclose(sum(c * m.nodes[mm] for mm, c in row), m.nodes[n], atol=1e-12)
+
+
+def test_tie_junctions_pin_corner_nodes():
+    """The old meshing (``junctions="tie"``) pins the part of a corner's end edge outside the
+    master strip to the strip's end."""
+    sec, lams = _l_section()
+    m = SectionMesh.from_thin_walled(sec, lams, elements_along=6, junctions="tie")
+    off = [n for n, row in m.ties.items()
+           if np.linalg.norm(sum(c * m.nodes[mm] for mm, c in row) - m.nodes[n]) > 1e-6]
+    assert len(off) == 4
+
+
+def test_mitre_junctions_refuse_a_t_junction():
+    sec, lams = _i_section()
+    with pytest.raises(ValueError, match="cannot be mitred"):
+        SectionMesh.from_thin_walled(sec, lams, junctions="mitre")
