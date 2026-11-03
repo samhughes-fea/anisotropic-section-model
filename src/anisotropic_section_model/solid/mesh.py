@@ -129,15 +129,35 @@ class SectionMesh:
 
     @classmethod
     def from_thin_walled(cls, section, laminates: Mapping[int, object], elements_along: int = 8,
-                         rows_per_ply: int = 1, materials: Optional[Mapping[object, SolidMaterial]] = None
-                         ) -> "SectionMesh":
+                         rows_per_ply: int = 1, materials: Optional[Mapping[object, SolidMaterial]] = None,
+                         junctions: str = "auto") -> "SectionMesh":
         """Mesh the walls of a ``ThinWalledSection`` with ``WallLaminate`` s.
 
         Each wall is a strip from its start point to its end point, its plies stacked from
         ``n = -h/2`` to ``n = +h/2`` about the mid-line, each ply ``rows_per_ply`` elements
         thick and ``elements_along`` long. Ply materials become ``SolidMaterial.from_ply``
         unless ``materials`` maps a ``PlyMaterial`` to one.
+
+        ``junctions`` says how walls meet at a section point:
+
+        - ``"mitre"``: each strip runs between the lines that bisect its corners, so a ply
+          row of one wall meets the same row of the next wall there and the two share their
+          nodes. The mesh is conforming, with no ties. It needs a closed section in which
+          every point joins exactly two walls, the walls run around it in one direction, and
+          all laminates have the same ply thicknesses.
+        - ``"tie"``: each strip runs between its end points on the mid-line and later walls'
+          end edges are tied into earlier walls' strips (``ties``). Part of a tied end edge
+          lies outside the master strip and is pinned to its end, which stiffens the corner:
+          distortional (GBT) modes come out too stiff, and so do long 3D extrusions.
+        - ``"auto"`` (default): ``"mitre"`` when the section allows it, else ``"tie"``.
         """
+        if junctions not in ("auto", "mitre", "tie"):
+            raise ValueError(f"junctions must be 'auto', 'mitre' or 'tie', not {junctions!r}")
+        corners = _mitre_corners(section, laminates)
+        if junctions == "mitre" and corners is None:
+            raise ValueError("junctions='mitre' needs a closed section of two-wall corners, walls running "
+                             "one way round, and laminates with the same ply thicknesses")
+        mitre = corners is not None and junctions != "tie"
         all_nodes: List[np.ndarray] = []
         elements: List[np.ndarray] = []
         strips: Dict[int, List[int]] = {}                   # wall id -> its element indices
@@ -162,10 +182,19 @@ class SectionMesh:
             ply_of_row = np.repeat(np.arange(len(lam.plies)), rows_per_ply)
             L = float(np.linalg.norm(b - a))
 
+            if mitre:
+                n0, n1 = corners[w.wall_id]                  # normals of the walls before and after
+
             def at(u, v):
                 # v in [0, 1] runs over the rows; map piecewise linearly onto the ply bounds
                 r = np.interp(v * (len(rows) - 1), np.arange(len(rows)), rows)
-                p = a + u * L * t + r * n_vec
+                if mitre:
+                    # offset r from both walls' mid-lines: the corner's bisector
+                    pa = a + r * (n_vec + n0) / (1.0 + n_vec @ n0)
+                    pb = b + r * (n_vec + n1) / (1.0 + n_vec @ n1)
+                    p = pa + u * (pb - pa)
+                else:
+                    p = a + u * L * t + r * n_vec
                 return p[0], p[1]
 
             nodes, elems = _structured_q8(at, elements_along, len(rows) - 1)
@@ -192,7 +221,7 @@ class SectionMesh:
         nodes = np.vstack(all_nodes)
         nodes, elements, rank = _merge_nodes(nodes, elements, return_map=True)
         edges = {k: [int(rank[n]) for n in v] for k, v in edges.items()}
-        ties = _junction_ties(section, nodes, elements, strips, edges)
+        ties = {} if mitre else _junction_ties(section, nodes, elements, strips, edges)
         return cls(nodes, elements, kinds, mids, thetas, alphas, mats, getattr(section, "section_id", None), ties)
 
     @classmethod
@@ -237,6 +266,41 @@ def _structured_q8(at, n_u: int, n_v: int) -> Tuple[np.ndarray, List[np.ndarray]
             elems.append(np.array([index[I, J], index[I + 2, J], index[I + 2, J + 2], index[I, J + 2],
                                    index[I + 1, J], index[I + 2, J + 1], index[I + 1, J + 2], index[I, J + 1]]))
     return np.array(pts, dtype=np.float64), elems
+
+
+def _mitre_corners(section, laminates) -> Optional[Dict[int, Tuple[np.ndarray, np.ndarray]]]:
+    """For a section that can be meshed with mitred corners, the unit normals of the walls
+    before and after each wall (``{wall id: (n_before, n_after)}``); else ``None``."""
+    walls = list(section.walls)
+    starts: Dict[int, object] = {}
+    ends: Dict[int, object] = {}
+    for w in walls:
+        if w.start in starts or w.end in ends:
+            return None
+        starts[w.start], ends[w.end] = w, w
+    if set(starts) != set(ends) or set(starts) != set(section.points):
+        return None
+    ref = None
+    for w in walls:
+        lam = laminates[w.laminate_id]
+        th = np.array([p.thickness for p in lam.plies])
+        if ref is None:
+            ref = th
+        elif th.shape != ref.shape or not np.allclose(th, ref, rtol=1e-12, atol=0.0):
+            return None
+
+    def normal(w):
+        a, b = (np.asarray(p, dtype=float) for p in section.endpoints(w))
+        t = (b - a) / np.linalg.norm(b - a)
+        return np.array([-t[1], t[0]])
+
+    out = {}
+    for w in walls:
+        n0, n, n1 = normal(ends[w.start]), normal(w), normal(starts[w.end])
+        if min(1.0 + n @ n0, 1.0 + n @ n1) < 0.2:             # a corner sharper than about 37 degrees
+            return None
+        out[w.wall_id] = (n0, n1)
+    return out
 
 
 def _junction_ties(section, nodes, elements, strips, edges) -> Dict[int, List[Tuple[int, float]]]:
