@@ -371,11 +371,15 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
         [section_id] [element_id] [type] [nodes...] [material_id] [theta] [alpha]
 
     ``type`` is ``T6`` or ``Q8`` with its 6 or 8 node ids (Gmsh order). An optional
+    ``[Section_Tie]`` block, ``[section_id] [node_id] [master_id] [coefficient]`` with one row
+    per master, ties a node to a combination of free nodes (``SectionMesh.ties``, as made by
+    ``SectionMesh.from_thin_walled`` at wall junctions). An optional
     ``[Solid_Material]`` block, ``[material_id] [E1] [E2] [E3] [G12] [G13] [G23] [nu12]
     [nu13] [nu23] [rho]``, adds or overrides materials (others come from ``laminate.txt``).
     """
     nodes: Dict[int, Dict[int, Tuple[float, float]]] = {}
     elems: Dict[int, List[Tuple[str, List[int], int, float, float]]] = {}
+    tie_rows: Dict[int, Dict[int, List[Tuple[int, float]]]] = {}
     mats = dict(materials)
     section = None
     with open(path, encoding="utf-8") as fh:
@@ -384,7 +388,7 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
             if not line:
                 continue
             low = line.lower()
-            if low in ("[section_node]", "[section_element]", "[solid_material]"):
+            if low in ("[section_node]", "[section_element]", "[solid_material]", "[section_tie]"):
                 section = low
                 continue
             if line.startswith("["):
@@ -399,6 +403,8 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
                     raise ValueError(f"{path}: {kind} row needs {n} node ids and material, theta, alpha: {line!r}")
                 elems.setdefault(int(v[0]), []).append(
                     (kind, [int(x) for x in v[3:3 + n]], int(v[3 + n]), float(v[4 + n]), float(v[5 + n])))
+            elif section == "[section_tie]":
+                tie_rows.setdefault(int(v[0]), {}).setdefault(int(v[1]), []).append((int(v[2]), float(v[3])))
             elif section == "[solid_material]":
                 f = [float(x) for x in v[1:]]
                 mats[int(v[0])] = SolidMaterial(*f[:9], rho=f[9] if len(f) > 9 else 0.0)
@@ -412,9 +418,13 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
             conn = [np.array([index[n] for n in r[1]]) for r in rows]
         except KeyError as exc:
             raise ValueError(f"{path}: section {sid} element refers to unknown node {exc}") from None
+        try:
+            ties = {index[n]: [(index[m], c) for m, c in row] for n, row in tie_rows.get(sid, {}).items()}
+        except KeyError as exc:
+            raise ValueError(f"{path}: section {sid} tie refers to unknown node {exc}") from None
         out[sid] = SectionMesh(np.array([nodes[sid][n] for n in ids]), conn, [r[0] for r in rows],
                                [r[2] for r in rows], [r[3] for r in rows], [r[4] for r in rows],
-                               {m: mats[m] for m in {r[2] for r in rows} if m in mats}, sid)
+                               {m: mats[m] for m in {r[2] for r in rows} if m in mats}, sid, ties=ties)
     return out
 
 
