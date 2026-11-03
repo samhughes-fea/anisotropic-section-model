@@ -102,3 +102,39 @@ def test_missing_laminate_names_the_wall():
     cut = BladeGeometry(stations(), "1A-F", 0.003, 0.008, 0.002).section_at(1.0)
     with pytest.raises(KeyError, match="shear_web_0"):
         section_mesh_from_cut(cut, {"skin": ISOTROPIC["skin"]})
+
+
+THICK = {"skin": lam(GLASS, [0, 45, -45, -45, 45, 0], t=3e-3), "web": lam(GLASS, [45, -45, -45, 45], t=2e-3),
+         "cap": lam(CARBON, [0] * 8, t=3e-3)}
+
+
+def _overlapping_elements(mesh):
+    """Pairs of elements where one's centroid lies inside the other's corner quadrilateral."""
+    X = np.asarray(mesh.nodes, float)
+    quads = [X[c[:4]] for c in mesh.elements]
+    cents = np.array([q.mean(axis=0) for q in quads])
+    n = 0
+    for i, q in enumerate(quads):
+        e = np.roll(q, -1, axis=0) - q
+        d = cents[:, None, :] - q[None, :, :]
+        cross = e[None, :, 0] * d[:, :, 1] - e[None, :, 1] * d[:, :, 0]
+        inside = np.all(cross > 0, axis=1) | np.all(cross < 0, axis=1)
+        inside[i] = False
+        n += int(inside.sum())
+    return n
+
+
+def test_thick_skins_closing_at_a_sharp_trailing_edge():
+    """18 mm skins on a 1 m NACA 0024 close on each other over the last few per cent of chord.
+
+    Each side fills only up to the medial axis there, so no element is inverted and the two
+    sides do not overlap (before, an element at the tip inverted and the skins overlapped).
+    """
+    cut = BladeGeometry(stations(), "2D-F", 0.018, 0.024, 0.008, web_positions=(0.18, 0.48)).section_at(3.0)
+    mesh = section_mesh_from_cut(cut, THICK, element_size=0.01)
+    assert _overlapping_elements(mesh) == 0
+    a = numbers(SolidSectionAnalysis(mesh))
+    b = numbers(thin_walled_from_cut(cut, THICK).analysis())
+    # the 2D caps reach the webs' outer faces, so a few per cent more axial and flap stiffness
+    for key, tol in (("EA", 0.04), ("EI_flap", 0.04), ("EI_edge", 0.015), ("GJ", 0.02)):
+        assert a[key] == pytest.approx(b[key], rel=tol), key

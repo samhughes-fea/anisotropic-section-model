@@ -128,6 +128,34 @@ def _ray_gap(origin, direction, outer: np.ndarray, skip: float, ccw: bool) -> fl
     return best
 
 
+def _medial_depth(origin, direction, outer: np.ndarray, gap: float, ccw: bool) -> float:
+    """Distance along ``direction`` from ``origin`` to the medial axis of ``outer``.
+
+    The point where the distance to the far side (edges whose outward normal faces the
+    ray) equals the distance travelled; between 0 and ``gap``, found by bisection.
+    """
+    A, B = outer, np.roll(outer, -1, axis=0)
+    E = B - A
+    n_out = np.column_stack([E[:, 1], -E[:, 0]]) if ccw else np.column_stack([-E[:, 1], E[:, 0]])
+    far = (n_out @ np.asarray(direction, float)) > 0.0
+    A, E = A[far], E[far]
+    L2 = np.maximum(np.einsum("ij,ij->i", E, E), 1e-300)
+
+    def f(t):
+        X = origin + t * direction
+        u = np.clip(np.einsum("ij,ij->i", X - A, E) / L2, 0.0, 1.0)
+        return float(np.min(np.linalg.norm(A + u[:, None] * E - X, axis=1))) - t
+
+    lo, hi = 0.0, float(gap)
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        if f(mid) > 0.0:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
 # ----------------------------------------------------------------------------- the mesher
 def section_mesh_from_cut(
     cut,
@@ -361,7 +389,11 @@ def section_mesh_from_cut(
         n_out = loop.outward(s, hn)
         O = loop.at(s) + 0.5 * ts * n_out
         gap = _ray_gap(O, -n_out, outer_poly, skip=1e-3 * ts, ccw=loop.ccw)
-        return min(1.0, 0.5 * gap / ts)
+        if gap >= 2.0 * ts:
+            return 1.0
+        # where the skins close on each other, each side fills up to the medial axis (the
+        # points equidistant from both outer faces), so the two sides never cross
+        return min(1.0, _medial_depth(O, -n_out, outer_poly, gap, loop.ccw) / ts)
 
     # nodes
     pos: List[np.ndarray] = []
@@ -424,7 +456,9 @@ def section_mesh_from_cut(
             return index[key]
         s = half_station(I)
         if I not in scale_cache:
-            scale_cache[I] = depth_scale(s)
+            # no deeper than the neighbouring half-stations: at a sharp trailing edge the
+            # tip's own ray runs along the chord and sees no closure
+            scale_cache[I] = min(depth_scale(half_station(I + k)) for k in (-1, 0, 1))
         d = depth_skin[J // 2] if J % 2 == 0 else 0.5 * (depth_skin[J // 2] + depth_skin[J // 2 + 1])
         n_out = loop.outward(s, hn)
         return node(key, loop.at(s) + (0.5 * ts - scale_cache[I] * d) * n_out)
