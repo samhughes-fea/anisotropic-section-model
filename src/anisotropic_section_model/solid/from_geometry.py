@@ -537,14 +537,18 @@ def write_section_mesh_2d(path: str, meshes: Mapping[int, SectionMesh]) -> None:
     """Write ``section_mesh_2d.txt`` for ``{section_id: SectionMesh}``, with its materials.
 
     Material ids are renumbered across sections (one ``[Solid_Material]`` row per
-    distinct material object).
+    distinct material object). Junction ties (``SectionMesh.ties``) go to a
+    ``[Section_Tie]`` block.
     """
     mat_rows: Dict[int, Tuple[int, SolidMaterial]] = {}
     lines_n, lines_e = ["[Section_Node]", "[section_id] [node_id] [y] [z]"], \
         ["[Section_Element]", "[section_id] [element_id] [type] [nodes...] [material_id] [theta] [alpha]"]
+    lines_t = ["[Section_Tie]", "[section_id] [node_id] [master_id] [coefficient]"]
     for sid, mesh in meshes.items():
         for k, (y, z) in enumerate(mesh.nodes, start=1):
             lines_n.append(f"{sid} {k} {float(y)!r} {float(z)!r}")
+        for n, row in sorted((getattr(mesh, "ties", None) or {}).items()):
+            lines_t += [f"{sid} {int(n) + 1} {int(m) + 1} {float(c)!r}" for m, c in row]
         for e, (conn, kind, m, th, al) in enumerate(zip(mesh.elements, mesh.kinds, mesh.material_ids, mesh.theta,
                                                        mesh.alpha), start=1):
             mat = mesh.materials[m]
@@ -558,4 +562,7 @@ def write_section_mesh_2d(path: str, meshes: Mapping[int, SectionMesh]) -> None:
         vals = (m.E1, m.E2, m.E3, m.G12, m.G13, m.G23, m.nu12, m.nu13, m.nu23, m.rho)
         lines_m.append(f"{gid} " + " ".join(repr(float(v)) for v in vals))
     with open(path, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lines_m + [""] + lines_n + [""] + lines_e) + "\n")
+        blocks = lines_m + [""] + lines_n + [""] + lines_e
+        if len(lines_t) > 2:
+            blocks += [""] + lines_t
+        fh.write("\n".join(blocks) + "\n")
