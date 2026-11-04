@@ -29,11 +29,18 @@ differentiated exactly, with no finite differences:
 6. **Second-order terms** (``geometric=True``). ``geometric_terms`` sums the wall
    resultants of the Saint-Venant wall strains against the section geometry, linear in
    the wall law and in the strain fields, so ``dH`` takes the derivative law and fields.
+7. **GBT** (``gbt_section_derivative``). The GBT matrices integrate the cross-section modes
+   against the GBT wall law (``N_ss`` released). The distortional modes are eigenvectors of
+   ``B x = lambda C x`` and the shear-lag modes of ``E x = mu A x`` in the complement of the
+   Saint-Venant warping; their derivatives follow from the eigenproblems, expanded on the
+   other eigenvectors, which complete the space. Only the components that leave the span
+   of the modes kept are formed: a GBT beam with one section does not see a change of basis
+   within a block, its amplitudes being free.
 
 Public API
 ----------
 LayupParameter, laminate_derivative, wall_law_derivative, SectionDerivative,
-section_derivative, element_section_derivative.
+section_derivative, gbt_section_derivative, element_section_derivative.
 """
 
 from __future__ import annotations
@@ -45,10 +52,10 @@ import numpy as np
 import numpy.typing as npt
 
 from pre_processing.section_integration.thin_walled.laminate import WallLaminate
-from pre_processing.section_integration.thin_walled.wall_stiffness import WALL_RESULTANTS, WALL_STRAINS
+from pre_processing.section_integration.thin_walled.wall_stiffness import WALL_RESULTANTS, WALL_STRAINS  # noqa: F401
 
 __all__ = ["LayupParameter", "laminate_derivative", "wall_law_derivative", "SectionDerivative", "section_derivative",
-           "element_section_derivative"]
+           "gbt_section_derivative", "element_section_derivative"]
 
 KINDS = ("angle", "thickness")
 
@@ -161,6 +168,13 @@ class SectionDerivative:
     #: ``d A`` of the parameter's laminate, ``A`` the axial wall stiffness of ``beam_wall_stiffness``
     #: (the taper coupling ``sum A_l parts[l]`` is linear in it)
     wall_axial: float = 0.0
+    #: right-handed GBT stiffness, mass and geometric tensors with the modes held fixed
+    #: (``gbt_section_derivative``), for GBT elements
+    gbt_stiffness: Optional[npt.NDArray[np.float64]] = None
+    gbt_mass: Optional[npt.NDArray[np.float64]] = None
+    gbt_geometric: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
+    #: ``(dW0, dW1)``: the Saint-Venant warping fields (free DOFs, per unit section force)
+    warping_fields: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
 
 
 def _assemble(an, laws: Dict[int, np.ndarray]) -> Dict[str, np.ndarray]:
@@ -277,7 +291,7 @@ def section_derivative(an, param: LayupParameter, benscoter: bool = False,
     dwE = np.array([g.weight * dlaw[0, 0] if lid_of[g.wall_id] == param.laminate_id else 0.0
                     for g in an._gauss_points])
     return SectionDerivative(param, dF, dK, dmass, _mass_matrix(dmass), dK8, dI, dH, dwE,
-                             _wall_axial_derivative(lam, param))
+                             _wall_axial_derivative(lam, param), warping_fields=(dW0, dW1))
 
 
 def _wall_axial_derivative(lam: WallLaminate, param: LayupParameter) -> float:
@@ -398,6 +412,176 @@ def _mass_matrix(t: Dict[str, float]) -> np.ndarray:
     return M
 
 
+def _gbt_law_derivative(lam: WallLaminate, dABD: np.ndarray) -> np.ndarray:
+    """``d gbt_wall_stiffness(lam)`` (5, 5): ``N_ss`` released, ``P^T dABD P``."""
+    rel = [WALL_RESULTANTS.index("N_ss")]
+    kept = [i for i in range(6) if i not in rel]
+    K = lam.ABD()
+    P = np.zeros((6, 5))
+    P[kept, np.arange(5)] = 1.0
+    P[rel] = -np.linalg.solve(K[np.ix_(rel, rel)], K[np.ix_(rel, kept)])
+    dK = P.T @ dABD @ P
+    return 0.5 * (dK + dK.T)
+
+
+def _mode_derivative(modes, lid: int, dlaw: np.ndarray, n_modes: int) -> np.ndarray:
+    """``dX`` of the first ``n_modes`` distortional modes, up to a change of basis of their span.
+
+    The modes are eigenvectors of ``B x = lambda C x`` on the admissible frame space, whose
+    other eigenvectors (the remaining distortional modes) and rigid modes (``B r = 0``)
+    complete it. With ``r_k = (dB - lambda_k dC) x_k``, the component of ``dx_k`` on another
+    mode ``x_j`` is ``-x_j^T r_k / ((lambda_j - lambda_k) x_j^T C x_j)`` and on the rigid modes
+    ``R`` it solves ``R^T C R c = -R^T dC x_k``. The components on the first ``n_modes`` modes
+    only turn the basis of their span, which a GBT beam does not see (its amplitudes are free
+    within the block), so they are left out.
+    """
+    lam_all, X_all = modes._modes
+    nf = modes.n_frame_dof
+    dC, dB = np.zeros((nf, nf)), np.zeros((nf, nf))
+    for e, f, wt, l in modes._gauss():
+        if l != lid:
+            continue
+        d = modes._element_dofs(e)
+        E2 = np.vstack([f["u"], np.zeros(8), -f["w"], np.zeros(8), np.zeros(8)])
+        E0 = np.vstack([np.zeros(8), np.zeros(8), np.zeros(8), -f["w_ss"], np.zeros(8)])
+        dC[np.ix_(d, d)] += wt * E2.T @ dlaw @ E2
+        dB[np.ix_(d, d)] += wt * E0.T @ dlaw @ E0
+    C = modes._frame_matrices["C"]
+    R = modes._rigid
+    RCR = R.T @ C @ R
+    rest = X_all[:, n_modes:]
+    cj = np.einsum("ik,ij,jk->k", rest, C, rest)
+    out = np.zeros((nf, n_modes))
+    for k in range(n_modes):
+        x = X_all[:, k]
+        r = dB @ x - lam_all[k] * (dC @ x)
+        c = -(rest.T @ r) / ((lam_all[n_modes:] - lam_all[k]) * cj)
+        out[:, k] = rest @ c + R @ np.linalg.solve(RCR, -(R.T @ (dC @ x)))
+    return out
+
+
+def _warping_derivative(modes, lid: int, dlaw_r: np.ndarray, d: SectionDerivative, n_shear: int) -> np.ndarray:
+    """``dOmega`` of the warping modes, up to a change of basis of the Saint-Venant span.
+
+    The Saint-Venant warping modes span ``D = W - Q (Q^T A Q)^-1 Q^T A W`` (``W = [W0, W1]``,
+    ``Q`` the rigid axial fields, ``A`` the axial warping stiffness), so ``Omega_sv = D T`` and
+    ``dOmega_sv = dD T``. The shear-lag modes ``x_k`` solve ``E x = mu A x + A Q' nu`` with
+    ``Q'^T A x = 0`` (``Q' = [Q, Omega_sv]``, ``nu = (Q'^T A Q')^-1 Q'^T E x``); their other
+    shear-lag modes and ``Q'`` complete the warping space, and the components of ``dx_k`` on
+    them follow from the derivative of these equations, as for the distortional modes.
+    """
+    an = modes.analysis
+    A = modes._axial_warping_stiffness
+    lid_of = {w.wall_id: w.laminate_id for w in an.section.walls}
+    dA = np.zeros_like(A)
+    for g in an._gauss_points:
+        if lid_of[g.wall_id] == lid:
+            np.add.at(dA, np.ix_(g.dofs, g.dofs), g.weight * dlaw_r[0, 0] * np.outer(g.Nx_local[0], g.Nx_local[0]))
+    sol = an._solution
+    W = np.hstack([sol["W0"], sol["W1"]])
+    dW = np.hstack(d.warping_fields)
+    U, sv, _ = np.linalg.svd(an._rigid_modes, full_matrices=False)
+    Q = U[:, sv > 1e-12 * sv[0]]
+    S = Q.T @ A @ Q
+    G = np.linalg.solve(S, Q.T @ A)                       # (Q^T A Q)^-1 Q^T A
+    dG = np.linalg.solve(S, Q.T @ dA) - np.linalg.solve(S, Q.T @ dA @ Q @ G)
+    D = W - Q @ (G @ W)
+    dD = dW - Q @ (G @ dW) - Q @ (dG @ W)
+    Om = modes._check_warping(n_shear)
+    n_sv = modes.n_sv_warping
+    T, *_ = np.linalg.lstsq(D, Om[:, :n_sv], rcond=None)
+    out = np.zeros_like(Om)
+    out[:, :n_sv] = dD @ T
+    if n_shear:
+        full, _, mu = modes._warping_basis
+        Xs, mus = full[:, n_sv:], mu[n_sv:]
+        E = an._matrices["E"]
+        dE = _assemble(an, {lid: dlaw_r})["E"]
+        Qp = np.hstack([Q, Om[:, :n_sv]])
+        dQp = np.hstack([np.zeros_like(Q), out[:, :n_sv]])
+        QAQ = Qp.T @ A @ Qp
+        rest = Xs[:, n_shear:]
+        aj = np.einsum("ik,ij,jk->k", rest, A, rest)
+        dAQ = dA @ Qp + A @ dQp
+        for k in range(n_shear):
+            x = Xs[:, k]
+            nu = np.linalg.solve(QAQ, Qp.T @ (E @ x))
+            r = dE @ x - mus[k] * (dA @ x) - dAQ @ nu
+            c = -(rest.T @ r) / ((mus[n_shear:] - mus[k]) * aj)
+            cq = np.linalg.solve(QAQ, -(dQp.T @ (A @ x) + Qp.T @ (dA @ x)))
+            out[:, n_sv + k] = rest @ c + Qp @ cq
+    return out
+
+
+def gbt_section_derivative(modes, d: SectionDerivative, n_modes: int, n_shear: int = 0):
+    """Derivatives of the GBT section matrices: ``(dK, dM, (dTX, dTY))``.
+
+    ``modes`` is the ``CrossSectionModes`` of the section and ``d`` its ``section_derivative``
+    (for the warping fields). The results are in the layout of ``modes.stiffness``,
+    ``modes.mass`` and ``modes.geometric_tensor`` for ``n_modes`` and ``n_shear``
+    (right-handed). Each is an integral of the mode fields against the GBT wall law
+    (``N_ss`` released) or the wall mass, so ``dK = sum w (dH^T K H + H^T K dH + H^T dK H)``
+    with ``dH`` the strains of the derivatives of the distortional modes (``_mode_derivative``)
+    and of the warping modes (``_warping_derivative``).
+    """
+    param = d.parameter
+    an = modes.analysis
+    X, Om = modes._check(n_modes), modes._check_warping(n_shear)
+    m, p = X.shape[1], Om.shape[1]
+    nE, nM, nq = 6 + 2 * p + 3 * m, 6 + p + 2 * m, 3 + m
+    dK, dM = np.zeros((nE, nE)), np.zeros((nM, nM))
+    dTX, dTY = np.zeros((nq, nq, nE)), np.zeros((nq, nq, nE))
+    lam = an.laminates.get(param.laminate_id)
+    if lam is None or not any(w.laminate_id == param.laminate_id for w in an.section.walls):
+        return dK, dM, (dTX, dTY)
+    dABD, dm = laminate_derivative(lam, param)
+    dlaw = _gbt_law_derivative(lam, dABD)
+    dX = _mode_derivative(modes, param.laminate_id, dlaw, n_modes)
+    dOm = _warping_derivative(modes, param.laminate_id, wall_law_derivative(lam, dABD, an.hoop), d, n_shear)
+    lid_of = {w.wall_id: w.laminate_id for w in an.section.walls}
+    iq = np.r_[1, 2, 3, 6 + p:6 + p + m]
+
+    def frame(g, Xm, Om_, ex, xi):
+        Pi, _ = modes._displacement_map(g, Xm, Om_)
+        w_s = modes._fields(ex, xi)["w_s"] @ Xm[modes._element_dofs(ex)]
+        return Pi, w_s
+
+    for g in an._gauss_points:
+        own = lid_of[g.wall_id] == param.laminate_id
+        law = modes._laws[lid_of[g.wall_id]]
+        H, ex = modes._strain_map(g, X, Om)
+        dH, _ = modes._strain_map(g, dX, dOm)
+        dH[:, :6] = 0.0                                   # the rigid fields do not change
+        KH = law @ H
+        dK += g.weight * (dH.T @ KH + KH.T @ dH)
+        if own:
+            dK += g.weight * H.T @ dlaw @ H
+        xi = modes._locate(g.wall_id, g.position)[1]
+        Pi, w_s = frame(g, X, Om, ex, xi)
+        dPi, dw_s = frame(g, dX, dOm, ex, xi)
+        dPi[:, :6] = 0.0
+        rho = an.laminates[lid_of[g.wall_id]].mass_per_area
+        dM += g.weight * rho * (dPi.T @ Pi + Pi.T @ dPi)
+        if own:
+            dM += g.weight * dm[0] * Pi.T @ Pi
+        # geometric tensors: X = int N_xx Pq^T Pq, Y = int N_xs Pq^T Ps, (N_xx, N_xs) = law[:2] H
+        Rs = law[:2] @ H
+        dRs = law[:2] @ dH + (dlaw[:2] @ H if own else 0.0)
+        Pq, dPq = Pi[1:, iq], dPi[1:, iq]
+        t, nn = ex["t"], ex["n"]
+        Ps = np.zeros((2, nq))
+        Ps[:, 2] = [-t[1], t[0]]
+        Ps[:, 3:] = np.outer(nn, w_s)
+        dPs = np.zeros((2, nq))
+        dPs[:, 3:] = np.outer(nn, dw_s)
+        w = g.weight
+        dTX += w * (np.einsum("ia,ib,e->abe", dPq, Pq, Rs[0]) + np.einsum("ia,ib,e->abe", Pq, dPq, Rs[0])
+                    + np.einsum("ia,ib,e->abe", Pq, Pq, dRs[0]))
+        dTY += w * (np.einsum("ia,ib,e->abe", dPq, Ps, Rs[1]) + np.einsum("ia,ib,e->abe", Pq, dPs, Rs[1])
+                    + np.einsum("ia,ib,e->abe", Pq, Ps, dRs[1]))
+    return 0.5 * (dK + dK.T), 0.5 * (dM + dM.T), (dTX, dTY)
+
+
 def element_section_derivative(sa, d: SectionDerivative):
     """A ``SectionAnalysis`` like ``sa`` whose stiffness and mass matrix are the derivatives ``d``
     (element signs).
@@ -441,4 +625,14 @@ def element_section_derivative(sa, d: SectionDerivative):
         kw["warping_inertia"] = d.warping_inertia
     else:
         kw["warping_inertia"] = 0.0
+    if d.gbt_stiffness is not None:
+        Sg = np.ones(d.gbt_stiffness.shape[0])
+        Sg[1] = -1.0  # element sign of kappa_y
+        Kg = Sg[:, None] * d.gbt_stiffness * Sg[None, :]
+        if sa.tapered:
+            Kg[:6, :6] += kw["stiffness"] - to_element_voigt(d.stiffness)
+        Mg = np.array(d.gbt_mass, dtype=np.float64, copy=True)
+        Mg[:6, :6] = dM
+        kw["gbt_stiffness"], kw["gbt_mass"] = Kg, Mg
+        kw["gbt_geometric"] = tuple(T * Sg for T in d.gbt_geometric)
     return _Derivative(**kw)
