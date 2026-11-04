@@ -387,6 +387,25 @@ class SolidCrossSectionModes:
             TY += p.weight * (np.einsum("ia,ib,e->abe", Pi, Py, sig[5]) + np.einsum("ia,ib,e->abe", Pi, Pz, sig[4]))
         return TX, TY
 
+    def brazier_tensor(self, n_modes: int, n_shear: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+        """Brazier terms ``(T, Q)`` as ``CrossSectionModes.brazier_tensor``: ``T = int g sigma_xx dA``
+        and ``Q = int E_x g g dA`` with ``g_k = (d_z, -d_y)`` the mode's in-plane motion and
+        ``E_x`` the axial modulus (in-plane stresses free), right-handed."""
+        self._check(n_modes, n_shear)
+        Om, D, U, S = self._fields(n_modes)
+        m = n_modes
+        nE = 6 + 2 * Om.shape[1] + 3 * m
+        T = np.zeros((m, 2, nE))
+        Q = np.zeros((m, m, 2, 2))
+        Ex = self.analysis._axial_modulus
+        for p in self.analysis._points:
+            sig = p.C @ self._H(p, Om, D, U, S)
+            d = p.dofs
+            gk = np.stack([p.N @ D[d[2::3]], -(p.N @ D[d[1::3]])], axis=1)      # (m, 2)
+            T += p.weight * np.einsum("kc,e->kce", gk, sig[0])
+            Q += p.weight * Ex[p.element] * np.einsum("kc,ld->klcd", gk, gk)
+        return T, Q
+
 
 def _orthonormal(W: np.ndarray, A) -> np.ndarray:
     """Columns spanning ``W``, orthonormal in ``A`` (dependent columns dropped)."""

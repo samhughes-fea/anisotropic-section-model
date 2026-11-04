@@ -128,8 +128,15 @@ def rotate_gbt_basis(sa, Rw: np.ndarray, Rm: np.ndarray):
         G = tuple(np.einsum("ai,bj,ije,ef->abf", Tq.T, Tq.T, X, T) for X in G)
     W = sa.gbt_moments
     W = None if W is None else Tm.T @ W
+    Bz = getattr(sa, "gbt_brazier", None)
+    if Bz is not None:
+        # new mode amplitudes a_new = Rm a_old (old = Rm^T new)
+        Tb, Qb = Bz
+        Tb = np.einsum("ik,kce,ef->icf", Rm, Tb, T)
+        Qb = np.einsum("ik,jl,klcd->ijcd", Rm, Rm, Qb)
+        Bz = (Tb, Qb)
     return dataclasses.replace(sa, gbt_stiffness=0.5 * (K + K.T), gbt_mass=0.5 * (M + M.T), gbt_geometric=G,
-                               gbt_moments=W)
+                               gbt_moments=W, gbt_brazier=Bz)
 
 
 def align_gbt_sections(per_element: Sequence, connectivity: npt.ArrayLike,
