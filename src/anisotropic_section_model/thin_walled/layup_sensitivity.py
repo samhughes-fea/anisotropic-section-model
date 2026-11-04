@@ -21,6 +21,14 @@ differentiated exactly, with no finite differences:
    problem is not a minimum of the section energy.)
 4. **Mass.** The section mass per length and its moments are linear in the wall mass
    moments, so ``d mass_matrix`` follows directly.
+5. **Benscoter** (``benscoter=True``). The torsional warping ``omega`` is one more linear
+   solve with the same wall-law matrices, and its rigid part is removed by a 3 x 3 solve in
+   the walls' axial stiffness; both are differentiated. The 8 x 8 stiffness
+   ``sum w G^T K G`` (``G`` the wall strains of the beam strains, ``omega_s d`` and
+   ``omega psi'``) and the warping inertia ``sum w m omega^2`` then follow by the product rule.
+6. **Second-order terms** (``geometric=True``). ``geometric_terms`` sums the wall
+   resultants of the Saint-Venant wall strains against the section geometry, linear in
+   the wall law and in the strain fields, so ``dH`` takes the derivative law and fields.
 
 Public API
 ----------
@@ -31,7 +39,7 @@ section_derivative, element_section_derivative.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -143,6 +151,11 @@ class SectionDerivative:
     stiffness: npt.NDArray[np.float64]
     mass: Dict[str, float]
     mass_matrix: npt.NDArray[np.float64]
+    #: right-handed ``d benscoter_stiffness`` (8, 8) and ``d warping_inertia``, with ``benscoter=True``
+    benscoter_stiffness: Optional[npt.NDArray[np.float64]] = None
+    warping_inertia: float = 0.0
+    #: right-handed ``d geometric_terms`` (7, 6), with ``geometric=True``
+    geometric_terms: Optional[npt.NDArray[np.float64]] = None
 
 
 def _assemble(an, laws: Dict[int, np.ndarray]) -> Dict[str, np.ndarray]:
@@ -173,11 +186,13 @@ def _phi(g, P0, P1, W0, W1) -> np.ndarray:
     return g.Z @ P0 + g.Y @ P1 + g.B_local @ W0[g.dofs] + g.Nx_local @ W1[g.dofs]
 
 
-def section_derivative(an, param: LayupParameter) -> SectionDerivative:
+def section_derivative(an, param: LayupParameter, benscoter: bool = False,
+                       geometric: bool = False) -> SectionDerivative:
     """Exact derivatives of the section stiffness, flexibility and mass for ``param``.
 
     ``an`` is a ``ThinWalledSectionAnalysis``. A parameter of a laminate the section does not
-    use gives zeros.
+    use gives zeros. ``benscoter=True`` adds the derivatives of the Benscoter stiffness and
+    the warping inertia, ``geometric=True`` that of the second-order terms.
     """
     from pre_processing.section_integration.thin_walled.section_analysis import _solve
 
@@ -186,7 +201,8 @@ def section_derivative(an, param: LayupParameter) -> SectionDerivative:
     if not used:
         z6 = np.zeros((6, 6))
         return SectionDerivative(param, z6, z6.copy(), {k: 0.0 for k in ("m", "my", "mz", "yy", "zz", "yz")},
-                                 z6.copy())
+                                 z6.copy(), np.zeros((8, 8)) if benscoter else None, 0.0,
+                                 np.zeros((7, 6)) if geometric else None)
     dABD, dm = laminate_derivative(lam, param)
     dlaw = wall_law_derivative(lam, dABD, an.hoop)
 
@@ -233,7 +249,98 @@ def section_derivative(an, param: LayupParameter) -> SectionDerivative:
     dK = -Ks @ dF @ Ks
     dK = 0.5 * (dK + dK.T)
     dmass = _mass_derivative(an, param.laminate_id, dm)
-    return SectionDerivative(param, dF, dK, dmass, _mass_matrix(dmass))
+    dK8, dI = None, 0.0
+    if benscoter:
+        dK8, dI = _benscoter_derivative(an, param.laminate_id, dlaw, dmx, dm[0], (P0, P1, W0, W1),
+                                        (dP0, dP1, dW0, dW1), dK)
+    dH = None
+    if geometric:
+        from types import SimpleNamespace
+
+        from pre_processing.section_integration.thin_walled.section_analysis import T_RATE
+
+        rows = type(an)._geometric_rows
+        dH = np.zeros((7, 6))
+        for g in an._gauss_points:
+            Phi = _phi(g, P0, P1, W0, W1)
+            dPhi = _phi(g, dP0, dP1, dW0, dW1)
+            dH += rows(g, dPhi, dPhi @ T_RATE)
+            if lid_of[g.wall_id] == param.laminate_id:
+                gd = SimpleNamespace(K=dlaw, position=g.position, normal=g.normal, weight=g.weight)
+                dH += rows(gd, Phi, Phi @ T_RATE)
+    return SectionDerivative(param, dF, dK, dmass, _mass_matrix(dmass), dK8, dI, dH)
+
+
+def _benscoter_derivative(an, laminate_id, dlaw, dmx, dm0, sol, dsol, dKs):
+    """``(d benscoter_stiffness, d warping_inertia)``, right-handed (module docstring, step 5)."""
+    from pre_processing.section_integration.thin_walled.section_analysis import _solve
+
+    nd = an.n_dof
+    m = an._matrices
+    omega, c = an._torsion_warping
+    # d omega: E omega = -R[:, 5] with the constant fixed; the constraint only sets the
+    # constant, which the rigid-part removal below takes out again, so it is not differentiated
+    M2 = np.zeros((nd, nd))
+    for g in an._gauss_points:
+        np.add.at(M2, np.ix_(g.dofs, g.dofs), g.weight * g.thickness * np.outer(g.Nx_local[0], g.Nx_local[0]))
+    D1 = M2 @ an._rigid_modes[:, :1]
+    S = np.zeros((nd + 1, nd + 1))
+    S[:nd, :nd] = m["E"]
+    S[:nd, nd:] = D1
+    S[nd:, :nd] = D1.T
+    x = np.concatenate([omega, _solve(S, np.concatenate([-m["R"][:, 5], [0.0]]))[nd:]])
+    rhs = np.zeros(nd + 1)
+    rhs[:nd] = -dmx["R"][:, 5] - dmx["E"] @ x[:nd]
+    domega = _solve(S, rhs)[:nd]
+
+    lid_of = {w.wall_id: w.laminate_id for w in an.section.walls}
+    G3 = np.zeros((3, 3))
+    dG3 = np.zeros((3, 3))
+    db = np.zeros(3)
+    for g in an._gauss_points:
+        Kax = g.K[np.ix_([0, 2], [0, 2])]
+        y, z = g.position
+        Mg = np.array([[1.0, z, -y], [0.0, g.normal[1], -g.normal[0]]])
+        rn = y * g.normal[1] - z * g.normal[0]
+        ag = np.array([g.Nx_local[0] @ omega[g.dofs], -rn])
+        dag = np.array([g.Nx_local[0] @ domega[g.dofs], 0.0])
+        G3 += g.weight * Mg.T @ Kax @ Mg
+        db += g.weight * Mg.T @ Kax @ dag
+        if lid_of[g.wall_id] == laminate_id:
+            dKax = dlaw[np.ix_([0, 2], [0, 2])]
+            dG3 += g.weight * Mg.T @ dKax @ Mg
+            db += g.weight * Mg.T @ dKax @ ag
+    dc = np.linalg.solve(G3, db - dG3 @ c)
+
+    P0, P1, W0, W1 = sol
+    dP0, dP1, dW0, dW1 = dsol
+    Ks = an._stiffness
+    dK8 = np.zeros((8, 8))
+    dI = 0.0
+    for g in an._gauss_points:
+        t_y, t_z = g.normal[1], -g.normal[0]
+        y, z = g.position
+        om = float(g.Nx_local[0] @ omega[g.dofs]) - (c[0] + c[1] * z - c[2] * y)
+        om_s = float(g.B_local[1] @ omega[g.dofs]) - (c[1] * t_z - c[2] * t_y)
+        dom = float(g.Nx_local[0] @ domega[g.dofs]) - (dc[0] + dc[1] * z - dc[2] * y)
+        dom_s = float(g.B_local[1] @ domega[g.dofs]) - (dc[1] * t_z - dc[2] * t_y)
+        Phi = _phi(g, P0, P1, W0, W1)
+        Gm = np.zeros((4, 8))
+        Gm[:, :6] = Phi @ Ks
+        Gm[1, 6], Gm[0, 7] = om_s, om
+        dGm = np.zeros((4, 8))
+        dGm[:, :6] = _phi(g, dP0, dP1, dW0, dW1) @ Ks + Phi @ dKs
+        dGm[1, 6], dGm[0, 7] = dom_s, dom
+        KdG = g.K @ dGm
+        dK8 += g.weight * (dGm.T @ g.K @ Gm + Gm.T @ KdG)
+        lam = an.laminates[lid_of[g.wall_id]]
+        dI += g.weight * 2.0 * lam.mass_per_area * om * dom
+        if lid_of[g.wall_id] == laminate_id:
+            dK8 += g.weight * Gm.T @ dlaw @ Gm
+            dI += g.weight * dm0 * om * om
+    dK8 = 0.5 * (dK8 + dK8.T)
+    dK8[:6, :6] = dKs
+    return dK8, float(dI)
 
 
 def _mass_derivative(an, laminate_id: int, dm: np.ndarray) -> Dict[str, float]:
@@ -293,6 +400,12 @@ def element_section_derivative(sa, d: SectionDerivative):
 
     kw = {f.name: getattr(sa, f.name) for f in fields(sa) if f.init}
     kw["stiffness"] = to_element_voigt(d.stiffness)
+    if d.benscoter_stiffness is not None:
+        S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+        kw["benscoter_stiffness"] = S8 @ d.benscoter_stiffness @ S8
+        kw["warping_inertia"] = d.warping_inertia
+    else:
+        kw["warping_inertia"] = 0.0
     out = _Derivative(**kw)
     object.__setattr__(out, "_dM", d.mass_matrix.copy())
     return out
