@@ -331,6 +331,31 @@ class SolidCrossSectionModes:
             M += p.weight * rho * Pi.T @ Pi
         return 0.5 * (M + M.T)
 
+    def shape_moments(self, n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
+        """Moments of each field of the mass order, as ``CrossSectionModes.shape_moments``."""
+        from pre_processing.section_integration.thin_walled.cross_section_modes import _box, _monomials
+
+        self._check(n_modes, n_shear)
+        an = self.analysis
+        Om, D, U, _ = self._fields(n_modes)
+        P, m = Om.shape[1], n_modes
+        n = 6 + P + 2 * m
+        c, h = _box(np.array([[p.y, p.z] for p in an._points]))
+        out = np.zeros((n, 30))
+        for p in an._points:
+            N, d = p.N, p.dofs
+            y, z = p.y, p.z
+            Pi = np.zeros((3, n))
+            Pi[0, [0, 4, 5]] = [1.0, z, -y]
+            Pi[1, [1, 3]] = [1.0, -z]
+            Pi[2, [2, 3]] = [1.0, y]
+            Pi[0, 6:6 + P] = N @ Om[d[0::3]]
+            Pi[1, 6 + P:6 + P + m] = N @ D[d[1::3]]
+            Pi[2, 6 + P:6 + P + m] = N @ D[d[2::3]]
+            Pi[0, 6 + P + m:] = N @ U[d[0::3]]
+            out += p.weight * np.kron(Pi.T, _monomials((np.array([y, z]) - c) / h)[None, :]).reshape(n, 30)
+        return out
+
     def geometric_tensor(self, n_modes: int, n_shear: int = 0) -> Tuple[np.ndarray, np.ndarray]:
         """Second-order terms of the in-plane motion ``q = [v, w, theta_x, a(m)]``, as
         ``CrossSectionModes.geometric_tensor``: ``X = int sigma_xx Pi^T Pi dA`` and

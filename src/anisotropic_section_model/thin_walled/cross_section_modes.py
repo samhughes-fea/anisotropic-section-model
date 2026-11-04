@@ -480,6 +480,20 @@ class CrossSectionModes:
             M += g.weight * rho * Pi.T @ Pi
         return 0.5 * (M + M.T)
 
+    def shape_moments(self, n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
+        """Moments of each field of the mass order over the section, ``(n, 30)``: the integrals
+        of its three displacement components against the ten monomials of degree up to 3 in
+        the section coordinates scaled to its bounding box (``gbt_alignment``)."""
+        X, Om = self._check(n_modes), self._check_warping(n_shear)
+        n = 6 + Om.shape[1] + 2 * X.shape[1]
+        pts = [g.position for g in self.analysis._gauss_points]
+        c, h = _box(np.array(pts))
+        out = np.zeros((n, 30))
+        for g in self.analysis._gauss_points:
+            Pi, _ = self._displacement_map(g, X, Om)
+            out += g.weight * np.kron(Pi.T, _monomials((np.asarray(g.position) - c) / h)[None, :]).reshape(n, 30)
+        return out
+
     def geometric_tensor(self, n_modes: int, n_shear: int = 0) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """Second-order (geometric) terms of the in-plane motion, linear in the GBT strains.
 
@@ -534,3 +548,15 @@ class CrossSectionModes:
             px, ps, pn = loads[g.wall_id]
             f += g.weight * Pi.T @ np.array([px, ps * e["t"][0] + pn * e["n"][0], ps * e["t"][1] + pn * e["n"][1]])
         return f
+
+
+def _box(points: np.ndarray):
+    """Centre and half-sizes of the bounding box of ``points`` (n, 2)."""
+    lo, hi = points.min(axis=0), points.max(axis=0)
+    return 0.5 * (lo + hi), np.maximum(0.5 * (hi - lo), 1e-12)
+
+
+def _monomials(q: np.ndarray) -> np.ndarray:
+    """The ten monomials of degree up to 3 in ``q = (y, z)``."""
+    y, z = q
+    return np.array([1.0, y, z, y * y, y * z, z * z, y**3, y * y * z, y * z * z, z**3])

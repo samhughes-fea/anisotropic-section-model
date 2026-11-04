@@ -34,6 +34,7 @@ ELEMENT_SIGN, SectionAnalysis, to_element_voigt.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 
@@ -125,6 +126,10 @@ class SectionAnalysis:
         motion ``q = [v, w, theta_x, a(M)]`` does the work ``1/2 q'^T X q' + q'^T Y q``
         per length against the stresses of the element-signed GBT strains (``X @ E``).
         See ``gbt_geometric_terms``.
+    gbt_moments : ndarray or None
+        ``(6 + (n_sv + P) + 2M, 30)``: moments of each field of the GBT mass order over the
+        section (``CrossSectionModes.shape_moments``), used to align the bases of
+        neighbouring sections (``gbt_alignment``).
     """
 
     stiffness: npt.NDArray[np.float64]
@@ -149,6 +154,7 @@ class SectionAnalysis:
     third_order_geometric_terms: Optional[npt.NDArray[np.float64]] = None
     axial_points: Optional[npt.NDArray[np.float64]] = None
     gbt_geometric: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
+    gbt_moments: Optional[npt.NDArray[np.float64]] = None
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -245,7 +251,7 @@ class SectionAnalysis:
             XB, X3 = analysis.benscoter_geometric_terms, analysis.third_order_geometric_terms
         except ValueError:
             XB = X3 = None
-        K_gbt = M_gbt = G_gbt = None
+        K_gbt = M_gbt = G_gbt = mom = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
             from pre_processing.section_integration.thin_walled.cross_section_modes import CrossSectionModes
@@ -257,6 +263,7 @@ class SectionAnalysis:
             Sg[1] = -1.0  # element sign of kappa_y
             K_gbt = Sg[:, None] * K_r * Sg[None, :]
             M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
+            mom = modes.shape_moments(gbt_modes, gbt_shear_modes)
             G_gbt = tuple(T * Sg for T in modes.geometric_tensor(gbt_modes, gbt_shear_modes))
         out = cls(
             K,
@@ -285,6 +292,7 @@ class SectionAnalysis:
         if M_gbt is not None:
             # rigid block with the walls' own rotary inertia, as mass_matrix()
             M_gbt[:6, :6] = out.mass_matrix()
+            out = dataclasses.replace(out, gbt_moments=mom)
         return out
 
     @classmethod
@@ -301,7 +309,7 @@ class SectionAnalysis:
         """
         S4 = np.diag([1.0, -1.0, 1.0, 1.0])
         S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        K_gbt = M_gbt = G_gbt = None
+        K_gbt = M_gbt = G_gbt = mom = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
             from pre_processing.section_integration.solid.cross_section_modes import SolidCrossSectionModes
@@ -313,6 +321,7 @@ class SectionAnalysis:
             Sg[1] = -1.0  # element sign of kappa_y
             K_gbt = Sg[:, None] * K_r * Sg[None, :]
             M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
+            mom = modes.shape_moments(gbt_modes, gbt_shear_modes)
             G_gbt = tuple(T * Sg for T in modes.geometric_tensor(gbt_modes, gbt_shear_modes))
         out = cls(
             to_element_voigt(analysis.stiffness),
@@ -337,6 +346,7 @@ class SectionAnalysis:
         )
         if M_gbt is not None:
             M_gbt[:6, :6] = out.mass_matrix()
+            out = dataclasses.replace(out, gbt_moments=mom)
         return out
 
     # ------------------------------------------------------------------ #
@@ -394,10 +404,12 @@ class SectionAnalysis:
             D[j, 5] += k int E a_j r^2 dA,   a = (1, -z, -y) for rows (eps_x, kappa_y, kappa_z)
             D[5, 5] += k^2 int E r^4 dA
 
-        to every stiffness carrying ``phi_x`` (the 6 x 6, classical, Benscoter and third-order
-        ones). The integrals use ``axial_points``. This is the extension-twist coupling of a
+        to every stiffness carrying ``phi_x`` (the 6 x 6, classical, Benscoter, third-order and
+        GBT ones). The integrals use ``axial_points``. This is the extension-twist coupling of a
         pretwisted strip (Rosen 1980; Hodges 2006, sec. 3.4); the frame's own turning along
-        the beam is in the element geometry, not here.
+        the beam is in the element geometry, not here. As for the Benscoter warping, the
+        helical stretch of the warping and distortional fields is left out (``k`` times their
+        axial strain: second order in ``k r`` for the slender blades it is meant for).
         """
         import dataclasses
 
@@ -405,8 +417,6 @@ class SectionAnalysis:
             return self
         if self.axial_points is None:
             raise ValueError("pretwist needs the section's axial_points (a section with area and inertias)")
-        if self.gbt_stiffness is not None and self.gbt_modes:
-            raise NotImplementedError("pretwist is not supported with GBT sections")
         y, z, wE = np.asarray(self.axial_points, dtype=np.float64).T
         r2 = y * y + z * z
         c = rate * np.array([wE @ r2, -(wE @ (z * r2)), -(wE @ (y * r2))])   # rows eps_x, kappa_y, kappa_z
@@ -428,6 +438,7 @@ class SectionAnalysis:
             classical_stiffness=add(self.classical_stiffness, (0, 1, 2), 3),
             benscoter_stiffness=add(self.benscoter_stiffness, (0, 1, 2), 5),
             third_order_stiffness=add(self.third_order_stiffness, (0, 1, 2), 5),
+            gbt_stiffness=add(self.gbt_stiffness, (0, 1, 2), 5),
         )
 
     def with_taper(self, taper) -> "SectionAnalysis":
@@ -436,16 +447,14 @@ class SectionAnalysis:
         ``taper`` is a ``thin_walled.taper.SectionTaper`` (right-handed). Its 6 x 6
         (``taper.matrix()``, coupling the axial and bending strains with the shear strains)
         goes into every stiffness that carries the shear strains: the 6 x 6 and the leading
-        blocks of the Benscoter and third-order ones. The classical (shear-rigid) stiffness is
-        unchanged: the coupling acts through the shear strains only.
+        blocks of the Benscoter, third-order and GBT ones. The classical (shear-rigid) stiffness
+        is unchanged: the coupling acts through the shear strains only.
         """
         import dataclasses
 
         dK = to_element_voigt(taper.matrix())
         if not np.any(dK):
             return self
-        if self.gbt_stiffness is not None and self.gbt_modes:
-            raise NotImplementedError("taper is not supported with GBT sections")
 
         def add(K):
             if K is None:
@@ -459,6 +468,7 @@ class SectionAnalysis:
             stiffness=add(self.stiffness),
             benscoter_stiffness=add(self.benscoter_stiffness),
             third_order_stiffness=add(self.third_order_stiffness),
+            gbt_stiffness=add(self.gbt_stiffness),
         )
 
     def euler_bernoulli_D(self) -> npt.NDArray[np.float64]:
