@@ -312,6 +312,16 @@ class ThinWalledSectionAnalysis:
                     out.append(self._point(w, k, xg, wg))
         return out
 
+    def element_ends(self, wall_id: int) -> npt.NDArray[np.float64]:
+        """Distances along wall ``wall_id`` of its wall elements' end nodes (``n_sub + 1``)."""
+        return np.asarray(self._wall_node_s[wall_id][::3], dtype=np.float64)
+
+    def gauss_s(self, wall_id: int) -> npt.NDArray[np.float64]:
+        """Distances along wall ``wall_id`` of the section's Gauss points, element by element."""
+        L = self.section.length(self.section.wall(wall_id))
+        le = L / self.n_sub
+        return np.concatenate([le * (k + 0.5 * (1.0 + _GAUSS_X)) for k in range(self.n_sub)])
+
     def point_at(self, wall_id: int, s: float) -> _GaussPoint:
         """Strain operators at distance ``s`` along wall ``wall_id`` (zero weight)."""
         w = self.section.wall(wall_id)
