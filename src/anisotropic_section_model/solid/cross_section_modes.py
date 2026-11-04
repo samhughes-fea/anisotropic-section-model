@@ -333,7 +333,7 @@ class SolidCrossSectionModes:
 
     def shape_moments(self, n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
         """Moments of each field of the mass order, as ``CrossSectionModes.shape_moments``."""
-        from pre_processing.section_integration.thin_walled.cross_section_modes import _box, _monomials
+        from onedfem.pre_processing.section_integration.thin_walled.cross_section_modes import _box, _monomials
 
         self._check(n_modes, n_shear)
         an = self.analysis

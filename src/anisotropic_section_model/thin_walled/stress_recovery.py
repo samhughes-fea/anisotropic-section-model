@@ -47,7 +47,7 @@ import numpy as np
 import numpy.typing as npt
 from numpy.polynomial import polynomial as P
 
-from pre_processing.section_integration.thin_walled.laminate import WallLaminate, strain_rotation
+from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate, strain_rotation
 
 #: mid-surface strains of a wall, order of ``WallLaminate.ABD``
 FULL_WALL_STRAINS: Tuple[str, ...] = ("eps_xx", "eps_ss", "gamma_xs", "kappa_xx", "kappa_ss", "kappa_xs")
@@ -295,7 +295,7 @@ class SaintVenantRecovery:
         self.analysis = analysis
 
     def kept_field(self, wall_id: int, forces: npt.ArrayLike) -> KeptField:
-        from pre_processing.section_integration.thin_walled.section_analysis import T_RATE
+        from onedfem.pre_processing.section_integration.thin_walled.section_analysis import T_RATE
 
         f = np.asarray(forces, dtype=np.float64)
         fx = T_RATE @ f

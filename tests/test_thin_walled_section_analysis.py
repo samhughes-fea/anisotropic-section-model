@@ -4,14 +4,14 @@ import numpy as np
 import pytest
 from numpy.polynomial.legendre import leggauss
 
-from pre_processing.section_integration.thin_walled import (
+from onedfem.pre_processing.section_integration.thin_walled import (
     Ply,
     PlyMaterial,
     ThinWalledSection,
     Wall,
     WallLaminate,
 )
-from pre_processing.section_integration.thin_walled.section_analysis import (
+from onedfem.pre_processing.section_integration.thin_walled.section_analysis import (
     ThinWalledSectionAnalysis,
     stiffness_about,
     translation_matrix,
@@ -259,7 +259,7 @@ def test_missing_laminate():
 
 
 def test_section_analyses_from_files(tmp_path):
-    from pre_processing.section_integration.thin_walled.job_input import section_analyses_from_files
+    from onedfem.pre_processing.section_integration.thin_walled.job_input import section_analyses_from_files
 
     (tmp_path / "laminate.txt").write_text(
         "[Ply_Material]\n[material_id] [E1] [E2] [G12] [nu12] [G13] [G23]\n"

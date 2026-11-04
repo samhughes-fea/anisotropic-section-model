@@ -36,8 +36,8 @@ import numpy as np
 import numpy.typing as npt
 import scipy.sparse as sp
 
-from pre_processing.section_integration.solid.material import _PAIRS, bond_matrix, material_axes
-from pre_processing.section_integration.thin_walled.layup_sensitivity import LayupParameter, SectionDerivative
+from onedfem.pre_processing.section_integration.solid.material import _PAIRS, bond_matrix, material_axes
+from onedfem.pre_processing.section_integration.thin_walled.layup_sensitivity import LayupParameter, SectionDerivative
 
 __all__ = ["material_derivative", "solid_section_derivative"]
 

@@ -35,7 +35,7 @@ from typing import Iterable, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from pre_processing.section_integration.thin_walled.laminate import WallLaminate
+from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate
 
 WALL_STRAINS: Tuple[str, ...] = (
     "eps_xx", "eps_ss", "gamma_xs", "kappa_xx", "kappa_ss", "kappa_xs",

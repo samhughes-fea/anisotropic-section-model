@@ -26,7 +26,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from pre_processing.section_integration.thin_walled.element_recovery import _FD, _beam_strains, _kind, _sign
+from onedfem.pre_processing.section_integration.thin_walled.element_recovery import _FD, _beam_strains, _kind, _sign
 
 
 def element_section_state(element, U_e: npt.ArrayLike, xi: float, analysis
@@ -34,7 +34,7 @@ def element_section_state(element, U_e: npt.ArrayLike, xi: float, analysis
     """``(forces, benscoter)`` at ``xi``: right-handed section forces (6,) for Euler-Bernoulli and
     Timoshenko elements, or right-handed Benscoter strains (8,) for Benscoter elements (the other
     entry ``None``)."""
-    from pre_processing.element_library.framed_element import local_state
+    from onedfem.pre_processing.element_library.framed_element import local_state
 
     element, U, xi = local_state(element, np.asarray(U_e, dtype=np.float64), xi)
     kind = _kind(element)

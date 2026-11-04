@@ -64,8 +64,8 @@ import numpy as np
 import numpy.typing as npt
 from scipy.linalg import eigh, null_space
 
-from pre_processing.section_integration.thin_walled.section_analysis import ThinWalledSectionAnalysis
-from pre_processing.section_integration.thin_walled.wall_stiffness import gbt_wall_stiffness
+from onedfem.pre_processing.section_integration.thin_walled.section_analysis import ThinWalledSectionAnalysis
+from onedfem.pre_processing.section_integration.thin_walled.wall_stiffness import gbt_wall_stiffness
 
 #: GBT wall strains (5 x 5 law, ``N_ss`` released)
 GBT_WALL_STRAINS = ("eps_xx", "gamma_xs", "kappa_xx", "kappa_ss", "kappa_xs")

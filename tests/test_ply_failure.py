@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pre_processing.section_integration.ply_failure import (
+from onedfem.pre_processing.section_integration.ply_failure import (
     CRITERIA,
     PlyStrength,
     exposures,

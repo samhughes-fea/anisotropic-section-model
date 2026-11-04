@@ -250,7 +250,7 @@ def exposures(s, st: PlyStrength) -> Dict[str, np.ndarray]:
 def ply_stress_from_wall(sigma_11, sigma_22, tau_12, tau_xn, tau_sn, sigma_nn, angle_deg) -> npt.NDArray[np.float64]:
     """Ply-axis 3D stresses ``(..., 6)`` from a thin-walled recovery: in-plane ply stresses,
     and the transverse shears turned from wall to ply axes (``tau_13, tau_23``)."""
-    from pre_processing.section_integration.thin_walled.laminate import shear_rotation
+    from onedfem.pre_processing.section_integration.thin_walled.laminate import shear_rotation
 
     R = shear_rotation(np.radians(angle_deg))
     t13 = R[0, 0] * np.asarray(tau_xn) + R[0, 1] * np.asarray(tau_sn)

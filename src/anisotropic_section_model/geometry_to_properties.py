@@ -3,7 +3,7 @@
 
 from typing import Dict, Any, Optional
 
-from pre_processing.section_integration.closed_form import (
+from onedfem.pre_processing.section_integration.closed_form import (
     rectangle_properties,
     i_section_properties,
     channel_properties,
