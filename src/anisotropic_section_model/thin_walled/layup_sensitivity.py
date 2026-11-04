@@ -156,6 +156,11 @@ class SectionDerivative:
     warping_inertia: float = 0.0
     #: right-handed ``d geometric_terms`` (7, 6), with ``geometric=True``
     geometric_terms: Optional[npt.NDArray[np.float64]] = None
+    #: ``d axial_points[:, 2]``: the axial wall stiffness weights (``with_pretwist`` is linear in them)
+    axial_weights: Optional[npt.NDArray[np.float64]] = None
+    #: ``d A`` of the parameter's laminate, ``A`` the axial wall stiffness of ``beam_wall_stiffness``
+    #: (the taper coupling ``sum A_l parts[l]`` is linear in it)
+    wall_axial: float = 0.0
 
 
 def _assemble(an, laws: Dict[int, np.ndarray]) -> Dict[str, np.ndarray]:
@@ -202,7 +207,8 @@ def section_derivative(an, param: LayupParameter, benscoter: bool = False,
         z6 = np.zeros((6, 6))
         return SectionDerivative(param, z6, z6.copy(), {k: 0.0 for k in ("m", "my", "mz", "yy", "zz", "yz")},
                                  z6.copy(), np.zeros((8, 8)) if benscoter else None, 0.0,
-                                 np.zeros((7, 6)) if geometric else None)
+                                 np.zeros((7, 6)) if geometric else None, np.zeros(len(an._gauss_points)),
+                                 _wall_axial_derivative(lam, param) if lam is not None else 0.0)
     dABD, dm = laminate_derivative(lam, param)
     dlaw = wall_law_derivative(lam, dABD, an.hoop)
 
@@ -268,7 +274,16 @@ def section_derivative(an, param: LayupParameter, benscoter: bool = False,
             if lid_of[g.wall_id] == param.laminate_id:
                 gd = SimpleNamespace(K=dlaw, position=g.position, normal=g.normal, weight=g.weight)
                 dH += rows(gd, Phi, Phi @ T_RATE)
-    return SectionDerivative(param, dF, dK, dmass, _mass_matrix(dmass), dK8, dI, dH)
+    dwE = np.array([g.weight * dlaw[0, 0] if lid_of[g.wall_id] == param.laminate_id else 0.0
+                    for g in an._gauss_points])
+    return SectionDerivative(param, dF, dK, dmass, _mass_matrix(dmass), dK8, dI, dH, dwE,
+                             _wall_axial_derivative(lam, param))
+
+
+def _wall_axial_derivative(lam: WallLaminate, param: LayupParameter) -> float:
+    """``d A`` of ``beam_wall_stiffness(lam)`` (``N_ss = M_ss = 0``), the taper coupling's wall stiffness."""
+    dABD, _ = laminate_derivative(lam, param)
+    return float(wall_law_derivative(lam, dABD, "free")[0, 0])
 
 
 def _benscoter_derivative(an, laminate_id, dlaw, dmx, dm0, sol, dsol, dKs):
@@ -394,18 +409,36 @@ def element_section_derivative(sa, d: SectionDerivative):
 
     from pre_processing.section_integration.section_analysis import SectionAnalysis, to_element_voigt
 
+    dM = d.mass_matrix.copy()
+
     class _Derivative(SectionAnalysis):
+        # a closure, so copies made by dataclasses.replace (with_pretwist) keep it
         def mass_matrix(self):
-            return self._dM.copy()
+            return dM.copy()
 
     kw = {f.name: getattr(sa, f.name) for f in fields(sa) if f.init}
-    kw["stiffness"] = to_element_voigt(d.stiffness)
+    dK = np.array(d.stiffness, dtype=np.float64, copy=True)
+    if sa.tapered:
+        from pre_processing.section_integration.thin_walled.taper import SectionTaper
+
+        if sa.taper_parts is None:
+            raise NotImplementedError("layup sensitivities of a tapered section need its taper split by laminate "
+                                      "([Section_Taper_Laminate] in section_taper.txt)")
+        row = sa.taper_parts.get(d.parameter.laminate_id)
+        if row is not None:
+            dK += d.wall_axial * SectionTaper.from_row(row).matrix()
+    kw["stiffness"] = to_element_voigt(dK)
+    kw["tapered"], kw["taper_parts"] = False, None
+    if d.axial_weights is not None and sa.axial_points is not None:
+        ap = np.array(sa.axial_points, dtype=np.float64, copy=True)
+        ap[:, 2] = d.axial_weights
+        kw["axial_points"] = ap
     if d.benscoter_stiffness is not None:
         S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        kw["benscoter_stiffness"] = S8 @ d.benscoter_stiffness @ S8
+        dK8 = np.array(d.benscoter_stiffness, dtype=np.float64, copy=True)
+        dK8[:6, :6] = dK
+        kw["benscoter_stiffness"] = S8 @ dK8 @ S8
         kw["warping_inertia"] = d.warping_inertia
     else:
         kw["warping_inertia"] = 0.0
-    out = _Derivative(**kw)
-    object.__setattr__(out, "_dM", d.mass_matrix.copy())
-    return out
+    return _Derivative(**kw)

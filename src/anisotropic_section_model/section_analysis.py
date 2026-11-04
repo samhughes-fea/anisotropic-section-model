@@ -130,6 +130,10 @@ class SectionAnalysis:
         ``(6 + (n_sv + P) + 2M, 30)``: moments of each field of the GBT mass order over the
         section (``CrossSectionModes.shape_moments``), used to align the bases of
         neighbouring sections (``gbt_alignment``).
+    tapered : bool
+        The section carries a taper coupling (``with_taper``).
+    taper_parts : dict or None
+        The taper's split by laminate (``SectionTaper.parts``), when it has one.
     """
 
     stiffness: npt.NDArray[np.float64]
@@ -155,6 +159,8 @@ class SectionAnalysis:
     axial_points: Optional[npt.NDArray[np.float64]] = None
     gbt_geometric: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
     gbt_moments: Optional[npt.NDArray[np.float64]] = None
+    tapered: bool = False
+    taper_parts: Optional[Dict[int, npt.NDArray[np.float64]]] = None
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -469,6 +475,8 @@ class SectionAnalysis:
             benscoter_stiffness=add(self.benscoter_stiffness),
             third_order_stiffness=add(self.third_order_stiffness),
             gbt_stiffness=add(self.gbt_stiffness),
+            tapered=True,
+            taper_parts=getattr(taper, "parts", None),
         )
 
     def euler_bernoulli_D(self) -> npt.NDArray[np.float64]:

@@ -33,8 +33,8 @@ rate is ``SectionAnalysis.with_pretwist``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Mapping, Optional
+from dataclasses import dataclass, field
+from typing import Dict, Mapping, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -56,10 +56,15 @@ class SectionTaper:
         ``C``: rows ``(eps_x, kappa_y, kappa_z)``, columns ``(gamma_xy, gamma_xz)``.
     shear : ndarray (2, 2)
         ``Q`` added to the shear block.
+    parts : dict or None
+        ``{laminate_id: row}``: each laminate's walls' share of ``C`` and ``Q`` per unit
+        axial wall stiffness ``A`` (as ``as_row``), so ``C, Q = sum A_l parts[l]``. Layup
+        sensitivities differentiate the coupling through them.
     """
 
     coupling: npt.NDArray[np.float64]
     shear: npt.NDArray[np.float64]
+    parts: Optional[Dict[int, npt.NDArray[np.float64]]] = field(default=None, compare=False)
 
     @staticmethod
     def zero() -> "SectionTaper":
@@ -119,10 +124,13 @@ def section_taper(
     xg, wg = np.polynomial.legendre.leggauss(n_gauss)
     C = np.zeros((3, 2))
     Q = np.zeros((2, 2))
+    parts: Dict[int, npt.NDArray[np.float64]] = {}
     for wa, wb in zip(start.walls, end.walls):
         if (wa.start, wa.end) != (wb.start, wb.end):
             raise ValueError(f"wall {wa.wall_id} joins different points in the two sections")
         A = float(beam_wall_stiffness(laminates[wa.laminate_id]).matrix[0, 0])
+        Cw = np.zeros((3, 2))
+        Qw = np.zeros((2, 2))
         a0, a1 = start.points[wa.start], start.points[wa.end]
         b0, b1 = end.points[wb.start], end.points[wb.end]
         r0, r1 = 0.5 * (a0 + b0), 0.5 * (a1 + b1)
@@ -132,9 +140,13 @@ def section_taper(
             t = 0.5 * (1.0 + x)
             y, z = (1.0 - t) * r0 + t * r1
             rp = (1.0 - t) * d0 + t * d1
-            C += A * w * half * np.outer((1.0, z, -y), rp)
-            Q += A * w * half * np.outer(rp, rp)
-    return SectionTaper(C, 0.5 * (Q + Q.T))
+            Cw += w * half * np.outer((1.0, z, -y), rp)
+            Qw += w * half * np.outer(rp, rp)
+        C += A * Cw
+        Q += A * Qw
+        row = np.concatenate([Cw.ravel(), [Qw[0, 0], 0.5 * (Qw[0, 1] + Qw[1, 0]), Qw[1, 1]]])
+        parts[wa.laminate_id] = parts.get(wa.laminate_id, 0.0) + row
+    return SectionTaper(C, 0.5 * (Q + Q.T), parts)
 
 
 def section_taper_from_geometry(
