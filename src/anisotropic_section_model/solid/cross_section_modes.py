@@ -331,6 +331,31 @@ class SolidCrossSectionModes:
             M += p.weight * rho * Pi.T @ Pi
         return 0.5 * (M + M.T)
 
+    def shape_moments(self, n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
+        """Moments of each field of the mass order, as ``CrossSectionModes.shape_moments``."""
+        from pre_processing.section_integration.thin_walled.cross_section_modes import _box, _monomials
+
+        self._check(n_modes, n_shear)
+        an = self.analysis
+        Om, D, U, _ = self._fields(n_modes)
+        P, m = Om.shape[1], n_modes
+        n = 6 + P + 2 * m
+        c, h = _box(np.array([[p.y, p.z] for p in an._points]))
+        out = np.zeros((n, 30))
+        for p in an._points:
+            N, d = p.N, p.dofs
+            y, z = p.y, p.z
+            Pi = np.zeros((3, n))
+            Pi[0, [0, 4, 5]] = [1.0, z, -y]
+            Pi[1, [1, 3]] = [1.0, -z]
+            Pi[2, [2, 3]] = [1.0, y]
+            Pi[0, 6:6 + P] = N @ Om[d[0::3]]
+            Pi[1, 6 + P:6 + P + m] = N @ D[d[1::3]]
+            Pi[2, 6 + P:6 + P + m] = N @ D[d[2::3]]
+            Pi[0, 6 + P + m:] = N @ U[d[0::3]]
+            out += p.weight * np.kron(Pi.T, _monomials((np.array([y, z]) - c) / h)[None, :]).reshape(n, 30)
+        return out
+
     def geometric_tensor(self, n_modes: int, n_shear: int = 0) -> Tuple[np.ndarray, np.ndarray]:
         """Second-order terms of the in-plane motion ``q = [v, w, theta_x, a(m)]``, as
         ``CrossSectionModes.geometric_tensor``: ``X = int sigma_xx Pi^T Pi dA`` and
@@ -361,6 +386,25 @@ class SolidCrossSectionModes:
             TX += p.weight * np.einsum("ia,ib,e->abe", Pi, Pi, sig[0])
             TY += p.weight * (np.einsum("ia,ib,e->abe", Pi, Py, sig[5]) + np.einsum("ia,ib,e->abe", Pi, Pz, sig[4]))
         return TX, TY
+
+    def brazier_tensor(self, n_modes: int, n_shear: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+        """Brazier terms ``(T, Q)`` as ``CrossSectionModes.brazier_tensor``: ``T = int g sigma_xx dA``
+        and ``Q = int E_x g g dA`` with ``g_k = (d_z, -d_y)`` the mode's in-plane motion and
+        ``E_x`` the axial modulus (in-plane stresses free), right-handed."""
+        self._check(n_modes, n_shear)
+        Om, D, U, S = self._fields(n_modes)
+        m = n_modes
+        nE = 6 + 2 * Om.shape[1] + 3 * m
+        T = np.zeros((m, 2, nE))
+        Q = np.zeros((m, m, 2, 2))
+        Ex = self.analysis._axial_modulus
+        for p in self.analysis._points:
+            sig = p.C @ self._H(p, Om, D, U, S)
+            d = p.dofs
+            gk = np.stack([p.N @ D[d[2::3]], -(p.N @ D[d[1::3]])], axis=1)      # (m, 2)
+            T += p.weight * np.einsum("kc,e->kce", gk, sig[0])
+            Q += p.weight * Ex[p.element] * np.einsum("kc,ld->klcd", gk, gk)
+        return T, Q
 
 
 def _orthonormal(W: np.ndarray, A) -> np.ndarray:

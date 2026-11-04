@@ -88,7 +88,11 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
     wall loads need thin-walled sections.
 
     With ``section_taper.txt`` the listed elements' sections gain the taper (Resal) coupling
-    (``SectionAnalysis.with_taper``).
+    (``SectionAnalysis.with_taper``), GBT rows included.
+
+    GBT rows on more than one section have their sections' warping and mode bases turned
+    to continue each other along the beam (``gbt_alignment.align_gbt_sections``), since
+    neighbouring elements share those amplitudes.
 
     With ``wall_load.txt`` it also gains ``"wall_load_per_element"``: the generalised
     load per length of each loaded element (``None`` for the rest), in the order of the
@@ -177,10 +181,13 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
         unassigned = sorted(e for e in tapers if e not in assignment)
         if unassigned:
             raise ValueError(f"section_taper.txt names elements without a section in element_section.txt: {unassigned}")
-        gbt_tapered = sorted(e for e in tapers if e in gbt_rows)
-        if gbt_tapered:
-            raise ValueError(f"taper is not supported on GBT elements: {gbt_tapered}")
         per_element = tuple(sa.with_taper(tapers[e]) if e in tapers else sa for e, sa in zip(ids, per_element))
+    align = {}
+    if gbt_rows and "connectivity" in element_dictionary and len({assignment[e] for e in gbt_rows}) > 1:
+        from pre_processing.section_integration.gbt_alignment import align_gbt_sections
+
+        per_element, align = align_gbt_sections(per_element, element_dictionary["connectivity"],
+                                                [e in gbt_rows for e in ids])
     out = {
         **element_dictionary,
         SECTION_ANALYSIS_KEY: per_element,
@@ -218,7 +225,13 @@ def attach_section_analyses(job_dir: str, element_dictionary: dict, hoop: str = 
             if e in gbt_rows:
                 if sid not in modes_cache:
                     modes_cache[sid] = CrossSectionModes(analyses[sid])
-                per_load.append(modes_cache[sid].wall_load(loads[e], max_modes[sid], max_shear[sid]))
+                f = modes_cache[sid].wall_load(loads[e], max_modes[sid], max_shear[sid])
+                k = ids.index(e)
+                if k in align:                       # the element's bases were turned (gbt_alignment)
+                    from pre_processing.section_integration.gbt_alignment import mass_transform
+
+                    f = mass_transform(per_element[k], align[k]["Rw"], align[k]["Rm"]).T @ f
+                per_load.append(f)
             else:
                 per_load.append(analyses[sid].wall_load_resultant(loads[e]))
         out["wall_load_per_element"] = tuple(per_load)

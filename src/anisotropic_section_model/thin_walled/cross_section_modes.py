@@ -480,6 +480,20 @@ class CrossSectionModes:
             M += g.weight * rho * Pi.T @ Pi
         return 0.5 * (M + M.T)
 
+    def shape_moments(self, n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
+        """Moments of each field of the mass order over the section, ``(n, 30)``: the integrals
+        of its three displacement components against the ten monomials of degree up to 3 in
+        the section coordinates scaled to its bounding box (``gbt_alignment``)."""
+        X, Om = self._check(n_modes), self._check_warping(n_shear)
+        n = 6 + Om.shape[1] + 2 * X.shape[1]
+        pts = [g.position for g in self.analysis._gauss_points]
+        c, h = _box(np.array(pts))
+        out = np.zeros((n, 30))
+        for g in self.analysis._gauss_points:
+            Pi, _ = self._displacement_map(g, X, Om)
+            out += g.weight * np.kron(Pi.T, _monomials((np.asarray(g.position) - c) / h)[None, :]).reshape(n, 30)
+        return out
+
     def geometric_tensor(self, n_modes: int, n_shear: int = 0) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """Second-order (geometric) terms of the in-plane motion, linear in the GBT strains.
 
@@ -516,6 +530,37 @@ class CrossSectionModes:
             TY += g.weight * np.einsum("ia,ib,e->abe", Pi, Ps, R[1])
         return TX, TY
 
+    def brazier_tensor(self, n_modes: int, n_shear: int = 0) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Terms of the beam curvature acting on the modes' in-plane motion (Brazier), right-handed.
+
+        A mode ``k`` moves a wall point by ``d_k a_k`` in the section plane, so under the beam
+        curvatures the fibre there is strained by ``e_B = sum_k a_k g_k . kappa`` with
+        ``g_k = (d_z, -d_y)`` and ``kappa = (kappa_y, kappa_z)`` (the fibre strain
+        ``eps + z kappa_y - y kappa_z`` at the moved point). With the wall's axial resultant
+        ``N_xx`` of the GBT strains ``E`` and its axial stiffness ``A_11`` that does the work
+
+            sum_k a_k kappa^T T_k E + 1/2 sum_kl a_k a_l kappa^T Q_kl kappa,
+
+        ``T = int g N_xx ds`` (``(m, 2, 6 + 2p + 3m)``) and ``Q = int A_11 g g ds``
+        (``(m, m, 2, 2)``). Compressed walls bow towards the neutral axis: the flattening of
+        a bent box or tube.
+        """
+        X, Om = self._check(n_modes), self._check_warping(n_shear)
+        m, p = X.shape[1], Om.shape[1]
+        nE = 6 + 2 * p + 3 * m
+        T = np.zeros((m, 2, nE))
+        Q = np.zeros((m, m, 2, 2))
+        o = 6 + p
+        for g in self.analysis._gauss_points:
+            H, e = self._strain_map(g, X, Om)
+            K = self._laws[e["wall"].laminate_id]
+            Pi, _ = self._displacement_map(g, X, Om)
+            d = Pi[1:, o:o + m]                                  # (2, m): d_y, d_z per mode
+            gk = np.stack([d[1], -d[0]], axis=1)                 # (m, 2)
+            T += g.weight * np.einsum("kc,e->kce", gk, K[0] @ H)
+            Q += g.weight * K[0, 0] * np.einsum("kc,ld->klcd", gk, gk)
+        return T, Q
+
     def wall_load(self, loads: Dict[int, Tuple[float, float, float]], n_modes: int, n_shear: int = 0) -> npt.NDArray[np.float64]:
         """Generalised load per length from uniform wall surface loads, in the order of ``mass``.
 
@@ -534,3 +579,15 @@ class CrossSectionModes:
             px, ps, pn = loads[g.wall_id]
             f += g.weight * Pi.T @ np.array([px, ps * e["t"][0] + pn * e["n"][0], ps * e["t"][1] + pn * e["n"][1]])
         return f
+
+
+def _box(points: np.ndarray):
+    """Centre and half-sizes of the bounding box of ``points`` (n, 2)."""
+    lo, hi = points.min(axis=0), points.max(axis=0)
+    return 0.5 * (lo + hi), np.maximum(0.5 * (hi - lo), 1e-12)
+
+
+def _monomials(q: np.ndarray) -> np.ndarray:
+    """The ten monomials of degree up to 3 in ``q = (y, z)``."""
+    y, z = q
+    return np.array([1.0, y, z, y * y, y * z, z * z, y**3, y * y * z, y * z * z, z**3])
