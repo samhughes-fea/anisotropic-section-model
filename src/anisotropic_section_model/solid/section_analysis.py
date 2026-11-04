@@ -69,10 +69,10 @@ import numpy.typing as npt
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from pre_processing.section_integration.solid.elements import shape
-from pre_processing.section_integration.solid.material import bond_matrix, material_axes
-from pre_processing.section_integration.solid.mesh import SectionMesh
-from pre_processing.section_integration.thin_walled.section_analysis import CLASSICAL, GEOMETRIC_TERMS, T_RATE
+from onedfem.pre_processing.section_integration.solid.elements import shape
+from onedfem.pre_processing.section_integration.solid.material import bond_matrix, material_axes
+from onedfem.pre_processing.section_integration.solid.mesh import SectionMesh
+from onedfem.pre_processing.section_integration.thin_walled.section_analysis import CLASSICAL, GEOMETRIC_TERMS, T_RATE
 
 __all__ = ["SolidSectionAnalysis", "PointStress", "BENSCOTER_STRAINS"]
 

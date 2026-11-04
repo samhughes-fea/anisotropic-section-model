@@ -33,8 +33,8 @@ from typing import Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from pre_processing.section_integration.solid.elements import n_nodes, quadrature, shape
-from pre_processing.section_integration.solid.material import SolidMaterial
+from onedfem.pre_processing.section_integration.solid.elements import n_nodes, quadrature, shape
+from onedfem.pre_processing.section_integration.solid.material import SolidMaterial
 
 
 @dataclass(frozen=True)

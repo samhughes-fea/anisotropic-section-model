@@ -37,7 +37,7 @@ from typing import Tuple
 import numpy as np
 import numpy.typing as npt
 
-from pre_processing.section_integration.thin_walled.stress_recovery import (
+from onedfem.pre_processing.section_integration.thin_walled.stress_recovery import (
     KeptField,
     SaintVenantRecovery,
     WallPointStress,
@@ -74,8 +74,8 @@ def element_wall_field(element, U_e: npt.ArrayLike, xi: float, analysis, wall_id
 
     Returns the field and the hoop condition to complete it with.
     """
-    from pre_processing.element_library.framed_element import local_state
-    from pre_processing.section_integration.thin_walled.section_analysis import T_RATE
+    from onedfem.pre_processing.element_library.framed_element import local_state
+    from onedfem.pre_processing.section_integration.thin_walled.section_analysis import T_RATE
 
     # a rotated element's displacements in its own axes; a curved one's sub-element at xi
     element, U, xi = local_state(element, U_e, xi)
@@ -136,7 +136,7 @@ def element_wall_field(element, U_e: npt.ArrayLike, xi: float, analysis, wall_id
         return field, analysis.hoop
 
     # GBT
-    from pre_processing.section_integration.thin_walled.cross_section_modes import CrossSectionModes
+    from onedfem.pre_processing.section_integration.thin_walled.cross_section_modes import CrossSectionModes
 
     cm = getattr(analysis, "_cross_section_modes", None)
     if cm is None:

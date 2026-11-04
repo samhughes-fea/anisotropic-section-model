@@ -13,13 +13,13 @@ sys.path.insert(0, HERE)
 
 from test_gbt_cross_section_modes import box  # noqa: E402
 
-from pre_processing.section_integration.gbt_alignment import (  # noqa: E402
+from onedfem.pre_processing.section_integration.gbt_alignment import (  # noqa: E402
     align_gbt_sections,
     gbt_signature,
     rotate_gbt_basis,
 )
-from pre_processing.section_integration.section_analysis import SectionAnalysis  # noqa: E402
-from pre_processing.section_integration.thin_walled.taper import SectionTaper  # noqa: E402
+from onedfem.pre_processing.section_integration.section_analysis import SectionAnalysis  # noqa: E402
+from onedfem.pre_processing.section_integration.thin_walled.taper import SectionTaper  # noqa: E402
 
 
 def _orthogonal(n, seed):
@@ -30,8 +30,8 @@ def _orthogonal(n, seed):
 @pytest.fixture(scope="module")
 def channel():
     """An unsymmetric section (no doubly symmetric modes): a box with one wall thicker."""
-    from pre_processing.section_integration.thin_walled import ThinWalledSection, ThinWalledSectionAnalysis, Wall
-    from pre_processing.section_integration.thin_walled.laminate import WallLaminate
+    from onedfem.pre_processing.section_integration.thin_walled import ThinWalledSection, ThinWalledSectionAnalysis, Wall
+    from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate
 
     pts = {1: (-0.15, -0.06), 2: (0.15, -0.06), 3: (0.15, 0.06), 4: (-0.12, 0.06)}
     walls = [Wall(1, 1, 2, 1), Wall(2, 2, 3, 2), Wall(3, 3, 4, 1), Wall(4, 4, 1, 1)]

@@ -91,12 +91,12 @@ from typing import Dict, List, Mapping, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from pre_processing.section_integration.thin_walled.laminate import WallLaminate
-from pre_processing.section_integration.thin_walled.thin_walled_geometry import (
+from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate
+from onedfem.pre_processing.section_integration.thin_walled.thin_walled_geometry import (
     ThinWalledSection,
     Wall,
 )
-from pre_processing.section_integration.thin_walled.wall_stiffness import (
+from onedfem.pre_processing.section_integration.thin_walled.wall_stiffness import (
     condensed_wall_stiffness,
 )
 

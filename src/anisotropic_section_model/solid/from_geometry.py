@@ -36,9 +36,9 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from pre_processing.section_integration.solid.material import SolidMaterial
-from pre_processing.section_integration.solid.mesh import SectionMesh
-from pre_processing.section_integration.thin_walled.from_geometry import laminate_lookup
+from onedfem.pre_processing.section_integration.solid.material import SolidMaterial
+from onedfem.pre_processing.section_integration.solid.mesh import SectionMesh
+from onedfem.pre_processing.section_integration.thin_walled.from_geometry import laminate_lookup
 
 __all__ = ["section_mesh_from_cut", "write_section_mesh_2d"]
 
