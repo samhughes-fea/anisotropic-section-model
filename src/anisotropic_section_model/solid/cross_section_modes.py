@@ -20,6 +20,14 @@ mass orders, so ``LinearGBTBeamElement3D`` takes either), with the walls replace
   rigid in-plane motions removed. ``u_k`` is the axial warping that goes with them, the
   field that minimises the out-of-plane shear energy of ``a_k'`` (the continuum form of the
   Vlasov hypothesis of no membrane shear), with zero mean.
+- The axial strain of ``a_k''`` (``N_x u_k``) comes with a slaved through-thickness strain
+  that makes the stress across the wall zero (``sigma_nn = 0``, ``n`` normal to the wall
+  direction ``alpha`` of each element), as in plate theory. Without it the wall's
+  longitudinal bending is held in plane strain: ``C`` is ``(1 - nu) / ((1 + nu)(1 - 2 nu))``
+  times the plate value instead of ``1 / (1 - nu^2)``, 22 % stiff for ``nu = 0.3``, and
+  local buckling 6 to 10 % high. The membrane part of ``N_x u_k`` keeps its hoop strain
+  restrained (the thin-walled modes release it, ``N_ss = 0``), so for a membrane-dominated
+  mode ``C`` is up to ``1 / (1 - nu^2)`` above the thin-walled value.
 
 3D strains, Voigt ``[xx, yy, zz, yz, xz, xy]``, per generalised strain
 ``[psi6, b'(p), b(p), a''(m), a'(m), a(m)]``, with ``B`` and ``N_x`` the section's
@@ -264,8 +272,13 @@ class SolidCrossSectionModes:
         Om, D, U, S = self._fields(n_modes)
         return self._H(p, Om, D, U, S)
 
-    @staticmethod
-    def _H(p, Om, D, U, S):
+    def _wall_normal(self, element: int) -> np.ndarray:
+        """Voigt strain of a unit ``eps_nn`` across the wall of ``element`` (``n`` at ``alpha + 90``)."""
+        a = np.radians(self.analysis.mesh.alpha[element])
+        ny, nz = -np.sin(a), np.cos(a)
+        return np.array([0.0, ny * ny, nz * nz, 2.0 * ny * nz, 0.0, 0.0])
+
+    def _H(self, p, Om, D, U, S):
         P, m = Om.shape[1], D.shape[1]
         oa = 6 + 2 * P
         d = p.dofs
@@ -273,7 +286,12 @@ class SolidCrossSectionModes:
         H[:, :6] = p.Z + p.B @ S[d]
         H[:, 6:6 + P] = p.Nx @ Om[d]
         H[:, 6 + P:oa] = p.B @ Om[d]
-        H[:, oa:oa + m] = p.Nx @ U[d]
+        Ha = p.Nx @ U[d]
+        if m:                                   # sigma_nn = 0: the wall is free to thin
+            n = self._wall_normal(p.element)
+            Cn = p.C @ n
+            Ha = Ha - np.outer(n, (Ha.T @ Cn) / (n @ Cn))
+        H[:, oa:oa + m] = Ha
         H[:, oa + m:oa + 2 * m] = p.B @ U[d] + p.Nx @ D[d]
         H[:, oa + 2 * m:] = p.B @ D[d]
         return H
