@@ -126,6 +126,10 @@ class SectionAnalysis:
         motion ``q = [v, w, theta_x, a(M)]`` does the work ``1/2 q'^T X q' + q'^T Y q``
         per length against the stresses of the element-signed GBT strains (``X @ E``).
         See ``gbt_geometric_terms``.
+    gbt_brazier : (ndarray, ndarray) or None
+        Element-signed Brazier terms ``(T, Q)`` of the modes (``CrossSectionModes.brazier_tensor``):
+        ``T`` (M, 2, n_gbt) and ``Q`` (M, M, 2, 2) on ``kappa = (kappa_y, kappa_z)``. See
+        ``gbt_brazier_terms``.
     gbt_moments : ndarray or None
         ``(6 + (n_sv + P) + 2M, 30)``: moments of each field of the GBT mass order over the
         section (``CrossSectionModes.shape_moments``), used to align the bases of
@@ -161,6 +165,7 @@ class SectionAnalysis:
     gbt_moments: Optional[npt.NDArray[np.float64]] = None
     tapered: bool = False
     taper_parts: Optional[Dict[int, npt.NDArray[np.float64]]] = None
+    gbt_brazier: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -257,7 +262,7 @@ class SectionAnalysis:
             XB, X3 = analysis.benscoter_geometric_terms, analysis.third_order_geometric_terms
         except ValueError:
             XB = X3 = None
-        K_gbt = M_gbt = G_gbt = mom = None
+        K_gbt = M_gbt = G_gbt = mom = brazier = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
             from pre_processing.section_integration.thin_walled.cross_section_modes import CrossSectionModes
@@ -271,6 +276,9 @@ class SectionAnalysis:
             M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
             mom = modes.shape_moments(gbt_modes, gbt_shear_modes)
             G_gbt = tuple(T * Sg for T in modes.geometric_tensor(gbt_modes, gbt_shear_modes))
+            Tb, Qb = modes.brazier_tensor(gbt_modes, gbt_shear_modes)
+            sk = np.array([-1.0, 1.0])  # element signs of (kappa_y, kappa_z)
+            brazier = (Tb * sk[None, :, None] * Sg[None, None, :], Qb * np.outer(sk, sk)[None, None])
         out = cls(
             K,
             C,
@@ -294,6 +302,7 @@ class SectionAnalysis:
             X3,
             analysis.axial_points,
             G_gbt,
+            gbt_brazier=brazier,
         )
         if M_gbt is not None:
             # rigid block with the walls' own rotary inertia, as mass_matrix()
@@ -315,7 +324,7 @@ class SectionAnalysis:
         """
         S4 = np.diag([1.0, -1.0, 1.0, 1.0])
         S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        K_gbt = M_gbt = G_gbt = mom = None
+        K_gbt = M_gbt = G_gbt = mom = brazier = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
             from pre_processing.section_integration.solid.cross_section_modes import SolidCrossSectionModes
@@ -329,6 +338,9 @@ class SectionAnalysis:
             M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
             mom = modes.shape_moments(gbt_modes, gbt_shear_modes)
             G_gbt = tuple(T * Sg for T in modes.geometric_tensor(gbt_modes, gbt_shear_modes))
+            Tb, Qb = modes.brazier_tensor(gbt_modes, gbt_shear_modes)
+            sk = np.array([-1.0, 1.0])  # element signs of (kappa_y, kappa_z)
+            brazier = (Tb * sk[None, :, None] * Sg[None, None, :], Qb * np.outer(sk, sk)[None, None])
         out = cls(
             to_element_voigt(analysis.stiffness),
             S4 @ analysis.classical_stiffness @ S4,
@@ -349,6 +361,7 @@ class SectionAnalysis:
             gbt_shear_modes=int(gbt_shear_modes),
             gbt_sv_modes=int(n_sv),
             gbt_geometric=G_gbt,
+            gbt_brazier=brazier,
         )
         if M_gbt is not None:
             M_gbt[:6, :6] = out.mass_matrix()
@@ -390,6 +403,17 @@ class SectionAnalysis:
         ik, _ = self.gbt_indices(n_modes, n_shear)
         iq = np.r_[0, 1, 2, 3 + np.arange(n_modes)]
         return tuple(T[np.ix_(iq, iq, ik)].copy() for T in self.gbt_geometric)
+
+    def gbt_brazier_terms(self, n_modes: int, n_shear: int = 0):
+        """Brazier terms ``(T, Q)`` of the first modes, on the strains of ``gbt_matrices(n_modes,
+        n_shear)``, or ``None`` when the section has none: the fibre strain of the beam
+        curvature at the modes' in-plane motion is ``sum_k a_k g_k . kappa`` and its work is
+        ``sum_k a_k kappa^T T_k E + 1/2 sum_kl a_k a_l kappa^T Q_kl kappa``."""
+        if self.gbt_brazier is None:
+            return None
+        ik, _ = self.gbt_indices(n_modes, n_shear)
+        T, Q = self.gbt_brazier
+        return T[:n_modes][:, :, ik].copy(), Q[:n_modes, :n_modes].copy()
 
     @property
     def is_coupled(self) -> bool:
