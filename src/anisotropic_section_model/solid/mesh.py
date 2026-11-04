@@ -61,6 +61,10 @@ class SectionMesh:
     #: Tied nodes: ``{node: [(master node, weight), ...]}``, the node's displacement being the
     #: weighted sum of its masters' (a wall end joined to another wall's strip).
     ties: Dict[int, List[Tuple[int, float]]] = field(default_factory=dict)
+    #: The ply of each element, ``(laminate_id, ply)`` with ``ply`` 0-based bottom first, or
+    #: ``None`` (an element of no laminate ply); ``None`` for an untagged mesh. Ply-angle
+    #: sensitivities (``solid.layup_sensitivity``) turn the elements of a ply together.
+    plies: Optional[List[Optional[Tuple[int, int]]]] = None
 
     def __post_init__(self) -> None:
         self.nodes = np.asarray(self.nodes, dtype=np.float64).reshape(-1, 2)
@@ -69,6 +73,10 @@ class SectionMesh:
         for name in ("kinds", "material_ids", "theta", "alpha"):
             if len(getattr(self, name)) != n:
                 raise ValueError(f"SectionMesh.{name} needs one entry per element")
+        if self.plies is not None:
+            if len(self.plies) != n:
+                raise ValueError("SectionMesh.plies needs one entry per element")
+            self.plies = [None if t is None else (int(t[0]), int(t[1])) for t in self.plies]
         for e, (conn, kind) in enumerate(zip(self.elements, self.kinds)):
             if conn.size != n_nodes(kind):
                 raise ValueError(f"element {e}: {kind} needs {n_nodes(kind)} nodes, got {conn.size}")
@@ -172,7 +180,7 @@ class SectionMesh:
         elements: List[np.ndarray] = []
         strips: Dict[int, List[int]] = {}                   # wall id -> its element indices
         edges: Dict[Tuple[int, int], List[int]] = {}        # (wall id, section point) -> edge nodes
-        kinds, mids, thetas, alphas = [], [], [], []
+        kinds, mids, thetas, alphas, plies = [], [], [], [], []
         mat_ids: Dict[int, int] = {}
         mats: Dict[int, SolidMaterial] = {}
         offset = 0
@@ -226,13 +234,15 @@ class SectionMesh:
                 mids.append(mat_ids[key])
                 thetas.append(float(ply.angle_deg))
                 alphas.append(alpha)
+                plies.append((int(w.laminate_id), int(ply_of_row[row])))
             all_nodes.append(nodes)
             offset += nodes.shape[0]
         nodes = np.vstack(all_nodes)
         nodes, elements, rank = _merge_nodes(nodes, elements, return_map=True)
         edges = {k: [int(rank[n]) for n in v] for k, v in edges.items()}
         ties = _junction_ties(section, nodes, elements, strips, edges, skip=set(corners))
-        return cls(nodes, elements, kinds, mids, thetas, alphas, mats, getattr(section, "section_id", None), ties)
+        return cls(nodes, elements, kinds, mids, thetas, alphas, mats, getattr(section, "section_id", None), ties,
+                   plies)
 
     @classmethod
     def from_gmsh(cls, path: str, groups: Mapping[object, Tuple[int, float, float]],
@@ -467,10 +477,15 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
     ``SectionMesh.from_thin_walled`` at wall junctions). An optional
     ``[Solid_Material]`` block, ``[material_id] [E1] [E2] [E3] [G12] [G13] [G23] [nu12]
     [nu13] [nu23] [rho]``, adds or overrides materials (others come from ``laminate.txt``).
+    An optional ``[Section_Element_Ply]`` block, ``[section_id] [element_id] [laminate_id]
+    [ply]`` (``ply`` from 1 at the bottom, as in ``laminate.txt``), tags elements with the
+    laminate ply they belong to (``SectionMesh.plies``, for ply-angle sensitivities).
     """
     nodes: Dict[int, Dict[int, Tuple[float, float]]] = {}
     elems: Dict[int, List[Tuple[str, List[int], int, float, float]]] = {}
     tie_rows: Dict[int, Dict[int, List[Tuple[int, float]]]] = {}
+    ply_rows: Dict[int, Dict[int, Tuple[int, int]]] = {}
+    elem_ids: Dict[int, List[int]] = {}
     mats = dict(materials)
     section = None
     with open(path, encoding="utf-8") as fh:
@@ -479,7 +494,8 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
             if not line:
                 continue
             low = line.lower()
-            if low in ("[section_node]", "[section_element]", "[solid_material]", "[section_tie]"):
+            if low in ("[section_node]", "[section_element]", "[solid_material]", "[section_tie]",
+                       "[section_element_ply]"):
                 section = low
                 continue
             if line.startswith("["):
@@ -492,10 +508,15 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
                 n = n_nodes(kind)
                 if len(v) != 3 + n + 3:
                     raise ValueError(f"{path}: {kind} row needs {n} node ids and material, theta, alpha: {line!r}")
+                elem_ids.setdefault(int(v[0]), []).append(int(v[1]))
                 elems.setdefault(int(v[0]), []).append(
                     (kind, [int(x) for x in v[3:3 + n]], int(v[3 + n]), float(v[4 + n]), float(v[5 + n])))
             elif section == "[section_tie]":
                 tie_rows.setdefault(int(v[0]), {}).setdefault(int(v[1]), []).append((int(v[2]), float(v[3])))
+            elif section == "[section_element_ply]":
+                if int(v[3]) < 1:
+                    raise ValueError(f"{path}: plies count from 1: {line!r}")
+                ply_rows.setdefault(int(v[0]), {})[int(v[1])] = (int(v[2]), int(v[3]) - 1)
             elif section == "[solid_material]":
                 f = [float(x) for x in v[1:]]
                 mats[int(v[0])] = SolidMaterial(*f[:9], rho=f[9] if len(f) > 9 else 0.0)
@@ -513,9 +534,16 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
             ties = {index[n]: [(index[m], c) for m, c in row] for n, row in tie_rows.get(sid, {}).items()}
         except KeyError as exc:
             raise ValueError(f"{path}: section {sid} tie refers to unknown node {exc}") from None
+        plies = None
+        if sid in ply_rows:
+            unknown = sorted(set(ply_rows[sid]) - set(elem_ids[sid]))
+            if unknown:
+                raise ValueError(f"{path}: section {sid} [Section_Element_Ply] names unknown elements {unknown}")
+            plies = [ply_rows[sid].get(e) for e in elem_ids[sid]]
         out[sid] = SectionMesh(np.array([nodes[sid][n] for n in ids]), conn, [r[0] for r in rows],
                                [r[2] for r in rows], [r[3] for r in rows], [r[4] for r in rows],
-                               {m: mats[m] for m in {r[2] for r in rows} if m in mats}, sid, ties=ties)
+                               {m: mats[m] for m in {r[2] for r in rows} if m in mats}, sid, ties=ties,
+                               plies=plies)
     return out
 
 

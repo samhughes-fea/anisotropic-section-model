@@ -572,13 +572,17 @@ def write_section_mesh_2d(path: str, meshes: Mapping[int, SectionMesh]) -> None:
 
     Material ids are renumbered across sections (one ``[Solid_Material]`` row per
     distinct material object). Junction ties (``SectionMesh.ties``) go to a
-    ``[Section_Tie]`` block.
+    ``[Section_Tie]`` block, ply tags (``SectionMesh.plies``) to a ``[Section_Element_Ply]`` block.
     """
     mat_rows: Dict[int, Tuple[int, SolidMaterial]] = {}
     lines_n, lines_e = ["[Section_Node]", "[section_id] [node_id] [y] [z]"], \
         ["[Section_Element]", "[section_id] [element_id] [type] [nodes...] [material_id] [theta] [alpha]"]
     lines_t = ["[Section_Tie]", "[section_id] [node_id] [master_id] [coefficient]"]
+    lines_p = ["[Section_Element_Ply]", "[section_id] [element_id] [laminate_id] [ply]"]
     for sid, mesh in meshes.items():
+        for e, t in enumerate(getattr(mesh, "plies", None) or (), start=1):
+            if t is not None:
+                lines_p.append(f"{sid} {e} {int(t[0])} {int(t[1]) + 1}")
         for k, (y, z) in enumerate(mesh.nodes, start=1):
             lines_n.append(f"{sid} {k} {float(y)!r} {float(z)!r}")
         for n, row in sorted((getattr(mesh, "ties", None) or {}).items()):
@@ -599,4 +603,6 @@ def write_section_mesh_2d(path: str, meshes: Mapping[int, SectionMesh]) -> None:
         blocks = lines_m + [""] + lines_n + [""] + lines_e
         if len(lines_t) > 2:
             blocks += [""] + lines_t
+        if len(lines_p) > 2:
+            blocks += [""] + lines_p
         fh.write("\n".join(blocks) + "\n")
