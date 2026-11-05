@@ -7,7 +7,10 @@ import pytest
 from anisotropic_section_model import ThinWalledSection
 from composite_laminate_model import BladeBuilder, FSDTModel, Laminate, create_default_library
 from implicit_geometry_kernel import Airfoil, BladeGeometry, ShearWeb, SkinRegion, Station
-from implicit_geometry_kernel.section_geometry.layout.system_layout import SYSTEM_TYPE_KEYS
+try:  # implicit-geometry-kernel 0.2.0 exports it at the top level
+    from implicit_geometry_kernel import SYSTEM_TYPE_KEYS
+except ImportError:  # 0.1.0
+    from implicit_geometry_kernel.section_geometry.layout.system_layout import SYSTEM_TYPE_KEYS
 
 
 AIRFOIL = Airfoil.naca4("0024")
