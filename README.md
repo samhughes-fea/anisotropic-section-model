@@ -69,6 +69,33 @@ check the section theory against shell models. `from_geometry` reads a cut of th
 geometry kernel's `BladeGeometry` by its attributes, so the package does not import the
 kernel either.
 
+## Axes and strain order
+
+The package has two conventions, and one section engine behind both.
+
+- **Top-level API** (`ThinWalledSection`, `TimoshenkoBeam`, the closed-form
+  properties): beam axis **z**, section axes (x, y), and the BeamDyn / windIO order
+  `[Fx, Fy, N, Mx, My, Mz]` against `[gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z]`.
+- **`thin_walled`, `solid` and `section_analysis`** (moved from 1d-fem): beam axis
+  **x**, section axes (y, z), and 1d-fem's order `[eps, kappa_y, kappa_z, gamma_xy,
+  gamma_xz, phi]` (forces `[N, M_y, M_z, V_y, V_z, T]`).
+
+The axes are a cyclic relabelling, 1d-fem (x, y, z) = top-level (z, x, y), so no sign
+changes. A 6 x 6 stiffness `K` in 1d-fem order becomes BeamDyn order by reordering
+rows and columns with `p = BEAMDYN_FROM_ONEDFEM = [3, 4, 0, 1, 2, 5]`:
+
+```python
+from anisotropic_section_model.thin_wall import BEAMDYN_FROM_ONEDFEM as p
+K_beamdyn = K_onedfem[np.ix_(p, p)]
+```
+
+`ThinWalledSection` builds a `thin_walled.ThinWalledSectionAnalysis` of the same walls
+(`section.analysis`) and takes its stiffness, centres and EΓ from it, so every wall
+coupling is included. The classical thin-wall values it used before are kept in
+`section.classical` and `classical_timoshenko_stiffness()` as a check; the two agree
+for balanced, symmetric walls. For BeamDyn's own input, the stiffness is usually
+wanted about the reference axis: `section.timoshenko_stiffness(reference)`.
+
 ## Torsion: Saint-Venant, restrained warping and distortion
 
 shell-fem's `beam_section_properties` gives the Saint-Venant GJ of a

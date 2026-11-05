@@ -38,7 +38,11 @@ def test_box_closed_form(aluminium):
     assert np.max(np.abs(s.omega)) == pytest.approx(b * h / 4 * (b - h) / (b + h), rel=1e-10)
     assert s.EGamma_primary == pytest.approx(E * T * b**2 * h**2 * (b - h) ** 2 / (24 * (b + h)), rel=1e-10)
     assert s.Ip == pytest.approx(G * T * (2 * b * (h / 2) ** 2 + 2 * h * (b / 2) ** 2), rel=1e-10)
-    assert s.EI_xx == pytest.approx(E * T * (2 * b * (h / 2) ** 2 + 2 * h**3 / 12), rel=1e-10)
+    # membrane thin-wall theory; the coupled analysis adds the flanges' own bending stiffness
+    EI_membrane = E * T * (2 * b * (h / 2) ** 2 + 2 * h**3 / 12)
+    assert s.classical["EI_xx"] == pytest.approx(EI_membrane, rel=1e-10)
+    flange_bending = 2 * b * E * T**3 / (12 * (1 - NU**2))
+    assert s.EI_xx == pytest.approx(EI_membrane + flange_bending, rel=1e-3)
 
 
 def test_open_sections(aluminium):
@@ -54,7 +58,9 @@ def test_open_sections(aluminium):
     channel = ThinWalledSection.from_segments([
         ((bf, hw / 2), (0, hw / 2), aluminium), ((0, hw / 2), (0, -hw / 2), aluminium),
         ((0, -hw / 2), (bf, -hw / 2), aluminium)])
-    assert channel.shear_centre[0] == pytest.approx(-3 * bf**2 / (hw + 6 * bf), rel=1e-10)
+    assert channel.classical["shear_centre"][0] == pytest.approx(-3 * bf**2 / (hw + 6 * bf), rel=1e-10)
+    # the coupled analysis also lets the walls bend (Kirchhoff walls), a t / b effect
+    assert channel.shear_centre[0] == pytest.approx(-3 * bf**2 / (hw + 6 * bf), rel=1e-3)
     assert channel.EGamma_primary == pytest.approx(
         E * T * bf**3 * hw**2 / 12 * (3 * bf + 2 * hw) / (6 * bf + hw), rel=1e-10)
 
