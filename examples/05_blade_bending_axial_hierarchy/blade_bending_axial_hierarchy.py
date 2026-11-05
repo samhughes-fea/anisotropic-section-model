@@ -1,7 +1,7 @@
 """Bending and axial load on a blade section, layer by layer: shear, shear lag, distortion.
 
 Example 04 took bending and axial load beyond Euler-Bernoulli on a rectangular box.
-This example does the same on the three-cell blade section of composite-laminate-model's example 20 and example 02
+This example does the same on the three-cell blade section of shell-fem's example 20 and example 02
 (NACA 0024, 1 m chord: glass skins, carbon spar caps, two glass shear webs), where
 the caps are much stiffer than the skins and the section is far from rigid in its
 plane. Each layer is checked against a shell model of the same blade (curved Quad8
@@ -36,7 +36,7 @@ import numpy as np
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import add_rib, contour_coordinate, loop_order, shell_section_motion
 from anisotropic_section_model import GeneralizedBeam, ThinWalledSection, TimoshenkoBeam
-from composite_laminate_model import (Airfoil, BladeBuilder, BoundaryConditions, FSDTModel,
+from shell_fem import (Airfoil, BladeBuilder, BoundaryConditions, FSDTModel,
     Laminate, LoadCase, ResultsExtractor, ShearWeb, SkinRegion, Station, StructuralGlobalSolver,
     beam_section_properties, create_default_library)
 

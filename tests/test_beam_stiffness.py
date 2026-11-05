@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 
 from anisotropic_section_model import ThinWalledSection
-from composite_laminate_model import (FEAMesh, FSDTModel, Laminate, Ply, beam_section_properties,
+from shell_fem import (FEAMesh, FSDTModel, Laminate, Ply, beam_section_properties,
     create_default_library, transform_beam_stiffness)
-from composite_laminate_model.laminate_materials import MaterialCard
-from composite_laminate_model.laminate_materials_3d import ElasticProperties3D, StrengthProperties3D
+from laminate_constitutive_model.laminate_materials import MaterialCard
+from laminate_constitutive_model.laminate_materials_3d import ElasticProperties3D, StrengthProperties3D
 
 E, NU, T = 68.9e9, 0.33, 0.004
 G = E / (2 * (1 + NU))

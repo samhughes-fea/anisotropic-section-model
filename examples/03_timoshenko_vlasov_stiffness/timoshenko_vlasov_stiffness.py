@@ -34,7 +34,7 @@ from _shared.iea15mw import DATA, build_segment
 from _shared.plotting import DIVERGING, REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import add_rib, box_spar, section_nodes
 from anisotropic_section_model import RestrainedTorsionBeam, ThinWalledSection
-from composite_laminate_model import (BoundaryConditions, Laminate, LoadCase,
+from shell_fem import (BoundaryConditions, Laminate, LoadCase,
     StructuralGlobalSolver, add_reference_node, beam_section_properties, create_default_library,
     rigid_link, transform_beam_stiffness)
 

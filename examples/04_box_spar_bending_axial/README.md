@@ -190,4 +190,4 @@ far-field N_zz):
   instead of the inextensible subspace, so use it for end effects and point-load
   diffusion, not for the overall response.
 - Linear static, prismatic sections. The shell is the reference here, not an exact
-  solution; its own mesh convergence is covered by composite-laminate-model's examples [03](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/03_result_fidelity) and [26](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/26_mid_surface_meshing).
+  solution; its own mesh convergence is covered by shell-fem's examples [03](https://github.com/samhughes-fea/shell-fem/tree/main/examples/03_result_fidelity) and [26](https://github.com/samhughes-fea/shell-fem/tree/main/examples/26_mid_surface_meshing).

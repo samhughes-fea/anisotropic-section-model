@@ -1,10 +1,11 @@
 """The package boundary of the split:
 
-    implicit_geometry_kernel  <-  composite_laminate_model  <-  anisotropic_section_model
+    laminate_constitutive_model  <-  anisotropic_section_model
 
 Walls are laminates, so the only names this package takes from
-``composite_laminate_model`` are ``Laminate`` and ``integrate_abd``. It does not import
-the geometry kernel: ``ThinWalledSection.from_geometry`` reads a cut by duck typing.
+``laminate_constitutive_model`` are ``Laminate`` and ``integrate_abd``. It does not import
+the geometry kernel (``ThinWalledSection.from_geometry`` reads a cut by duck typing) or
+the shell FE (``shell_fem``), which it meets only in tests and examples.
 """
 
 import ast
@@ -12,10 +13,10 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / "anisotropic_section_model"
 ALLOWED = {
-    "composite_laminate_model.laminate_mechanics": {"Laminate"},
-    "composite_laminate_model.laminate_kinematics": {"integrate_abd"},
+    "laminate_constitutive_model.laminate_mechanics": {"Laminate"},
+    "laminate_constitutive_model.laminate_kinematics": {"integrate_abd"},
 }
-FORBIDDEN = {"implicit_geometry_kernel", "laminate_modelling_package"}
+FORBIDDEN = {"implicit_geometry_kernel", "shell_fem", "composite_laminate_model", "laminate_modelling_package"}
 
 
 def _imports():
@@ -28,14 +29,13 @@ def _imports():
                     yield path.name, a.name, set()
 
 
-def test_only_laminate_and_integrate_abd_come_from_the_laminate_model():
+def test_only_laminate_and_integrate_abd_come_from_the_constitutive_model():
     for name, module, names in _imports():
-        if module.split(".")[0] == "composite_laminate_model":
+        if module.split(".")[0] == "laminate_constitutive_model":
             assert module in ALLOWED, (name, module)
             assert names <= ALLOWED[module], (name, module, names - ALLOWED[module])
 
 
-def test_no_geometry_kernel_or_old_package_imports():
+def test_no_geometry_kernel_shell_fe_or_old_package_imports():
     for name, module, _ in _imports():
         assert module.split(".")[0] not in FORBIDDEN, (name, module)
-

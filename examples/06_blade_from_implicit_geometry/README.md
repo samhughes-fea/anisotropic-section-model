@@ -5,7 +5,7 @@ structural layouts: skins, spar caps, any number of shear webs, cap bands and bo
 This example lofts one of them along a blade, cuts it at any span position, and feeds
 the same cut to both downstream models. `ThinWalledSection.from_geometry` builds the
 beam section straight from the cut. `BladeBuilder.from_geometry` meshes the walls as
-shells along the span. Both are checked against composite-laminate-model's [example 20](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/20_blade_beam_properties), a region-based shell model
+shells along the span. Both are checked against shell-fem's [example 20](https://github.com/samhughes-fea/shell-fem/tree/main/examples/20_blade_beam_properties), a region-based shell model
 of the same section, and then followed along a tapered, twisted segment.
 
 ![Sections of a tapered, twisted segment and its stiffness along the span](figures/tapered_segment.png)

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from anisotropic_section_model import ThinWalledSection
-from composite_laminate_model import BladeBuilder, FSDTModel, Laminate, create_default_library
+from shell_fem import BladeBuilder, FSDTModel, Laminate, create_default_library
 from implicit_geometry_kernel import Airfoil, BladeGeometry, ShearWeb, SkinRegion, Station
 try:  # implicit-geometry-kernel 0.2.0 exports it at the top level
     from implicit_geometry_kernel import SYSTEM_TYPE_KEYS

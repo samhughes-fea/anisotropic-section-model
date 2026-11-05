@@ -17,11 +17,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install the geometry kernel and the laminate model
+      - name: Install the constitutive model, and the geometry kernel and shell FE for the tests
         # not on PyPI yet: install them from their repositories
         run: |
+          pip install "laminate-constitutive-model @ git+https://github.com/samhughes-fea/laminate-constitutive-model@1470931cdd520b6a8050fab5c3cc245262d83550"
           pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@v0.2.0"
-          pip install "composite-laminate-model @ git+https://github.com/samhughes-fea/composite-laminate-model"
+          pip install --no-deps "shell-fem @ git+https://github.com/samhughes-fea/shell-fem@07883ae28edf3779f8b3665d63274b69e5095c84"
       - name: Install package
         run: pip install -e ".[dev]"
       - name: Run tests
