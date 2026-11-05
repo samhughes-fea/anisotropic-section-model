@@ -83,7 +83,7 @@ shear centre, orthogonal to extension and bending, so the bimoment is uncoupled.
 | Box spar | Example 01's box: 0.5 × 0.25 m wall mid-lines, carbon caps [0₂/45/−45/−45/45/0₂] (8 × 0.5 mm), glass webs [±45]s (4 × 0.5 mm); a variant with 20° in place of the caps' 0° plies |
 | Box shell | Flat Quad8 FSDT, 6 across each cap, 3 up each web, 8 elements per metre along the span (12 at least); 4 m segment for the section stiffness |
 | Cantilevers | 0.5 to 6 m, root clamped, unit tip force through a rigid tip diaphragm |
-| IEA 15 MW | The six stations of composite-laminate-model's [example 24](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/24_iea15mw_section_properties) as prismatic segments 8 chords long, curved Quad8 FSDT on the mid-surface (`mesh_surface="mid"`), chordwise size 1.5% of the perimeter, 32 along the span |
+| IEA 15 MW | The six stations of shell-fem's [example 24](https://github.com/samhughes-fea/shell-fem/tree/main/examples/24_iea15mw_section_properties) as prismatic segments 8 chords long, curved Quad8 FSDT on the mid-surface (`mesh_surface="mid"`), chordwise size 1.5% of the perimeter, 32 along the span |
 | Published data | The windIO `elastic_properties` 6 × 6 of the IEA 15 MW yaml, turned into the shell's axes |
 
 The published axes are x flapwise and y chordwise aft, both from the pitch axis: a

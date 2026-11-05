@@ -7,7 +7,7 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from composite_laminate_model import create_default_library  # noqa: E402
+from laminate_constitutive_model import create_default_library  # noqa: E402
 
 
 @pytest.fixture(scope="session")

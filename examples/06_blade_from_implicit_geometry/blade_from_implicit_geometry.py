@@ -10,7 +10,7 @@ downstream models:
 2. ``BladeBuilder.from_geometry`` meshes the walls' mid-surfaces along the span as
    curved Quad8 FSDT shells.
 
-The example checks both against the region-based ``BladeBuilder`` model of composite-laminate-model's example 20
+The example checks both against the region-based ``BladeBuilder`` model of shell-fem's example 20
 on the same prismatic section (NACA 0024, 1 m chord, glass skins and webs, carbon spar
 caps), then follows a tapered, twisted segment along its span, and draws a few other
 layouts from the catalogue.
@@ -31,7 +31,7 @@ import numpy as np
 from _shared.plotting import SERIES, TEXT_SECONDARY, plt, save
 from anisotropic_section_model import ThinWalledSection
 from implicit_geometry_kernel import Airfoil, BladeGeometry, ShearWeb, SkinRegion, Station
-from composite_laminate_model import BladeBuilder, FSDTModel, Laminate, beam_section_properties, create_default_library
+from shell_fem import BladeBuilder, FSDTModel, Laminate, beam_section_properties, create_default_library
 
 DATA = Path(__file__).resolve().parent / "data" / "results.json"
 SKIN_T, CAP_T, WEB_T = 0.003, 0.008, 0.002  # m: wall thicknesses, which place the walls

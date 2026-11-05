@@ -1,7 +1,7 @@
 # 05 · Blade bending and axial load: shear, shear lag, distortion and diffusion
 
 Example 04 took bending and axial load beyond Euler-Bernoulli on a rectangular box.
-This example does the same on the three-cell blade section of composite-laminate-model's [example 20](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/20_blade_beam_properties) and example 02
+This example does the same on the three-cell blade section of shell-fem's [example 20](https://github.com/samhughes-fea/shell-fem/tree/main/examples/20_blade_beam_properties) and example 02
 (NACA 0024, 1 m chord, glass skins and webs, 16-ply carbon spar caps), where the caps
 are 22 times stiffer per unit length than the skins and the section is far from rigid
 in its plane. Everything is checked against a shell model of the same blade (curved

@@ -15,9 +15,9 @@ Beams           TimoshenkoBeam (exact Timoshenko / Euler-Bernoulli beam elements
                 euler_bernoulli_beam
 
 Walls are laminates: the only things this package takes from
-``composite_laminate_model`` are ``Laminate`` and ``integrate_abd``. It never
+``laminate_constitutive_model`` are ``Laminate`` and ``integrate_abd``. It never
 extracts properties from a shell model; that is
-``composite_laminate_model.beam_section_properties``, and the two meet only in
+``shell_fem.beam_section_properties``, and the two meet only in
 tests and examples.
 """
 

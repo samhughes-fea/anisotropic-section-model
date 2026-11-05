@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Depends on [laminate-constitutive-model](https://github.com/samhughes-fea/laminate-constitutive-model)
+  (`Laminate`, `integrate_abd`) instead of composite-laminate-model, which was split
+  into that package and [shell-fem](https://github.com/samhughes-fea/shell-fem).
+  The tests and examples build their shell meshes with `shell_fem`.
+- `tests/test_import_boundary.py` checks that the package imports only NumPy and
+  laminate-constitutive-model.
+
 ## 0.1.0 (unreleased)
 
 - Split out of [composite-laminate-fea](https://github.com/samhughes-fea/composite-laminate-fea)

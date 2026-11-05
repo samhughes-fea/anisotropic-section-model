@@ -5,7 +5,7 @@ import pytest
 
 from anisotropic_section_model import (GeneralizedBeam, RestrainedTorsionBeam, SectionModes,
     ThinWalledSection)
-from composite_laminate_model import (BoundaryConditions, FEAMesh, FSDTModel, Laminate, LoadCase,
+from shell_fem import (BoundaryConditions, FEAMesh, FSDTModel, Laminate, LoadCase,
     StructuralGlobalSolver, add_reference_node, create_default_library, rigid_link)
 
 E, NU, T = 68.9e9, 0.33, 0.004

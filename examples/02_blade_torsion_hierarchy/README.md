@@ -3,7 +3,7 @@
 A blade section twists in three ways at once. Saint-Venant shear flows circulate in
 its cells. The section warps out of its plane, and where that warping is stopped (at
 a clamp, a stiff rib, or a change of section) a bimoment builds up. And the cells
-distort in their own plane. This example takes the three-cell section of composite-laminate-model's [example 20](https://github.com/samhughes-fea/composite-laminate-model/tree/main/examples/20_blade_beam_properties)
+distort in their own plane. This example takes the three-cell section of shell-fem's [example 20](https://github.com/samhughes-fea/shell-fem/tree/main/examples/20_blade_beam_properties)
 and adds each contribution in turn. Each layer is checked against a shell model of
 the same blade segment.
 
@@ -131,7 +131,7 @@ sits 8 mm aft of the pitch axis.
 
 ## Notes
 
-- The section must be prismatic, as in composite-laminate-model's example 20 and example 01 here. For a tapered blade, cut
+- The section must be prismatic, as in shell-fem's example 20 and example 01 here. For a tapered blade, cut
   sections along the span and use them station by station.
 - GBT and the shell differ in two assumptions: GBT's walls are Kirchhoff strips on
   straight facets between section points, and inextensible GBT carries no hoop

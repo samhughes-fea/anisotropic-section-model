@@ -31,13 +31,18 @@ examples/           six worked examples, each with its script, figures and READM
 ## Install
 
 The package is not on PyPI yet. It depends on
-[composite-laminate-model](https://github.com/samhughes-fea/composite-laminate-model) (walls are its `Laminate`s), which depends on
-[implicit-geometry-kernel](https://github.com/samhughes-fea/implicit-geometry-kernel). Install both, then this package from a clone:
+[laminate-constitutive-model](https://github.com/samhughes-fea/laminate-constitutive-model)
+(walls are its `Laminate`s). The tests and examples also build shell models with
+[shell-fem](https://github.com/samhughes-fea/shell-fem), which needs
+[implicit-geometry-kernel](https://github.com/samhughes-fea/implicit-geometry-kernel).
+Install them, then this package from a clone:
 
 ```bash
-pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel"
-pip install "composite-laminate-model @ git+https://github.com/samhughes-fea/composite-laminate-model"
-pip install -e .             # NumPy and the laminate model
+pip install "laminate-constitutive-model @ git+https://github.com/samhughes-fea/laminate-constitutive-model"
+# for the tests and examples:
+pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@v0.2.0"
+pip install "shell-fem @ git+https://github.com/samhughes-fea/shell-fem"
+pip install -e .             # NumPy and the constitutive model
 pip install -e ".[sparse]"   # + SciPy sparse solves for GBT
 pip install -e ".[examples]" # + SciPy and matplotlib for the examples
 pip install -e ".[dev]"      # everything above, plus pytest and build
@@ -51,12 +56,13 @@ Python 3.11 or newer.
 | Package | Holds | Depends on |
 | --- | --- | --- |
 | [implicit-geometry-kernel](https://github.com/samhughes-fea/implicit-geometry-kernel) | `Airfoil`, `Station`, `SkinRegion`, `ShearWeb`, `BladeGeometry` and the implicit section geometry: 40 structural layouts, wall midlines and cells at any span position | numpy, shapely, numba |
-| [composite-laminate-model](https://github.com/samhughes-fea/composite-laminate-model) | materials, laminates, kinematics, shell and solid FE, solver, kernels, `BladeBuilder`, `beam_section_properties` | the geometry kernel |
-| **anisotropic-section-model** (this one) | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam`, `TimoshenkoBeam`: thin-walled beam-section theory | `Laminate` and `integrate_abd` from the laminate model |
+| [laminate-constitutive-model](https://github.com/samhughes-fea/laminate-constitutive-model) | materials, `Ply`, `Laminate`, ABD, the kinematic theories' section stiffness, failure criteria | numpy |
+| [shell-fem](https://github.com/samhughes-fea/shell-fem) | shell and solid FE, solver, kernels, `BladeBuilder`, `beam_section_properties` | the geometry kernel and the constitutive model |
+| **anisotropic-section-model** (this one) | `ThinWalledSection`, `RestrainedTorsionBeam`, `GeneralizedBeam`, `TimoshenkoBeam`: thin-walled beam-section theory | `Laminate` and `integrate_abd` from the constitutive model |
 
-Walls are laminates, so the only names this package takes from the laminate model are
+Walls are laminates, so the only names this package takes from the constitutive model are
 `Laminate` and `integrate_abd` (`tests/test_import_boundary.py` checks it). It never
-extracts properties from a shell model: that is the laminate model's
+extracts properties from a shell model: that is shell-fem's
 `beam_section_properties`. The two meet in this package's tests and examples, which
 check the section theory against shell models. `from_geometry` reads a cut of the
 geometry kernel's `BladeGeometry` by its attributes, so the package does not import the
@@ -64,7 +70,7 @@ kernel either.
 
 ## Torsion: Saint-Venant, restrained warping and distortion
 
-composite-laminate-model's `beam_section_properties` gives the Saint-Venant GJ of a
+shell-fem's `beam_section_properties` gives the Saint-Venant GJ of a
 shell segment. Three tools here follow the torsional response beyond it, each adding
 one physical contribution:
 
@@ -158,7 +164,7 @@ section = ThinWalledSection.from_geometry(geo.section_at(1.0), {"skin": skin, "c
 ```
 
 Laminates bind by label, region or kind, and spar caps are merged into the skin they
-are bonded to. On composite-laminate-model's example 20 section it matches
+are bonded to. On shell-fem's example 20 section it matches
 `from_blade_mesh` within 1% in EA, EI and GJ
 ([example 06](examples/06_blade_from_implicit_geometry/)).
 
@@ -169,7 +175,7 @@ README on the model and the results: torsion of a box spar and of a three-cell b
 section, the 6 × 6 and 7 × 7 section stiffness (including six IEA 15 MW stations), the
 bending and axial hierarchy on both sections, and sections cut from the implicit
 geometry. Each checks itself against closed forms and shell models built with
-composite-laminate-model.
+shell-fem.
 
 ```bash
 pip install -e ".[examples]"

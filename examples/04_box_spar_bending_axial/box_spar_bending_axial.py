@@ -42,7 +42,7 @@ import numpy as np
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import add_rib, box_spar, contour_coordinate, loop_order, shell_section_motion
 from anisotropic_section_model import GeneralizedBeam, ThinWalledSection, TimoshenkoBeam
-from composite_laminate_model import (BoundaryConditions, Laminate, LoadCase, ResultsExtractor,
+from shell_fem import (BoundaryConditions, Laminate, LoadCase, ResultsExtractor,
     StructuralGlobalSolver, create_default_library)
 
 WIDTH, HEIGHT = 0.5, 0.25

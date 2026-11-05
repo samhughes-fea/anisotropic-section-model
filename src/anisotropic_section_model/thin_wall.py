@@ -44,8 +44,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from composite_laminate_model.laminate_kinematics import integrate_abd
-from composite_laminate_model.laminate_mechanics import Laminate
+from laminate_constitutive_model.laminate_kinematics import integrate_abd
+from laminate_constitutive_model.laminate_mechanics import Laminate
 
 
 @dataclass(frozen=True)

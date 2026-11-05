@@ -1,7 +1,7 @@
 """Torsion of a blade section, layer by layer: Saint-Venant, restrained warping, distortion.
 
 A prismatic blade segment (NACA 0024, 1 m chord, 6 m long: glass skins, carbon spar
-caps, two glass shear webs, the section of composite-laminate-model's example 20) is clamped at the root and
+caps, two glass shear webs, the section of shell-fem's example 20) is clamped at the root and
 twisted at the tip. Each layer of torsion theory adds one physical contribution, and
 each is checked against a shell model of the same blade (curved Quad8 FSDT, skins on
 their mid-surface):
@@ -33,7 +33,7 @@ from _shared.plotting import DIVERGING, REFERENCE, SEQUENTIAL, SERIES, TEXT_SECO
 from _shared.torsion import (add_rib, contour_coordinate, loop_order, section_nodes, shell_bimoment,
                              shell_section_motion)
 from anisotropic_section_model import GeneralizedBeam, RestrainedTorsionBeam, ThinWalledSection
-from composite_laminate_model import (Airfoil, BladeBuilder, BoundaryConditions, FSDTModel,
+from shell_fem import (Airfoil, BladeBuilder, BoundaryConditions, FSDTModel,
     Laminate, LoadCase, ResultsExtractor, ShearWeb, SkinRegion, Station, StructuralGlobalSolver,
     beam_section_properties, create_default_library)
 
