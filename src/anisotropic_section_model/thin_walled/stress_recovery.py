@@ -1,4 +1,4 @@
-# pre_processing/section_integration/thin_walled/stress_recovery.py
+# anisotropic_section_model/thin_walled/stress_recovery.py
 """Wall and ply stresses of a thin-walled section from its beam solution.
 
 Steps at a point ``s`` of a wall:
@@ -47,7 +47,7 @@ import numpy as np
 import numpy.typing as npt
 from numpy.polynomial import polynomial as P
 
-from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate, strain_rotation
+from anisotropic_section_model.thin_walled.laminate import WallLaminate, strain_rotation
 
 #: mid-surface strains of a wall, order of ``WallLaminate.ABD``
 FULL_WALL_STRAINS: Tuple[str, ...] = ("eps_xx", "eps_ss", "gamma_xs", "kappa_xx", "kappa_ss", "kappa_xs")
@@ -295,7 +295,7 @@ class SaintVenantRecovery:
         self.analysis = analysis
 
     def kept_field(self, wall_id: int, forces: npt.ArrayLike) -> KeptField:
-        from onedfem.pre_processing.section_integration.thin_walled.section_analysis import T_RATE
+        from anisotropic_section_model.thin_walled.section_analysis import T_RATE
 
         f = np.asarray(forces, dtype=np.float64)
         fx = T_RATE @ f

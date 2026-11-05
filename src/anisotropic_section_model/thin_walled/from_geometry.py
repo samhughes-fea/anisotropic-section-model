@@ -1,4 +1,4 @@
-# pre_processing/section_integration/thin_walled/from_geometry.py
+# anisotropic_section_model/thin_walled/from_geometry.py
 """Thin-walled sections cut from an implicit-geometry-kernel blade.
 
 ``implicit_geometry_kernel.BladeGeometry.section_at(z)`` returns a ``SectionCut``: the
@@ -45,8 +45,8 @@ from typing import Dict, Mapping, Optional, Tuple, Union
 
 import numpy as np
 
-from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate
-from onedfem.pre_processing.section_integration.thin_walled.thin_walled_geometry import ThinWalledSection, Wall
+from anisotropic_section_model.thin_walled.laminate import WallLaminate
+from anisotropic_section_model.thin_walled.thin_walled_geometry import ThinWalledSection, Wall
 
 __all__ = ["GeometrySection", "thin_walled_from_cut", "laminate_lookup"]
 
@@ -85,7 +85,7 @@ class GeometrySection:
 
     def analysis(self, hoop: str = "free", n_sub: int = 1):
         """``ThinWalledSectionAnalysis`` of the section (``hoop="free"`` matches the 2D and shell models)."""
-        from onedfem.pre_processing.section_integration.thin_walled.section_analysis import ThinWalledSectionAnalysis
+        from anisotropic_section_model.thin_walled.section_analysis import ThinWalledSectionAnalysis
 
         return ThinWalledSectionAnalysis(self.section, self.laminates, hoop=hoop, n_sub=n_sub)
 

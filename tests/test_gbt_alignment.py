@@ -2,24 +2,27 @@
 
 from __future__ import annotations
 
-import os
-import sys
-
 import numpy as np
 import pytest
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-
-from test_gbt_cross_section_modes import box  # noqa: E402
-
-from onedfem.pre_processing.section_integration.gbt_alignment import (  # noqa: E402
+from anisotropic_section_model.gbt_alignment import (
     align_gbt_sections,
     gbt_signature,
     rotate_gbt_basis,
 )
-from onedfem.pre_processing.section_integration.section_analysis import SectionAnalysis  # noqa: E402
-from onedfem.pre_processing.section_integration.thin_walled.taper import SectionTaper  # noqa: E402
+from anisotropic_section_model.section_analysis import SectionAnalysis
+from anisotropic_section_model.thin_walled import ThinWalledSection, ThinWalledSectionAnalysis, Wall, WallLaminate
+from anisotropic_section_model.thin_walled.taper import SectionTaper
+
+E, NU = 70e9, 0.3
+
+
+def box(b=0.3, h=0.3, t=2e-3, rho=0.0, n_sub=1):
+    """Isotropic square box (as in 1d-fem's tests/test_gbt_cross_section_modes.py)."""
+    pts = {1: (-b / 2, -h / 2), 2: (b / 2, -h / 2), 3: (b / 2, h / 2), 4: (-b / 2, h / 2)}
+    walls = [Wall(1, 1, 2, 1), Wall(2, 2, 3, 1), Wall(3, 3, 4, 1), Wall(4, 4, 1, 1)]
+    return ThinWalledSectionAnalysis(ThinWalledSection(pts, walls), {1: WallLaminate.isotropic(E, NU, t, rho=rho)},
+                                     n_sub=n_sub)
 
 
 def _orthogonal(n, seed):
@@ -30,8 +33,8 @@ def _orthogonal(n, seed):
 @pytest.fixture(scope="module")
 def channel():
     """An unsymmetric section (no doubly symmetric modes): a box with one wall thicker."""
-    from onedfem.pre_processing.section_integration.thin_walled import ThinWalledSection, ThinWalledSectionAnalysis, Wall
-    from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate
+    from anisotropic_section_model.thin_walled import ThinWalledSection, ThinWalledSectionAnalysis, Wall
+    from anisotropic_section_model.thin_walled.laminate import WallLaminate
 
     pts = {1: (-0.15, -0.06), 2: (0.15, -0.06), 3: (0.15, 0.06), 4: (-0.12, 0.06)}
     walls = [Wall(1, 1, 2, 1), Wall(2, 2, 3, 2), Wall(3, 3, 4, 1), Wall(4, 4, 1, 1)]

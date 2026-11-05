@@ -1,4 +1,4 @@
-# pre_processing/section_integration/solid/mesh.py
+# anisotropic_section_model/solid/mesh.py
 """2D finite-element meshes of beam cross-sections, with a material and orientation per element.
 
 A ``SectionMesh`` holds nodes ``(y, z)``, quadratic elements (``T6`` or ``Q8``, see
@@ -33,8 +33,8 @@ from typing import Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from onedfem.pre_processing.section_integration.solid.elements import n_nodes, quadrature, shape
-from onedfem.pre_processing.section_integration.solid.material import SolidMaterial
+from anisotropic_section_model.solid.elements import n_nodes, quadrature, shape
+from anisotropic_section_model.solid.material import SolidMaterial
 
 
 @dataclass(frozen=True)

@@ -1,23 +1,23 @@
-# pre_processing/section_integration/thin_walled/__init__.py
+# anisotropic_section_model/thin_walled/__init__.py
 """Thin-walled anisotropic sections: wall laminates, condensed wall laws, mid-line geometry, Saint-Venant analysis."""
 
-from onedfem.pre_processing.section_integration.thin_walled.laminate import (
+from anisotropic_section_model.thin_walled.laminate import (
     DEFAULT_SHEAR_CORRECTION,
     Ply,
     PlyMaterial,
     WallLaminate,
 )
-from onedfem.pre_processing.section_integration.thin_walled.section_analysis import (
+from anisotropic_section_model.thin_walled.section_analysis import (
     FORCES,
     STRAINS,
     ThinWalledSectionAnalysis,
     stiffness_about,
 )
-from onedfem.pre_processing.section_integration.thin_walled.thin_walled_geometry import (
+from anisotropic_section_model.thin_walled.thin_walled_geometry import (
     ThinWalledSection,
     Wall,
 )
-from onedfem.pre_processing.section_integration.thin_walled.wall_stiffness import (
+from anisotropic_section_model.thin_walled.wall_stiffness import (
     WALL_RESULTANTS,
     WALL_STRAINS,
     WallStiffness,

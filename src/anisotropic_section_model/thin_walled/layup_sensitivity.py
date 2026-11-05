@@ -1,4 +1,4 @@
-# pre_processing/section_integration/thin_walled/layup_sensitivity.py
+# anisotropic_section_model/thin_walled/layup_sensitivity.py
 """Exact derivatives of thin-walled section properties with respect to ply angles and thicknesses.
 
 A design parameter is one ply of one laminate (``LayupParameter``): its fibre angle (per
@@ -51,8 +51,8 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate
-from onedfem.pre_processing.section_integration.thin_walled.wall_stiffness import WALL_RESULTANTS, WALL_STRAINS  # noqa: F401
+from anisotropic_section_model.thin_walled.laminate import WallLaminate
+from anisotropic_section_model.thin_walled.wall_stiffness import WALL_RESULTANTS, WALL_STRAINS  # noqa: F401
 
 __all__ = ["LayupParameter", "laminate_derivative", "wall_law_derivative", "SectionDerivative", "section_derivative",
            "gbt_section_derivative", "element_section_derivative"]
@@ -96,7 +96,7 @@ def _interface_derivative(lam: WallLaminate, ply: int) -> np.ndarray:
 
 def laminate_derivative(lam: WallLaminate, param: LayupParameter) -> Tuple[np.ndarray, np.ndarray]:
     """``d ABD`` (6, 6) and ``d [m0, m1, m2]`` (the mass moments ``int rho n^p dn``, p = 0, 1, 2)."""
-    from onedfem.pre_processing.section_integration.thin_walled.laminate import strain_rotation
+    from anisotropic_section_model.thin_walled.laminate import strain_rotation
 
     k = int(param.ply)
     if not 0 <= k < len(lam.plies):
@@ -213,7 +213,7 @@ def section_derivative(an, param: LayupParameter, benscoter: bool = False,
     use gives zeros. ``benscoter=True`` adds the derivatives of the Benscoter stiffness and
     the warping inertia, ``geometric=True`` that of the second-order terms.
     """
-    from onedfem.pre_processing.section_integration.thin_walled.section_analysis import _solve
+    from anisotropic_section_model.thin_walled.section_analysis import _solve
 
     lam = an.laminates.get(param.laminate_id)
     used = lam is not None and any(w.laminate_id == param.laminate_id for w in an.section.walls)
@@ -277,7 +277,7 @@ def section_derivative(an, param: LayupParameter, benscoter: bool = False,
     if geometric:
         from types import SimpleNamespace
 
-        from onedfem.pre_processing.section_integration.thin_walled.section_analysis import T_RATE
+        from anisotropic_section_model.thin_walled.section_analysis import T_RATE
 
         rows = type(an)._geometric_rows
         dH = np.zeros((7, 6))
@@ -302,7 +302,7 @@ def _wall_axial_derivative(lam: WallLaminate, param: LayupParameter) -> float:
 
 def _benscoter_derivative(an, laminate_id, dlaw, dmx, dm0, sol, dsol, dKs):
     """``(d benscoter_stiffness, d warping_inertia)``, right-handed (module docstring, step 5)."""
-    from onedfem.pre_processing.section_integration.thin_walled.section_analysis import _solve
+    from anisotropic_section_model.thin_walled.section_analysis import _solve
 
     nd = an.n_dof
     m = an._matrices
@@ -591,7 +591,7 @@ def element_section_derivative(sa, d: SectionDerivative):
     """
     from dataclasses import fields
 
-    from onedfem.pre_processing.section_integration.section_analysis import SectionAnalysis, to_element_voigt
+    from anisotropic_section_model.section_analysis import SectionAnalysis, to_element_voigt
 
     dM = d.mass_matrix.copy()
 
@@ -603,7 +603,7 @@ def element_section_derivative(sa, d: SectionDerivative):
     kw = {f.name: getattr(sa, f.name) for f in fields(sa) if f.init}
     dK = np.array(d.stiffness, dtype=np.float64, copy=True)
     if sa.tapered:
-        from onedfem.pre_processing.section_integration.thin_walled.taper import SectionTaper
+        from anisotropic_section_model.thin_walled.taper import SectionTaper
 
         if sa.taper_parts is None:
             raise NotImplementedError("layup sensitivities of a tapered section need its taper split by laminate "

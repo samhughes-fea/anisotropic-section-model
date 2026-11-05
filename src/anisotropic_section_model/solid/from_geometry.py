@@ -1,4 +1,4 @@
-# pre_processing/section_integration/solid/from_geometry.py
+# anisotropic_section_model/solid/from_geometry.py
 """Conforming 2D section meshes of an implicit-geometry-kernel blade section.
 
 ``section_mesh_from_cut`` meshes a ``SectionCut`` (``BladeGeometry.section_at(z)``) with
@@ -36,9 +36,9 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from onedfem.pre_processing.section_integration.solid.material import SolidMaterial
-from onedfem.pre_processing.section_integration.solid.mesh import SectionMesh
-from onedfem.pre_processing.section_integration.thin_walled.from_geometry import laminate_lookup
+from anisotropic_section_model.solid.material import SolidMaterial
+from anisotropic_section_model.solid.mesh import SectionMesh
+from anisotropic_section_model.thin_walled.from_geometry import laminate_lookup
 
 __all__ = ["section_mesh_from_cut", "write_section_mesh_2d"]
 

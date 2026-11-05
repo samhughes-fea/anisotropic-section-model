@@ -1,4 +1,4 @@
-# pre_processing/section_integration/solid/elements.py
+# anisotropic_section_model/solid/elements.py
 """Quadratic 2D section elements: 6-node triangles (``T6``) and 8-node quadrilaterals (``Q8``).
 
 Node order follows Gmsh: corners first (counter-clockwise), then the mid-side nodes, the

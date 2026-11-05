@@ -1,4 +1,4 @@
-# pre_processing/section_integration/closed_form.py
+# anisotropic_section_model/closed_form.py
 """Closed-form section properties: rectangle, I-section, channel (A, I_y, I_z, J_t, kappa, y_sc, z_sc)."""
 
 from typing import Dict, Any

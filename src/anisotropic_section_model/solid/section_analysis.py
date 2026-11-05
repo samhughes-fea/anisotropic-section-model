@@ -1,4 +1,4 @@
-# pre_processing/section_integration/solid/section_analysis.py
+# anisotropic_section_model/solid/section_analysis.py
 """Saint-Venant analysis of beam sections meshed in 2D: ``SolidSectionAnalysis``.
 
 The Giavotto method (Giavotto, Borri et al. 1983), as implemented in BECAS (Blasques and
@@ -69,10 +69,10 @@ import numpy.typing as npt
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from onedfem.pre_processing.section_integration.solid.elements import shape
-from onedfem.pre_processing.section_integration.solid.material import bond_matrix, material_axes
-from onedfem.pre_processing.section_integration.solid.mesh import SectionMesh
-from onedfem.pre_processing.section_integration.thin_walled.section_analysis import CLASSICAL, GEOMETRIC_TERMS, T_RATE
+from anisotropic_section_model.solid.elements import shape
+from anisotropic_section_model.solid.material import bond_matrix, material_axes
+from anisotropic_section_model.solid.mesh import SectionMesh
+from anisotropic_section_model.thin_walled.section_analysis import CLASSICAL, GEOMETRIC_TERMS, T_RATE
 
 __all__ = ["SolidSectionAnalysis", "PointStress", "BENSCOTER_STRAINS"]
 

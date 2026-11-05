@@ -1,4 +1,4 @@
-# pre_processing/section_integration/thin_walled/laminate.py
+# anisotropic_section_model/thin_walled/laminate.py
 """Classical laminate theory for the walls of a thin-walled beam section.
 
 Each wall of a section is a laminate. This module builds its membrane,

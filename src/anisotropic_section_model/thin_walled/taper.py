@@ -1,4 +1,4 @@
-# pre_processing/section_integration/thin_walled/taper.py
+# anisotropic_section_model/thin_walled/taper.py
 """Taper coupling of a thin-walled section: the Resal effect.
 
 In a tapered beam the walls are not parallel to the beam axis. A wall point at ``r(x) =
@@ -39,9 +39,9 @@ from typing import Dict, Mapping, Optional
 import numpy as np
 import numpy.typing as npt
 
-from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate
-from onedfem.pre_processing.section_integration.thin_walled.thin_walled_geometry import ThinWalledSection
-from onedfem.pre_processing.section_integration.thin_walled.wall_stiffness import beam_wall_stiffness
+from anisotropic_section_model.thin_walled.laminate import WallLaminate
+from anisotropic_section_model.thin_walled.thin_walled_geometry import ThinWalledSection
+from anisotropic_section_model.thin_walled.wall_stiffness import beam_wall_stiffness
 
 __all__ = ["SectionTaper", "section_taper", "section_taper_from_geometry"]
 
@@ -163,7 +163,7 @@ def section_taper_from_geometry(
     the same wall topology, which a small ``step`` gives; if they do not the step is halved,
     up to four times.
     """
-    from onedfem.pre_processing.section_integration.thin_walled.from_geometry import thin_walled_from_cut
+    from anisotropic_section_model.thin_walled.from_geometry import thin_walled_from_cut
 
     h = float(step)
     for _ in range(5):

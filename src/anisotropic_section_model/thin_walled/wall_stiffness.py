@@ -1,4 +1,4 @@
-# pre_processing/section_integration/thin_walled/wall_stiffness.py
+# anisotropic_section_model/thin_walled/wall_stiffness.py
 """Condensed wall stiffness for beam and cross-section-mode theories.
 
 A beam theory does not carry every wall resultant. Resultants it does not
@@ -35,7 +35,7 @@ from typing import Iterable, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate
+from anisotropic_section_model.thin_walled.laminate import WallLaminate
 
 WALL_STRAINS: Tuple[str, ...] = (
     "eps_xx", "eps_ss", "gamma_xs", "kappa_xx", "kappa_ss", "kappa_xs",

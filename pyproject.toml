@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Sam Hughes" }]
 requires-python = ">=3.11"
 # walls are laminates: Laminate and integrate_abd come from laminate-constitutive-model
-dependencies = ["numpy>=1.22", "laminate-constitutive-model>=0.2.0"]
+dependencies = ["numpy>=1.22", "scipy>=1.8", "laminate-constitutive-model>=0.2.0"]
 keywords = ["composite", "thin-walled beam", "torsion", "warping", "generalized beam theory",
             "Timoshenko", "wind turbine blade", "wing"]
 classifiers = [

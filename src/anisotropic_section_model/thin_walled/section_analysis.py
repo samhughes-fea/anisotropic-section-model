@@ -1,4 +1,4 @@
-# pre_processing/section_integration/thin_walled/section_analysis.py
+# anisotropic_section_model/thin_walled/section_analysis.py
 """Saint-Venant analysis of anisotropic thin-walled sections.
 
 Builds the fully coupled 6 x 6 Timoshenko stiffness of a thin-walled section
@@ -91,12 +91,12 @@ from typing import Dict, List, Mapping, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from onedfem.pre_processing.section_integration.thin_walled.laminate import WallLaminate
-from onedfem.pre_processing.section_integration.thin_walled.thin_walled_geometry import (
+from anisotropic_section_model.thin_walled.laminate import WallLaminate
+from anisotropic_section_model.thin_walled.thin_walled_geometry import (
     ThinWalledSection,
     Wall,
 )
-from onedfem.pre_processing.section_integration.thin_walled.wall_stiffness import (
+from anisotropic_section_model.thin_walled.wall_stiffness import (
     condensed_wall_stiffness,
 )
 

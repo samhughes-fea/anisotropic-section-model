@@ -1,4 +1,4 @@
-# pre_processing/section_integration/section_analysis.py
+# anisotropic_section_model/section_analysis.py
 """Section constitutive data shared by every beam element: ``SectionAnalysis``.
 
 A ``SectionAnalysis`` holds the section stiffness that elements turn into
@@ -241,7 +241,7 @@ class SectionAnalysis:
         rebuilt that way first.
         """
         if (gbt or gbt_modes or gbt_shear_modes) and analysis.hoop != "restrained":
-            from onedfem.pre_processing.section_integration.thin_walled.section_analysis import ThinWalledSectionAnalysis
+            from anisotropic_section_model.thin_walled.section_analysis import ThinWalledSectionAnalysis
 
             analysis = ThinWalledSectionAnalysis(analysis.section, analysis.laminates, hoop="restrained",
                                                  n_sub=analysis.n_sub)
@@ -265,7 +265,7 @@ class SectionAnalysis:
         K_gbt = M_gbt = G_gbt = mom = brazier = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
-            from onedfem.pre_processing.section_integration.thin_walled.cross_section_modes import CrossSectionModes
+            from anisotropic_section_model.thin_walled.cross_section_modes import CrossSectionModes
 
             modes = CrossSectionModes(analysis)
             n_sv = modes.n_sv_warping
@@ -327,7 +327,7 @@ class SectionAnalysis:
         K_gbt = M_gbt = G_gbt = mom = brazier = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
-            from onedfem.pre_processing.section_integration.solid.cross_section_modes import SolidCrossSectionModes
+            from anisotropic_section_model.solid.cross_section_modes import SolidCrossSectionModes
 
             modes = SolidCrossSectionModes(analysis, max_modes=max(int(gbt_modes), 1))
             n_sv = modes.n_sv_warping

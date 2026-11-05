@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from onedfem.pre_processing.section_integration.ply_failure import (
+from anisotropic_section_model.ply_failure import (
     CRITERIA,
     PlyStrength,
     exposures,

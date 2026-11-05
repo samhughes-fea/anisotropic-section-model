@@ -1,4 +1,4 @@
-# pre_processing/section_integration/solid/layup_sensitivity.py
+# anisotropic_section_model/solid/layup_sensitivity.py
 """Exact derivatives of a 2D-meshed section's properties with respect to ply angles.
 
 A parameter is one ply of one laminate (``thin_walled.layup_sensitivity.LayupParameter``):
@@ -36,8 +36,8 @@ import numpy as np
 import numpy.typing as npt
 import scipy.sparse as sp
 
-from onedfem.pre_processing.section_integration.solid.material import _PAIRS, bond_matrix, material_axes
-from onedfem.pre_processing.section_integration.thin_walled.layup_sensitivity import LayupParameter, SectionDerivative
+from anisotropic_section_model.solid.material import _PAIRS, bond_matrix, material_axes
+from anisotropic_section_model.thin_walled.layup_sensitivity import LayupParameter, SectionDerivative
 
 __all__ = ["material_derivative", "solid_section_derivative"]
 

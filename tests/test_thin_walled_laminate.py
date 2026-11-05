@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from onedfem.pre_processing.section_integration.thin_walled import (
+from anisotropic_section_model.thin_walled import (
     Ply,
     PlyMaterial,
     WallLaminate,
@@ -56,7 +56,7 @@ def test_Q_bar_matches_textbook_formulas(ang):
 def test_Q_bar_strain_energy_invariance():
     rng = np.random.default_rng(0)
     ply = Ply(CFRP, 37.0, T)
-    from onedfem.pre_processing.section_integration.thin_walled.laminate import strain_rotation
+    from anisotropic_section_model.thin_walled.laminate import strain_rotation
 
     Tm = strain_rotation(ply.angle_rad)
     for _ in range(5):

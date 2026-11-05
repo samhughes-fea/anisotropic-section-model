@@ -15,14 +15,14 @@ pytest.importorskip("implicit_geometry_kernel")
 
 from implicit_geometry_kernel import Airfoil, BladeGeometry, Station  # noqa: E402
 
-from onedfem.pre_processing.section_integration.solid.from_geometry import (  # noqa: E402
+from anisotropic_section_model.solid.from_geometry import (  # noqa: E402
     section_mesh_from_cut,
     write_section_mesh_2d,
 )
-from onedfem.pre_processing.section_integration.solid.mesh import parse_section_mesh_2d  # noqa: E402
-from onedfem.pre_processing.section_integration.solid.section_analysis import SolidSectionAnalysis  # noqa: E402
-from onedfem.pre_processing.section_integration.thin_walled import Ply, PlyMaterial, WallLaminate  # noqa: E402
-from onedfem.pre_processing.section_integration.thin_walled.from_geometry import thin_walled_from_cut  # noqa: E402
+from anisotropic_section_model.solid.mesh import parse_section_mesh_2d  # noqa: E402
+from anisotropic_section_model.solid.section_analysis import SolidSectionAnalysis  # noqa: E402
+from anisotropic_section_model.thin_walled import Ply, PlyMaterial, WallLaminate  # noqa: E402
+from anisotropic_section_model.thin_walled.from_geometry import thin_walled_from_cut  # noqa: E402
 
 GLASS = PlyMaterial(E1=38.6e9, E2=8.27e9, G12=4.14e9, nu12=0.26, G13=4.14e9, G23=3.063e9, rho=1800.0)
 CARBON = PlyMaterial(E1=181e9, E2=10.3e9, G12=7.17e9, nu12=0.28, G13=7.17e9, G23=3.679e9, rho=1600.0)

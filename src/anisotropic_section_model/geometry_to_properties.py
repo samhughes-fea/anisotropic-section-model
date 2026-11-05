@@ -1,9 +1,9 @@
-# pre_processing/section_integration/geometry_to_properties.py
+# anisotropic_section_model/geometry_to_properties.py
 """Map section geometry to properties (A, I_y, I_z, J_t, kappa, y_sc, z_sc, optional Gamma)."""
 
 from typing import Dict, Any, Optional
 
-from onedfem.pre_processing.section_integration.closed_form import (
+from anisotropic_section_model.closed_form import (
     rectangle_properties,
     i_section_properties,
     channel_properties,

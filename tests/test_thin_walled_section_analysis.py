@@ -4,14 +4,14 @@ import numpy as np
 import pytest
 from numpy.polynomial.legendre import leggauss
 
-from onedfem.pre_processing.section_integration.thin_walled import (
+from anisotropic_section_model.thin_walled import (
     Ply,
     PlyMaterial,
     ThinWalledSection,
     Wall,
     WallLaminate,
 )
-from onedfem.pre_processing.section_integration.thin_walled.section_analysis import (
+from anisotropic_section_model.thin_walled.section_analysis import (
     ThinWalledSectionAnalysis,
     stiffness_about,
     translation_matrix,
@@ -256,27 +256,6 @@ def test_mass_properties():
 def test_missing_laminate():
     with pytest.raises(ValueError, match="no laminate"):
         ThinWalledSectionAnalysis(box(0.4, 0.2), {1: iso(1e-3)})
-
-
-def test_section_analyses_from_files(tmp_path):
-    from onedfem.pre_processing.section_integration.thin_walled.job_input import section_analyses_from_files
-
-    (tmp_path / "laminate.txt").write_text(
-        "[Ply_Material]\n[material_id] [E1] [E2] [G12] [nu12] [G13] [G23]\n"
-        f"1 {E} {E} {G} {NU} {G} {G}\n"
-        "[Laminate]\n[laminate_id] [ply] [material_id] [angle_deg] [thickness]\n1 1 1 0.0 0.002\n",
-        encoding="utf-8",
-    )
-    (tmp_path / "section_geometry.txt").write_text(
-        "[Section_Point]\n[section_id] [point_id] [y] [z]\n"
-        "1 1 -0.2 -0.1\n1 2 0.2 -0.1\n1 3 0.2 0.1\n1 4 -0.2 0.1\n"
-        "[Section_Wall]\n[section_id] [wall_id] [point_start] [point_end] [laminate_id]\n"
-        "1 1 1 2 1\n1 2 2 3 1\n1 3 3 4 1\n1 4 4 1 1\n",
-        encoding="utf-8",
-    )
-    out = section_analyses_from_files(str(tmp_path / "laminate.txt"), str(tmp_path / "section_geometry.txt"), hoop="free")
-    K = out[1].stiffness
-    assert K[0, 0] == pytest.approx(E * 1.2 * 0.002, rel=1e-10)
 
 
 def test_flat_strip_has_classical_but_no_timoshenko_stiffness():

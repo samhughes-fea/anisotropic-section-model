@@ -1,4 +1,4 @@
-# pre_processing/section_integration/thin_walled/thin_walled_geometry.py
+# anisotropic_section_model/thin_walled/thin_walled_geometry.py
 """Mid-line geometry of a thin-walled beam section.
 
 A section is a graph: points in the section plane ``(y, z)`` joined by

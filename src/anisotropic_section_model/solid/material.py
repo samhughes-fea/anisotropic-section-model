@@ -1,4 +1,4 @@
-# pre_processing/section_integration/solid/material.py
+# anisotropic_section_model/solid/material.py
 """Three-dimensional orthotropic materials for 2D section meshes, and their rotation to section axes.
 
 Axes

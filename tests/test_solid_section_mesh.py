@@ -5,11 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from onedfem.pre_processing.section_integration.solid.elements import quadrature, shape
-from onedfem.pre_processing.section_integration.solid.material import SolidMaterial, bond_matrix, material_axes
-from onedfem.pre_processing.section_integration.solid.mesh import SectionMesh, parse_section_mesh_2d, read_gmsh
-from onedfem.pre_processing.section_integration.thin_walled import ThinWalledSection, Wall, WallLaminate
-from onedfem.pre_processing.section_integration.thin_walled.laminate import Ply, PlyMaterial
+from anisotropic_section_model.solid.elements import quadrature, shape
+from anisotropic_section_model.solid.material import SolidMaterial, bond_matrix, material_axes
+from anisotropic_section_model.solid.mesh import SectionMesh, parse_section_mesh_2d, read_gmsh
+from anisotropic_section_model.thin_walled import ThinWalledSection, Wall, WallLaminate
+from anisotropic_section_model.thin_walled.laminate import Ply, PlyMaterial
 
 CFRP = PlyMaterial(E1=135e9, E2=10e9, G12=5e9, nu12=0.3, G13=5e9, G23=3.8e9, rho=1550.0)
 NODES = {"Q8": np.array([[-1, -1], [1, -1], [1, 1], [-1, 1], [0, -1], [1, 0], [0, 1], [-1, 0]], float),
