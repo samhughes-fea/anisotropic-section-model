@@ -19,6 +19,12 @@ box spar, with the shear terms checked against the tip deflection of short and l
 cantilevers, and on six stations of the IEA 15 MW blade against the published 6 x 6.
 
 Run with ``--reuse`` to redraw the figures from ``data/results.json`` without solving.
+
+The IEA 15 MW stations come from the private reference-blades catalogue (see
+``_shared/reference_blades.py``). Without it the box spar part runs on its own and the
+IEA 15 MW results already in ``data/results.json`` are kept. The published 6 x 6 is blade
+input data, so it is not written to ``data/results.json``; it is read from the
+catalogue whenever the IEA 15 MW figures are drawn.
 """
 
 import json
@@ -30,7 +36,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 
-from _shared.iea15mw import DATA, build_segment
+from _shared.reference_blades import ReferenceBladesUnavailable
+
+try:
+    from _shared.iea15mw import DATA, build_segment
+except ReferenceBladesUnavailable as exc:  # the blade lives in the private catalogue
+    DATA, build_segment, IEA_MISSING = None, None, str(exc)
+else:
+    IEA_MISSING = None
 from _shared.plotting import DIVERGING, REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import add_rib, box_spar, section_nodes
 from anisotropic_section_model import RestrainedTorsionBeam, ThinWalledSection
@@ -193,7 +206,6 @@ def solve_iea():
         sec = ThinWalledSection.from_blade_mesh(blade)
         rows.append({"r": st["r"], "span": st["span_fraction"], "chord": st["chord"], "pitch_axis": st["pitch_axis"],
                      "shell_K6": props.stiffness_6x6.tolist(), "thin_K6": sec.timoshenko_stiffness().tolist(),
-                     "pub_K6": publish_frame(st["published"]["K"]).tolist(),
                      "shell_EGamma": props.EGamma, "shell_S": props.warping_shear_stiffness,
                      "thin_EGamma": sec.EGamma, "thin_S": sec.S_warping, "thin_mu": sec.benscoter_mu,
                      "elements": len(blade.mesh.shell_elements)})
@@ -403,19 +415,33 @@ def report(box, rows):
         print(line)
 
 
+def with_published(rows):
+    """Add the published 6 x 6 (blade input data, read from the catalogue) to each row."""
+    by_r = {round(st["r"], 6): st for st in DATA["stations"]}
+    return [dict(r, pub_K6=publish_frame(by_r[round(r["r"], 6)]["published"]["K"]).tolist()) for r in rows]
+
+
 def main():
-    if "--reuse" in sys.argv and RESULTS.exists():
-        data = json.loads(RESULTS.read_text())
+    saved = json.loads(RESULTS.read_text()) if RESULTS.exists() else None
+    if "--reuse" in sys.argv and saved:
+        data = saved
     else:
         lib = create_default_library()
-        data = {"box": solve_box(lib), "iea": solve_iea()}
+        data = {"box": solve_box(lib),
+                "iea": solve_iea() if IEA_MISSING is None else (saved or {}).get("iea", [])}
         RESULTS.parent.mkdir(exist_ok=True)
         RESULTS.write_text(json.dumps(data, indent=1))
+    if IEA_MISSING is None and data["iea"]:
+        data["iea"] = with_published(data["iea"])
+    else:
+        print(f"IEA 15 MW part skipped: {IEA_MISSING}")
+        data["iea"] = []
     report(data["box"], data["iea"])
     figure_box(data["box"])
     figure_deflection(data["box"])
     figure_warping(data["box"])
-    figure_iea(data["iea"])
+    if data["iea"]:
+        figure_iea(data["iea"])
 
 
 if __name__ == "__main__":

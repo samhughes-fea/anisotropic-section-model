@@ -45,7 +45,7 @@ examples/
 ├── _shared/
 │   ├── plotting.py             plot style, colours, save()
 │   ├── iea15mw.py              IEA 15 MW blade stations as BladeBuilder regions and laminates
-│   ├── data/                   the IEA 15 MW sections (and the WISDEM script that wrote them)
+│   ├── reference_blades.py     finds the private reference-blades checkout (IEA 15 MW sections)
 │   └── torsion.py              box spar shell, ribs, shear-flow torques, shell twist, bimoment
 │                                and wall stress resultants
 └── NN_<name>/
