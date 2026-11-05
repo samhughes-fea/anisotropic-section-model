@@ -47,8 +47,8 @@ python examples/05_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.p
 
 | Model | Tip [mm] | / shell |
 |---|---:|---:|
-| Euler-Bernoulli | 3.905 | 0.755 |
-| Timoshenko, thin-wall 6 × 6 | 5.194 | 1.005 |
+| Euler-Bernoulli | 3.904 | 0.755 |
+| Timoshenko, thin-wall 6 × 6 | 5.191 | 1.004 |
 | Timoshenko, shell 6 × 6 | 5.125 | 0.991 |
 | GBT, plane sections | 5.003 | 0.968 |
 | GBT + all shear-lag modes | 5.169 | 1.000 |
@@ -87,7 +87,7 @@ python examples/05_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.p
 | none | 3.816 / 2.281 | 3.828 / 2.392 | 2.807 / 2.807 |
 | every 0.75 m | 2.783 / 2.493 | 2.881 / 2.606 | 2.807 / 2.807 |
 
-(Timoshenko gives 2.671 mm.)
+(Timoshenko gives 2.669 mm.)
 
 - Unlike the box of example 04, the blade section's beam deflection and its distortion
   are the same order: the skin moves 43% more than the beam does and the webs 15% less,

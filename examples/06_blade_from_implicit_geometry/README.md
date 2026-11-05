@@ -82,7 +82,7 @@ to example 20's region-based shell model:
 
 | Route | EA | EI_x | EI_y | GJ |
 |---|---|---|---|---|
-| Thin wall, from the cut, against the thin wall from the region mesh | −0.1% | 0.0% | −0.9% | +0.2% |
+| Thin wall, from the cut, against the thin wall from the region mesh | −0.1% | 0.0% | −1.0% | +0.2% |
 | Thin wall, from the geometry's mesh, against the same | −0.2% | −0.1% | −1.0% | +0.6% |
 | Shell (`beam_section_properties`), geometry mesh against region mesh | −0.1% | +0.1% | −1.0% | +0.5% |
 
@@ -94,11 +94,12 @@ the cap to the webs' outer faces and steps at the bond ends. Even so, they agree
 The thin-walled section's edgewise stiffness EI_y is about 11% below the shell's, on
 either mesh (2.13 against 2.38–2.41 × 10⁷ N m²). The gap is between the two methods and
 the same for both meshes, so it does not come from the geometry. It is not
-investigated here.
+investigated here. Flapwise, the two methods agree: EI_x 1.148 against 1.146 × 10⁷ N m²
+on the region mesh.
 
 Along the tapered segment, the thin-walled section from the geometry's shell mesh
 matches `from_geometry` to within 0.3% at every element-edge section. The root is 17
-times stiffer than the tip in torsion and 02 times in flapwise bending. Most of that
+times stiffer than the tip in torsion and 28 times in flapwise bending. Most of that
 comes from the chord: the section scales roughly with chord³ for bending and torsion.
 
 Any of the 40 layouts can be cut and meshed in the same way:

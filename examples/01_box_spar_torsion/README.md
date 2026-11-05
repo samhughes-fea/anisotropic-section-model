@@ -84,8 +84,8 @@ the box centre.
 | Model | Tip twist [mrad] | Against the shell |
 |---|---:|---:|
 | Saint-Venant | 2.0766 | +0.28% |
-| Vlasov | 2.0170 | −2.60% |
-| Benscoter (closed form) | 2.0512 | −0.95% |
+| Vlasov | 2.0169 | −2.60% |
+| Benscoter (closed form) | 2.0511 | −0.95% |
 | GBT, rigid section | 2.0499 | −1.01% |
 | GBT + distortion | 2.0704 | −0.02% |
 | Shell | 2.0708 | |
