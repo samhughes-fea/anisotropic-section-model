@@ -28,6 +28,12 @@ Public API
 ----------
 PlyMaterial, Ply, WallLaminate.
 
+laminate-constitutive-model plugs in: ``WallLaminate.from_laminate`` takes its
+``Laminate`` and ``PlyMaterial.from_material_card`` its ``MaterialCard``. Its shell axes
+``(x, y, z)`` are the wall's ``(x, s, n)`` and ply angles are measured the same way, so
+``A``, ``B`` and ``D`` carry over unchanged; its transverse shear order is
+``[gamma_yz, gamma_xz] = [gamma_sn, gamma_xn]``, the reverse of this module's.
+
 See Also
 --------
 docs/element_library/thin_walled_section_walls.md
@@ -88,6 +94,18 @@ class PlyMaterial:
         """Isotropic material with ``G = E / (2 (1 + nu))`` in every plane."""
         G = E / (2.0 * (1.0 + nu))
         return cls(E1=E, E2=E, G12=G, nu12=nu, G13=G, G23=G, rho=rho)
+
+    @classmethod
+    def from_elastic(cls, elastic, rho: float = 0.0) -> "PlyMaterial":
+        """From laminate-constitutive-model's ``ElasticProperties3D`` (``E3``, ``v13``, ``v23``
+        are not used by a wall laminate)."""
+        return cls(E1=elastic.E1, E2=elastic.E2, G12=elastic.G12, nu12=elastic.v12,
+                   G13=elastic.G13, G23=elastic.G23, rho=rho)
+
+    @classmethod
+    def from_material_card(cls, card) -> "PlyMaterial":
+        """From laminate-constitutive-model's ``MaterialCard``, with its density."""
+        return cls.from_elastic(card.elastic, card.density)
 
     @property
     def nu21(self) -> float:
@@ -216,6 +234,18 @@ class WallLaminate:
                   shear_correction: float = DEFAULT_SHEAR_CORRECTION) -> "WallLaminate":
         """Single isotropic ply of the given thickness."""
         return cls([Ply(PlyMaterial.isotropic(E, nu, rho), 0.0, thickness)], shear_correction)
+
+    @classmethod
+    def from_laminate(cls, laminate, shear_correction: float = DEFAULT_SHEAR_CORRECTION) -> "WallLaminate":
+        """From laminate-constitutive-model's ``Laminate`` (plies bottom to top).
+
+        The wall's reference surface is its mid-surface, so the laminate must have no
+        ``offset``; offset walls are placed by the section geometry instead.
+        """
+        if getattr(laminate, "offset", 0.0) != 0.0:
+            raise ValueError(f"WallLaminate.from_laminate needs a laminate without offset, got {laminate.offset}")
+        plies = [Ply(PlyMaterial.from_material_card(p.material), p.angle, p.thickness) for p in laminate.plies]
+        return cls(plies, shear_correction)
 
     @property
     def thickness(self) -> float:

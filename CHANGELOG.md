@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **laminate-constitutive-model plugs into the moved section code.** `ply_failure` now
+  evaluates its criteria with LCM's array exposures (`ply_exposures`, new in LCM after
+  0.2.0); results match 1d-fem's own implementation to 1e-12 (`tests/test_lcm_adapters.py`).
+  `PlyStrength` keeps its defaults (`S13 = S12`, `S23 = R_TT`, `F_star = -1/2`) and gains
+  `from_strength_properties`; `F_star` must now lie strictly inside (-1, 1).
+  `WallLaminate.from_laminate`, `PlyMaterial.from_elastic` / `from_material_card` and
+  `SolidMaterial.from_elastic` / `from_material_card` take LCM laminates and materials
+  (the transverse shear order is swapped from LCM's `[gamma_yz, gamma_xz]`).
+- CI and the install notes pin laminate-constitutive-model to the commit that adds the
+  exposures, until it is tagged.
 - **1d-fem's section code moves here** (step 6 of the split), with its git history:
   `thin_walled/` (wall laminates and condensed wall laws, Saint-Venant and Benscoter
   analysis, GBT modes, ply stress recovery, layup derivatives, taper), `solid/` (2D

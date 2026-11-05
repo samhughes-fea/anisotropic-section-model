@@ -28,8 +28,10 @@ folded into the API above in a later step):
   and strain order ``[eps_x, kappa_y, kappa_z, gamma_xy, gamma_xz, phi_x]``),
   ``ply_failure``, ``gbt_alignment``, ``closed_form``, ``geometry_to_properties``.
 
-Walls are laminates: the only things this package takes from
-``laminate_constitutive_model`` are ``Laminate`` and ``integrate_abd``. It never
+Walls are laminates: this package takes ``Laminate`` and ``integrate_abd`` from
+``laminate_constitutive_model``, and its array ply-failure exposures for ``ply_failure``;
+LCM laminates and materials plug into the moved code through ``from_laminate`` and
+``from_material_card``. It never
 extracts properties from a shell model; that is
 ``shell_fem.beam_section_properties``, and the two meet only in
 tests and examples.
