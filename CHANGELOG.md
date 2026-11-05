@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- CI and the install notes pin laminate-constitutive-model v0.3.0 (was a commit on its main).
+
+## 0.2.0 - 2026-11-05
+
 - **One section engine.** `ThinWalledSection` keeps its API but takes `EA`, `EI_*`,
   `GJ`, the centroid and shear centre, `EGamma`, `timoshenko_stiffness` and
   `vlasov_stiffness` from the coupled `thin_walled.ThinWalledSectionAnalysis` of its
