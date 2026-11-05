@@ -23,7 +23,7 @@ class ReferenceBladesUnavailable(FileNotFoundError):
 
 
 def reference_blade_file(relpath: str, repo_root: Path = REPO_ROOT) -> Path:
-    """``relpath`` (e.g. ``iea15/derived/precomp_sections.json``) in the checkout."""
+    """``relpath`` (e.g. ``iea15/derived/sections/precomp/precomp_sections.json``) in the checkout."""
     env = os.environ.get("REFERENCE_BLADES_DIR")
     root = Path(env) if env else repo_root / "reference_blades"
     path = root / relpath

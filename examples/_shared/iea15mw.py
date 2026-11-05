@@ -1,6 +1,6 @@
 """The IEA 15 MW reference blade as PreComp sections, rebuilt as shell models.
 
-``iea15/derived/precomp_sections.json`` in the private reference-blades catalogue
+``iea15/derived/sections/precomp/precomp_sections.json`` in the private reference-blades catalogue
 (see ``reference_blades.py``) holds six
 stations of the published blade layup as PreComp sees them: the airfoil, sector
 boundaries on each surface, the laminae of each sector and the webs. These helpers
@@ -22,7 +22,7 @@ from laminate_constitutive_model.laminate_materials_3d import ElasticProperties3
 
 from .reference_blades import reference_blade_file
 
-DATA_FILE = reference_blade_file("iea15/derived/precomp_sections.json")
+DATA_FILE = reference_blade_file("iea15/derived/sections/precomp/precomp_sections.json")
 DATA = json.loads(DATA_FILE.read_text())
 TE_CLOSE = 0.01  # trailing-edge gaps below this fraction of the chord are closed
 

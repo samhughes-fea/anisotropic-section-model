@@ -98,7 +98,7 @@ python examples/03_timoshenko_vlasov_stiffness/timoshenko_vlasov_stiffness.py --
 
 The IEA 15 MW sections and published 6 × 6 are blade input data, so they are not in
 this public repository: they come from the private reference-blades catalogue
-(`iea15/derived/precomp_sections.json`). Clone it to `reference_blades/` at the
+(`iea15/derived/sections/precomp/precomp_sections.json`). Clone it to `reference_blades/` at the
 repository root (git-ignored) or set `REFERENCE_BLADES_DIR`. Without it the box spar
 part runs alone and the committed IEA 15 MW figures and results are left as they are.
 
