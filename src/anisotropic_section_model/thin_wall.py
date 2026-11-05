@@ -32,9 +32,14 @@ curvature of the wall itself, which gives the effective axial stiffness
 Et = 1 / (A^-1)_11 and membrane shear stiffness Gt = 1 / (A^-1)_66 used here
 (``wall_bending="free"`` lets the wall bend too: 1 / a11, 1 / a66 with a the inverse
 ABD), and the plate stiffnesses D11 = 1 / d11 (secondary warping) and D66 = 1 / d66
-(wall twisting). Couplings
-between extension, shear and bending of an unbalanced wall are carried in full by
-``GeneralizedBeam``; the closed-form properties here use the uncoupled values.
+(wall twisting). These classical values are kept in ``section.classical``.
+
+One engine: the headline properties (``EA``, ``EI_*``, ``GJ``, the centroid and shear
+centre, ``EGamma``) and the stiffness matrices come from the coupled
+``thin_walled.ThinWalledSectionAnalysis`` of the same walls (``section.analysis``,
+1d-fem's Giavotto analysis on Kirchhoff walls), which keeps every coupling between
+extension, shear, bending and twist of unbalanced walls. The shear flows, ``omega`` and
+the Benscoter quantities (``Ip``, ``S_warping``) stay classical.
 """
 
 from __future__ import annotations
@@ -70,6 +75,11 @@ def condensed_wall_stiffness(laminate: Laminate) -> np.ndarray:
     return K[np.ix_(keep, keep)] - np.outer(K[keep, 1], K[1, keep]) / K[1, 1]
 
 
+#: positions of this module's strains [gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z] (BeamDyn
+#: order, beam axis z) in 1d-fem's [eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi] (beam axis x)
+BEAMDYN_FROM_ONEDFEM = [3, 4, 0, 1, 2, 5]
+
+
 def _line_integral(fi, fj, gi, gj, b):
     """Integral of the product of two functions linear along a wall of length b."""
     return b / 6.0 * (2.0 * fi * gi + fi * gj + fj * gi + 2.0 * fj * gj)
@@ -92,7 +102,9 @@ class ThinWalledSection:
         wall also bends freely, Et = 1 / a11, Gt = 1 / a66 from the full ABD inverse,
         which is too soft for an unsymmetric wall (a sandwich panel with one thick
         face, a cap on one side of a core): at r = 44 m on the IEA 15 MW blade it
-        reads GJ 16% low. The two are the same for symmetric walls.
+        reads GJ 16% low. The two are the same for symmetric walls. The coupled analysis
+        takes it as its ``hoop`` option (``"restrained"``: no hoop curvature;
+        ``"free"``: no hoop force or moment).
     """
 
     def __init__(self, points, walls: Sequence, wall_bending: str = "restrained"):
@@ -152,6 +164,7 @@ class ThinWalledSection:
         self.thickness = np.array([w.laminate.thickness for w in ws])
         self.areal_density = np.array([sum(p.thickness * p.material.density for p in w.laminate.plies) for w in ws])
         self._solve()
+        self._couple()
 
     # ------------------------------------------------------------ construction
     @classmethod
@@ -365,6 +378,46 @@ class ThinWalledSection:
         self.Ip = float(np.sum(Gt * b * self.r_n**2))
         self.S_warping = max(self.Ip - self.J_membrane, 0.0)
 
+    def _couple(self) -> None:
+        """Replace the headline properties with the coupled section analysis.
+
+        ``_solve`` gives the classical thin-wall values (kept in ``classical``); the
+        coupled analysis (``analysis``, a ``thin_walled.ThinWalledSectionAnalysis``)
+        solves the warping of the whole section with every wall coupling, and is the
+        one engine behind ``EA``, ``EI_*``, ``GJ``, the centres, ``EGamma`` and the
+        stiffness matrices. The two agree for balanced, symmetric walls.
+        """
+        from anisotropic_section_model.thin_walled.laminate import WallLaminate
+        from anisotropic_section_model.thin_walled.section_analysis import ThinWalledSectionAnalysis
+        from anisotropic_section_model.thin_walled.thin_walled_geometry import ThinWalledSection as _Geometry
+        from anisotropic_section_model.thin_walled.thin_walled_geometry import Wall as _GeometryWall
+
+        self.classical = {
+            "EA": self.EA, "EI_xx": self.EI_xx, "EI_yy": self.EI_yy, "EI_xy": self.EI_xy, "GJ": self.GJ,
+            "EGamma": self.EGamma, "centroid": self.centroid, "shear_centre": self.shear_centre,
+        }
+        ids: Dict[int, int] = {}
+        laminates = {}
+        geometry_walls = []
+        for k, w in enumerate(self.walls):
+            lid = ids.setdefault(id(w.laminate), len(ids))
+            if lid not in laminates:
+                lam = w.laminate if w.laminate.offset == 0.0 else w.laminate.with_offset(0.0)
+                laminates[lid] = WallLaminate.from_laminate(lam)
+            geometry_walls.append(_GeometryWall(k, int(w.start), int(w.end), lid))
+        geometry = _Geometry({k: p for k, p in enumerate(self.points)}, geometry_walls)
+        self.analysis = ThinWalledSectionAnalysis(geometry, laminates, hoop=self.wall_bending)
+        a = self.analysis
+        self.centroid = a.tension_centre
+        self.shear_centre = a.shear_centre
+        Kc = self.timoshenko_stiffness(self.centroid)
+        self.EA = float(Kc[2, 2])
+        self.EI_xx = float(Kc[3, 3])
+        self.EI_yy = float(Kc[4, 4])
+        self.EI_xy = float(-Kc[3, 4])
+        self.GJ = float(self.timoshenko_stiffness(self.shear_centre)[5, 5])
+        self.EGamma = a.warping_constant
+
     # ------------------------------------------------------------ derived values
     @property
     def benscoter_mu(self) -> float:
@@ -390,11 +443,11 @@ class ThinWalledSection:
             for p in (self.start[k], self.end[k]):
                 Et_node[p] += self.Et[k]
                 cnt[p] += 1
-        return bimoment * Et_node / cnt * self.omega / self.EGamma
+        return bimoment * Et_node / cnt * self.omega / self.classical["EGamma"]
 
     def wall_warping_resultant(self, bimoment: float) -> Tuple[np.ndarray, np.ndarray]:
         """N_zz at the start and end of every wall for a bimoment."""
-        f = bimoment / self.EGamma * self.Et
+        f = bimoment / self.classical["EGamma"] * self.Et
         return f * self.omega[self.start], f * self.omega[self.end]
 
     # ------------------------------------------------------------ beam stiffness matrices
@@ -483,7 +536,24 @@ class ThinWalledSection:
         return H
 
     def timoshenko_stiffness(self, reference=(0.0, 0.0)) -> np.ndarray:
-        """6 x 6 Timoshenko stiffness about ``reference`` (in the section axes).
+        """6 x 6 Timoshenko stiffness about ``reference`` (in the section axes), fully coupled.
+
+        Order (as BeamDyn and the windIO files): [Fx, Fy, N, Mx, My, Mz] against
+        [gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z], with gamma_x = u_x' - theta_y
+        and gamma_y = u_y' + theta_x. From the coupled section analysis (``analysis``),
+        whose axes are 1d-fem's: its beam axis x is z here and its (y, z) are (x, y), so
+        its strains [eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi] are
+        [eps, kappa_x, kappa_y, gamma_x, gamma_y, kappa_z] here. Every coupling between
+        extension, bending, shear and torsion from unbalanced walls is included.
+        """
+        from anisotropic_section_model.thin_walled.section_analysis import stiffness_about
+
+        K = stiffness_about(self.analysis.stiffness, float(reference[0]), float(reference[1]))
+        p = BEAMDYN_FROM_ONEDFEM
+        return K[np.ix_(p, p)]
+
+    def classical_timoshenko_stiffness(self, reference=(0.0, 0.0)) -> np.ndarray:
+        """Classical thin-wall 6 x 6 stiffness about ``reference``, kept as a check on ``timoshenko_stiffness``.
 
         Order (as BeamDyn and the windIO files): [Fx, Fy, N, Mx, My, Mz] against
         [gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z], with gamma_x = u_x' - theta_y
@@ -519,6 +589,12 @@ class ThinWalledSection:
         """(start, end) point pairs of the walls, for plotting."""
         return [(self.points[a], self.points[b]) for a, b in zip(self.start, self.end)]
 
+    def classical_summary(self) -> Dict[str, float]:
+        """The classical thin-wall values that the coupled analysis replaced."""
+        c = self.classical
+        return {"EA": c["EA"], "EI_xx": c["EI_xx"], "EI_yy": c["EI_yy"], "GJ": c["GJ"], "EGamma": c["EGamma"],
+                "shear_centre_x": c["shear_centre"][0], "shear_centre_y": c["shear_centre"][1]}
+
     def summary(self) -> Dict[str, float]:
         return {
             "EA": self.EA, "EI_xx": self.EI_xx, "EI_yy": self.EI_yy, "GJ": self.GJ,
@@ -533,4 +609,4 @@ class ThinWalledSection:
                 f"GJ={self.GJ:.4g}, EGamma={self.EGamma:.4g})")
 
 
-__all__ = ["Wall", "ThinWalledSection", "condensed_wall_stiffness"]
+__all__ = ["BEAMDYN_FROM_ONEDFEM", "Wall", "ThinWalledSection", "condensed_wall_stiffness"]

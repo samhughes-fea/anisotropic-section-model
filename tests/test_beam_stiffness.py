@@ -49,10 +49,14 @@ def test_channel_shear_centre_and_web_shear(aluminium):
     b, h = 0.1, 0.2
     s = ThinWalledSection(np.array([(0, 0), (b, 0), (b, h), (0, h)]), [(0, 1, aluminium), (1, 2, aluminium),
                                                                          (2, 3, aluminium)])
-    C = np.linalg.inv(s.timoshenko_stiffness())
+    C = np.linalg.inv(s.classical_timoshenko_stiffness())
     xs, ys = -C[5, 1] / C[5, 5], C[5, 0] / C[5, 5]
     assert xs == pytest.approx(b + 3 * b**2 / (h + 6 * b), rel=1e-9)  # textbook shear centre
     assert ys == pytest.approx(h / 2, rel=1e-9)
+    # the coupled analysis lets the walls bend too (Kirchhoff walls), a t / b effect
+    C = np.linalg.inv(s.timoshenko_stiffness())
+    assert -C[5, 1] / C[5, 5] == pytest.approx(b + 3 * b**2 / (h + 6 * b), rel=1e-3)
+    assert C[5, 0] / C[5, 5] == pytest.approx(h / 2, rel=1e-9)
     # open section: Saint-Venant torsion only from the walls' twisting
     K = s.timoshenko_stiffness(s.shear_centre)
     assert K[5, 5] == pytest.approx(s.GJ, rel=1e-6)

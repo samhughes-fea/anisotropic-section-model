@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **One section engine.** `ThinWalledSection` keeps its API but takes `EA`, `EI_*`,
+  `GJ`, the centroid and shear centre, `EGamma`, `timoshenko_stiffness` and
+  `vlasov_stiffness` from the coupled `thin_walled.ThinWalledSectionAnalysis` of its
+  walls (`section.analysis`), with every coupling of unbalanced walls. Results for
+  balanced, symmetric walls are unchanged to about 1e-4 (the coupled analysis also
+  counts the walls' own bending); unbalanced walls change by up to about 15%. The
+  classical values stay available as `section.classical`,
+  `classical_timoshenko_stiffness()` and `classical_summary()`, and the shear flows,
+  warping function and Benscoter quantities used by `RestrainedTorsionBeam` and
+  `GeneralizedBeam` are still the classical ones. `wall_bending` maps onto the
+  analysis' `hoop` option.
+- README section on the two axis conventions and the BeamDyn conversion
+  (`BEAMDYN_FROM_ONEDFEM`).
 - **laminate-constitutive-model plugs into the moved section code.** `ply_failure` now
   evaluates its criteria with LCM's array exposures (`ply_exposures`, new in LCM after
   0.2.0); results match 1d-fem's own implementation to 1e-12 (`tests/test_lcm_adapters.py`).
