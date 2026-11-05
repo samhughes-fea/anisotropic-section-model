@@ -20,7 +20,7 @@ jobs:
       - name: Install the constitutive model, and the geometry kernel and shell FE for the tests
         # not on PyPI yet: install them from their repositories
         run: |
-          pip install "laminate-constitutive-model @ git+https://github.com/samhughes-fea/laminate-constitutive-model@v0.2.0"
+          pip install "laminate-constitutive-model @ git+https://github.com/samhughes-fea/laminate-constitutive-model@6d25ab06b8dc79c7c7a6c4b6d40604b8441b6264"
           pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@v0.2.0"
           pip install --no-deps "shell-fem @ git+https://github.com/samhughes-fea/shell-fem@v0.1.0"
       - name: Install package

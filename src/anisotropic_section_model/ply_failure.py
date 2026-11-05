@@ -20,6 +20,11 @@ Stresses are in ply axes (1 fibre, 2 transverse in the ply plane, 3 normal), Voi
   inter-fibre failure on the most stressed action plane, found by a search over the
   plane angle ``theta``. In plane stress it reduces to Puck's modes A, B and C.
 
+The criteria themselves are laminate-constitutive-model's array exposures
+(``ply_exposures`` and friends). ``PlyStrength`` keeps this package's defaults and maps
+onto them: ``S13 = S12``, ``S23`` defaults to Puck's ``R_TT``, and ``F_star`` is the
+Tsai-Wu interaction (``-1/2`` is LCM's ``"tsai-wu"``).
+
 Public API
 ----------
 PlyStrength, CRITERIA, max_stress, tsai_wu, hashin, puck, exposures.
@@ -84,8 +89,16 @@ class PlyStrength:
             v = getattr(self, name)
             if v is not None and not v > 0.0:
                 raise ValueError(f"PlyStrength.{name} must be positive, got {v}")
-        if not -1.0 <= self.F_star <= 1.0:
-            raise ValueError(f"PlyStrength.F_star must lie in [-1, 1], got {self.F_star}")
+        if not -1.0 < self.F_star < 1.0:
+            raise ValueError(f"PlyStrength.F_star must lie in (-1, 1), got {self.F_star}")
+
+    @classmethod
+    def from_strength_properties(cls, strength, **parameters) -> "PlyStrength":
+        """From laminate-constitutive-model's ``StrengthProperties3D``; ``parameters`` sets
+        ``F_star`` and the Puck inclinations. Its ``S13`` is not used (this package takes
+        ``S12`` for ``tau_13``)."""
+        return cls(Xt=strength.Xt, Xc=strength.Xc, Yt=strength.Yt, Yc=strength.Yc, S12=strength.S12,
+                   S23=strength.S23, Zt=strength.Zt, Zc=strength.Zc, **parameters)
 
     @property
     def R_TT(self) -> float:
@@ -105,94 +118,37 @@ class PlyStrength:
         return self.Zc if self.Zc is not None else self.Yc
 
 
-def _stress(s) -> np.ndarray:
-    s = np.asarray(s, dtype=np.float64)
-    if s.shape[-1] != 6:
-        raise ValueError(f"ply stresses must have 6 components (..., 6), got shape {s.shape}")
-    return s
+def _lcm(st: PlyStrength):
+    """The same strengths and parameters in laminate-constitutive-model's terms."""
+    from laminate_constitutive_model.laminate_materials_3d import StrengthProperties3D
+    from laminate_constitutive_model.laminate_ply_exposure import PuckParameters
 
-
-def _quadratic_exposure(a, b) -> np.ndarray:
-    """``f = 1 / RF`` with ``a RF^2 + b RF = 1`` (``a >= 0``); ``f = 0`` for a zero state."""
-    a = np.maximum(np.asarray(a, dtype=np.float64), 0.0)
-    b = np.asarray(b, dtype=np.float64)
-    # 1 / RF = (b + sqrt(b^2 + 4 a)) / 2, the positive root of f^2 - b f - a = 0
-    return 0.5 * (b + np.sqrt(b * b + 4.0 * a))
+    strength = StrengthProperties3D(Xt=st.Xt, Xc=st.Xc, Yt=st.Yt, Yc=st.Yc, S12=st.S12,
+                                    Zt=st.zt, Zc=st.zc, S13=st.S12, S23=st.s23)
+    interaction = "tsai-wu" if st.F_star == -0.5 else st.F_star
+    return strength, interaction, PuckParameters(st.p_TL_t, st.p_TL_c, st.p_TT)
 
 
 def max_stress(s, st: PlyStrength) -> Tuple[np.ndarray, np.ndarray]:
     """Maximum-stress exposure and its governing component (``"s11t"``, ``"s22c"``, ``"t12"`` ...)."""
-    s = _stress(s)
-    s11, s22, s33, t23, t13, t12 = np.moveaxis(s, -1, 0)
-    terms = np.stack([
-        np.where(s11 >= 0, s11 / st.Xt, -s11 / st.Xc),
-        np.where(s22 >= 0, s22 / st.Yt, -s22 / st.Yc),
-        np.where(s33 >= 0, s33 / st.zt, -s33 / st.zc),
-        np.abs(t23) / st.s23,
-        np.abs(t13) / st.S12,
-        np.abs(t12) / st.S12,
-    ])
-    k = np.argmax(terms, axis=0)
-    names = np.array([["s11t", "s11c"], ["s22t", "s22c"], ["s33t", "s33c"], ["t23", "t23"], ["t13", "t13"],
-                      ["t12", "t12"]])
-    comp = np.take_along_axis(np.moveaxis(s, -1, 0), k[None], 0)[0]
-    mode = names[k, (comp < 0).astype(int)]
-    return np.take_along_axis(terms, k[None], 0)[0], mode
+    from laminate_constitutive_model.laminate_ply_exposure import max_stress_exposure
+
+    return max_stress_exposure(s, _lcm(st)[0])
 
 
 def tsai_wu(s, st: PlyStrength) -> np.ndarray:
     """Tsai-Wu exposure (3D, ``F_ij = F_star sqrt(F_ii F_jj)`` for the normal-stress pairs)."""
-    s = _stress(s)
-    s11, s22, s33, t23, t13, t12 = np.moveaxis(s, -1, 0)
-    F1, F2, F3 = 1 / st.Xt - 1 / st.Xc, 1 / st.Yt - 1 / st.Yc, 1 / st.zt - 1 / st.zc
-    F11, F22, F33 = 1 / (st.Xt * st.Xc), 1 / (st.Yt * st.Yc), 1 / (st.zt * st.zc)
-    F12 = st.F_star * np.sqrt(F11 * F22)
-    F13 = st.F_star * np.sqrt(F11 * F33)
-    F23 = st.F_star * np.sqrt(F22 * F33)
-    a = (F11 * s11**2 + F22 * s22**2 + F33 * s33**2 + 2 * F12 * s11 * s22 + 2 * F13 * s11 * s33
-         + 2 * F23 * s22 * s33 + (t23 / st.s23) ** 2 + (t13 / st.S12) ** 2 + (t12 / st.S12) ** 2)
-    b = F1 * s11 + F2 * s22 + F3 * s33
-    return _quadratic_exposure(a, b)
+    from laminate_constitutive_model.laminate_ply_exposure import tsai_wu_exposure
+
+    strength, interaction, _ = _lcm(st)
+    return tsai_wu_exposure(s, strength, interaction)
 
 
 def hashin(s, st: PlyStrength) -> Tuple[np.ndarray, np.ndarray]:
     """Hashin (1980) exposure and mode: ``"FT"``, ``"FC"``, ``"MT"`` or ``"MC"``."""
-    s = _stress(s)
-    s11, s22, s33, t23, t13, t12 = np.moveaxis(s, -1, 0)
-    S, S23 = st.S12, st.s23
-    shear_l = (t12**2 + t13**2) / S**2
-    fibre = np.where(s11 >= 0, np.sqrt((s11 / st.Xt) ** 2 + shear_l), -s11 / st.Xc)
-    sn = s22 + s33
-    shear_t = (t23**2 - s22 * s33) / S23**2
-    mt = np.sqrt(np.maximum((sn / st.Yt) ** 2 + shear_t + shear_l, 0.0))
-    a_mc = (sn / (2 * S23)) ** 2 + shear_t + shear_l
-    b_mc = ((st.Yc / (2 * S23)) ** 2 - 1.0) * sn / st.Yc
-    mc = _quadratic_exposure(a_mc, b_mc)
-    matrix = np.where(sn >= 0, mt, mc)
-    f = np.maximum(fibre, matrix)
-    mode = np.where(fibre >= matrix, np.where(s11 >= 0, "FT", "FC"), np.where(sn >= 0, "MT", "MC"))
-    return f, mode
+    from laminate_constitutive_model.laminate_ply_exposure import hashin_exposure
 
-
-_THETA = np.radians(np.arange(-90.0, 90.0, 1.0))
-
-
-def _puck_iff(s22, s33, t23, t13, t12, st: PlyStrength, theta) -> np.ndarray:
-    """Puck's inter-fibre exposure on the action plane at ``theta`` (broadcast)."""
-    c, sn_ = np.cos(theta), np.sin(theta)
-    sig_n = s22 * c * c + s33 * sn_ * sn_ + 2 * t23 * sn_ * c
-    tau_nt = (s33 - s22) * sn_ * c + t23 * (c * c - sn_ * sn_)
-    tau_n1 = t13 * sn_ + t12 * c
-    RTp, RTT, RTL = st.Yt, st.R_TT, st.S12
-    shear2 = tau_nt**2 + tau_n1**2
-    with np.errstate(invalid="ignore", divide="ignore"):
-        cos2 = np.where(shear2 > 0, tau_nt**2 / shear2, 0.0)
-    sin2 = np.where(shear2 > 0, 1.0 - cos2, 1.0)
-    pt = st.p_TT / RTT * cos2 + st.p_TL_t / RTL * sin2     # p_perp_psi^+ / R_perp_psi^A
-    pc = st.p_TT / RTT * cos2 + st.p_TL_c / RTL * sin2     # p_perp_psi^- / R_perp_psi^A
-    tens = np.sqrt(((1 / RTp - pt) * sig_n) ** 2 + (tau_nt / RTT) ** 2 + (tau_n1 / RTL) ** 2) + pt * sig_n
-    comp = np.sqrt((tau_nt / RTT) ** 2 + (tau_n1 / RTL) ** 2 + (pc * sig_n) ** 2) + pc * sig_n
-    return np.where(sig_n >= 0, tens, comp)
+    return hashin_exposure(s, _lcm(st)[0])
 
 
 def puck(s, st: PlyStrength) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -204,47 +160,19 @@ def puck(s, st: PlyStrength) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     plane stress: A for a tensile normal stress on the fracture plane, B for a compressive
     one on the plane at 0 degrees, C on an inclined plane.
     """
-    s = _stress(s)
-    s11, s22, s33, t23, t13, t12 = (x[..., None] for x in np.moveaxis(s, -1, 0))
-    th = _THETA
-    f_all = _puck_iff(s22, s33, t23, t13, t12, st, th)
-    k = np.argmax(f_all, axis=-1)
-    # parabolic refinement of the maximum
-    n = th.size
-    km, kp = (k - 1) % n, (k + 1) % n
-    f0 = np.take_along_axis(f_all, k[..., None], -1)[..., 0]
-    fm = np.take_along_axis(f_all, km[..., None], -1)[..., 0]
-    fp = np.take_along_axis(f_all, kp[..., None], -1)[..., 0]
-    den = fm - 2 * f0 + fp
-    with np.errstate(invalid="ignore", divide="ignore"):
-        d = np.where(den < 0, 0.5 * (fm - fp) / den, 0.0)
-    d = np.clip(d, -0.5, 0.5)
-    step = th[1] - th[0]
-    th_fp = th[k] + d * step
-    iff = _puck_iff(s22[..., 0], s33[..., 0], t23[..., 0], t13[..., 0], t12[..., 0], st, th_fp)
-    iff = np.maximum(iff, f0)
-    s11 = s11[..., 0]
-    ff = np.where(s11 >= 0, s11 / st.Xt, -s11 / st.Xc)
-    c, sn_ = np.cos(th_fp), np.sin(th_fp)
-    sig_n = s22[..., 0] * c * c + s33[..., 0] * sn_ * sn_ + 2 * t23[..., 0] * sn_ * c
-    iff_mode = np.where(sig_n >= 0, "IFF-A", np.where(np.abs(np.degrees(th_fp)) < 0.5, "IFF-B", "IFF-C"))
-    mode = np.where(ff >= iff, np.where(s11 >= 0, "FFT", "FFC"), iff_mode)
-    return np.maximum(ff, iff), mode, np.degrees(th_fp)
+    from laminate_constitutive_model.laminate_ply_exposure import puck_exposure
+
+    strength, _, params = _lcm(st)
+    return puck_exposure(s, strength, params)
 
 
 def exposures(s, st: PlyStrength) -> Dict[str, np.ndarray]:
     """Every criterion's exposure and mode: ``{"max_stress": f, "max_stress_mode": ..., ...,
     "puck_angle": degrees, "exposure": max over criteria, "margin": 1 / exposure - 1}``."""
-    out: Dict[str, np.ndarray] = {}
-    out["max_stress"], out["max_stress_mode"] = max_stress(s, st)
-    out["tsai_wu"] = tsai_wu(s, st)
-    out["hashin"], out["hashin_mode"] = hashin(s, st)
-    out["puck"], out["puck_mode"], out["puck_angle"] = puck(s, st)
-    f = np.max(np.stack([out[c] for c in CRITERIA]), axis=0)
-    out["exposure"] = f
-    with np.errstate(divide="ignore"):
-        out["margin"] = np.where(f > 0, 1.0 / np.where(f > 0, f, 1.0) - 1.0, np.inf)
-    return out
+    from laminate_constitutive_model.laminate_ply_exposure import ply_exposures
+
+    strength, interaction, params = _lcm(st)
+    return ply_exposures(s, strength, interaction, params)
 
 
 def ply_stress_from_wall(sigma_11, sigma_22, tau_12, tau_xn, tau_sn, sigma_nn, angle_deg) -> npt.NDArray[np.float64]:

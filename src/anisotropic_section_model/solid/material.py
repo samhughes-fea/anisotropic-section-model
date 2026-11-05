@@ -84,6 +84,18 @@ class SolidMaterial:
             nu23 = m.E2 / (2.0 * m.G23) - 1.0
         return cls(m.E1, m.E2, m.E2, m.G12, m.G13, m.G23, m.nu12, m.nu12, nu23, getattr(m, "rho", 0.0))
 
+    @classmethod
+    def from_elastic(cls, elastic, rho: float = 0.0) -> "SolidMaterial":
+        """From laminate-constitutive-model's ``ElasticProperties3D`` (same constants, with
+        ``v12, v13, v23`` as ``nu12, nu13, nu23``)."""
+        e = elastic
+        return cls(e.E1, e.E2, e.E3, e.G12, e.G13, e.G23, e.v12, e.v13, e.v23, rho)
+
+    @classmethod
+    def from_material_card(cls, card) -> "SolidMaterial":
+        """From laminate-constitutive-model's ``MaterialCard``, with its density."""
+        return cls.from_elastic(card.elastic, card.density)
+
     def compliance(self) -> npt.NDArray[np.float64]:
         """``S`` (6, 6) in material axes, Voigt order ``[11, 22, 33, 23, 13, 12]``."""
         S = np.zeros((6, 6))

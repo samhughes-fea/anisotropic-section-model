@@ -35,10 +35,11 @@ The package is not on PyPI yet. It depends on
 (walls are its `Laminate`s). The tests and examples also build shell models with
 [shell-fem](https://github.com/samhughes-fea/shell-fem), which needs
 [implicit-geometry-kernel](https://github.com/samhughes-fea/implicit-geometry-kernel).
-Install them, then this package from a clone:
+Install them, then this package from a clone (laminate-constitutive-model is pinned to
+a commit until its next release, which adds the ply exposures `ply_failure` uses):
 
 ```bash
-pip install "laminate-constitutive-model @ git+https://github.com/samhughes-fea/laminate-constitutive-model@v0.2.0"
+pip install "laminate-constitutive-model @ git+https://github.com/samhughes-fea/laminate-constitutive-model@6d25ab06b8dc79c7c7a6c4b6d40604b8441b6264"
 # for the tests and examples:
 pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@v0.2.0"
 pip install "shell-fem @ git+https://github.com/samhughes-fea/shell-fem@v0.1.0"

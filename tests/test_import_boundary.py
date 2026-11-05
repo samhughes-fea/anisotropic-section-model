@@ -2,8 +2,10 @@
 
     laminate_constitutive_model  <-  anisotropic_section_model
 
-Walls are laminates, so the only names this package takes from
-``laminate_constitutive_model`` are ``Laminate`` and ``integrate_abd``. It does not import
+Walls are laminates, so the names this package takes from ``laminate_constitutive_model``
+are ``Laminate`` and ``integrate_abd``, and for ply failure the strengths and the array
+exposures. LCM laminates and materials otherwise plug in by duck typing
+(``WallLaminate.from_laminate``, ``SolidMaterial.from_material_card``). It does not import
 the geometry kernel (``ThinWalledSection.from_geometry`` reads a cut by duck typing) or
 the shell FE (``shell_fem``), which it meets only in tests and examples.
 """
@@ -15,6 +17,11 @@ PACKAGE = Path(__file__).resolve().parents[1] / "src" / "anisotropic_section_mod
 ALLOWED = {
     "laminate_constitutive_model.laminate_mechanics": {"Laminate"},
     "laminate_constitutive_model.laminate_kinematics": {"integrate_abd"},
+    "laminate_constitutive_model.laminate_materials_3d": {"StrengthProperties3D"},
+    "laminate_constitutive_model.laminate_ply_exposure": {
+        "PuckParameters", "hashin_exposure", "max_stress_exposure", "ply_exposures", "puck_exposure",
+        "tsai_wu_exposure",
+    },
 }
 FORBIDDEN = {"implicit_geometry_kernel", "shell_fem", "composite_laminate_model", "laminate_modelling_package"}
 
@@ -29,7 +36,7 @@ def _imports():
                     yield path.name, a.name, set()
 
 
-def test_only_laminate_and_integrate_abd_come_from_the_constitutive_model():
+def test_only_the_allowed_names_come_from_the_constitutive_model():
     for name, module, names in _imports():
         if module.split(".")[0] == "laminate_constitutive_model":
             assert module in ALLOWED, (name, module)
