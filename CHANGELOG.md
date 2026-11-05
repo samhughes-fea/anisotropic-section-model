@@ -3,7 +3,6 @@
 ## Unreleased
 
 - CI and the install notes pin laminate-constitutive-model v0.2.0 and shell-fem v0.1.0.
-
 - Depends on [laminate-constitutive-model](https://github.com/samhughes-fea/laminate-constitutive-model)
   (`Laminate`, `integrate_abd`) instead of composite-laminate-model, which was split
   into that package and [shell-fem](https://github.com/samhughes-fea/shell-fem).
