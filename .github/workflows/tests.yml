@@ -20,7 +20,7 @@ jobs:
       - name: Install the geometry kernel and the laminate model
         # not on PyPI yet: install them from their repositories
         run: |
-          pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@59adf17bb613e75d53192eb64a4ecbcb96acde4c"
+          pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@409fbfa854e835092695988b33b02dfdb34eed37"
           pip install "composite-laminate-model @ git+https://github.com/samhughes-fea/composite-laminate-model"
       - name: Install package
         run: pip install -e ".[dev]"
