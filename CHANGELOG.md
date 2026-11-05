@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **1d-fem's section code moves here** (step 6 of the split), with its git history:
+  `thin_walled/` (wall laminates and condensed wall laws, Saint-Venant and Benscoter
+  analysis, GBT modes, ply stress recovery, layup derivatives, taper), `solid/` (2D
+  finite-element sections), `section_analysis`, `ply_failure`, `gbt_alignment`,
+  `closed_form` and `geometry_to_properties`, and their tests. 1d-fem's job-file
+  reader and beam-element recovery stay in 1d-fem. The moved code keeps 1d-fem's beam
+  axis x and strain order; it is folded into the existing API in a later step.
+- SciPy is now a required dependency (the GBT and 2D section solves use it).
 - CI and the install notes pin laminate-constitutive-model v0.2.0 and shell-fem v0.1.0.
 - Depends on [laminate-constitutive-model](https://github.com/samhughes-fea/laminate-constitutive-model)
   (`Laminate`, `integrate_abd`) instead of composite-laminate-model, which was split
