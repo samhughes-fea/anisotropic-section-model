@@ -3,6 +3,10 @@
 ## Unreleased
 
 - CI and the install notes pin laminate-constitutive-model v0.3.0 (was a commit on its main).
+- Example 03 reads the IEA 15 MW sections from the private reference-blades catalogue
+  (`examples/_shared/reference_blades.py`) and runs its box spar part alone without it.
+  `examples/_shared/data/` (the section data and its WISDEM script) is removed, and the
+  published 6 × 6 is no longer stored in `data/results.json`.
 
 ## 0.2.0 - 2026-11-05
 

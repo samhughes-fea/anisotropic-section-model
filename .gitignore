@@ -4,3 +4,6 @@
 __pycache__/
 build/
 dist/
+
+# Private reference-blades checkout (see examples/_shared/reference_blades.py); never commit it
+reference_blades/
