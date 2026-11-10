@@ -37,8 +37,9 @@ python examples/06_blade_from_implicit_geometry/blade_from_implicit_geometry.py 
 
    ```python
    from implicit_geometry_kernel import BladeGeometry
-   geo = BladeGeometry(stations, "2D-F", skin_thickness=0.003, spar_cap_thickness=0.008,
-                       shear_web_thickness=0.002, web_positions=(0.18, 0.48))
+   geo = BladeGeometry(stations, "2D-F-LC-0R", skin_thickness=0.003, spar_cap_thickness=0.008,
+                       shear_web_thickness=0.002, web_positions=(0.18, 0.48),
+                       pivot_fraction=0.3)
    cut = geo.section_at(3.0)  # wall midlines, thicknesses, labels and cells at z = 3 m
    ```
 

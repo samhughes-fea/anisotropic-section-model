@@ -67,7 +67,7 @@ def beam_numbers(props):
 
 def routes(lams):
     """The example 20 section from the geometry and from example 20's regions, thin wall and shell."""
-    geo = BladeGeometry(prismatic(), "2D-F", SKIN_T, CAP_T, WEB_T, web_positions=WEBS_AT)
+    geo = BladeGeometry(prismatic(), "2D-F-LC-0R", SKIN_T, CAP_T, WEB_T, web_positions=WEBS_AT, pivot_fraction=0.3)
     shell_geo = BladeBuilder.from_geometry(geo, n_span=12).build(lams, FSDTModel())
     regions = [SkinRegion("le_panel", 0.0, WEBS_AT[0], 8), SkinRegion("spar_cap", *WEBS_AT, 12),
                SkinRegion("te_panel", WEBS_AT[1], 1.0, 16)]
@@ -97,7 +97,8 @@ def tapered(lams):
     stations = [Station(0.0, 2.0, Airfoil.naca4("0030"), twist=10.0, pitch_axis=0.3),
                 Station(10.0, 1.0, Airfoil.naca4("0018"), twist=0.0, pitch_axis=0.3)]
     cap_t = lambda z: 0.012 - 0.0005 * z  # noqa: E731  12 mm at the root to 7 mm at the tip
-    geo = BladeGeometry(stations, "2D-F", SKIN_T, cap_t, 0.004, web_offsets=(0.3, 0.75))
+    geo = BladeGeometry(stations, "2D-F-LE-0R", SKIN_T, cap_t, 0.004, web_offsets=(0.3, 0.75),
+                        pivot_fraction=0.3)
     carbon = create_default_library().get("T300/5208")
     cap = lambda z: Laminate.from_angles(carbon, [0] * 16, cap_t(z) / 16)  # noqa: E731
     lam = dict(lams, cap=cap)
@@ -129,7 +130,7 @@ def tapered(lams):
 def gallery(lams):
     out = {}
     for key in GALLERY:
-        cut = BladeGeometry(prismatic(), key, SKIN_T, CAP_T, 0.004).section_at(0.0)
+        cut = BladeGeometry(prismatic(), f"{key}-LC-0R", SKIN_T, CAP_T, 0.004, pivot_fraction=0.3).section_at(0.0)
         sec = ThinWalledSection.from_geometry(cut, lams)
         out[key] = {"walls": [{"kind": w.kind, "xy": np.round(w.xy, 5).tolist()} for w in cut.walls],
                     "cells": [np.round(c.points[:, :2], 5).tolist() for c in cut.cells], "GJ": sec.GJ, "EA": sec.EA,

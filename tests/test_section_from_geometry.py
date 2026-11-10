@@ -7,10 +7,7 @@ import pytest
 from anisotropic_section_model import ThinWalledSection
 from shell_fem import BladeBuilder, FSDTModel, Laminate, create_default_library
 from implicit_geometry_kernel import Airfoil, BladeGeometry, ShearWeb, SkinRegion, Station
-try:  # implicit-geometry-kernel 0.2.0 exports it at the top level
-    from implicit_geometry_kernel import SYSTEM_TYPE_KEYS
-except ImportError:  # 0.1.0
-    from implicit_geometry_kernel.section_geometry.layout.system_layout import SYSTEM_TYPE_KEYS
+from implicit_geometry_kernel import SYSTEM_TYPE_LAYOUT_KEYS
 
 
 AIRFOIL = Airfoil.naca4("0024")
@@ -21,10 +18,10 @@ def _prismatic(twist=0.0, offset=(0.0, 0.0)):
             Station(4.0, 1.0, AIRFOIL, twist=twist, pitch_axis=0.3, offset=offset)]
 
 
-def _cut(stations=None, z=1.0, layout="2D-F", **kw):
+def _cut(stations=None, z=1.0, layout="2D-F-LC-0R", **kw):
     options = dict(spar_cap_thickness=0.008, shear_web_thickness=0.002, web_positions=(0.18, 0.48))
     options.update(kw)
-    return BladeGeometry(stations or _prismatic(), layout, 0.003, **options).section_at(z)
+    return BladeGeometry(stations or _prismatic(), layout, 0.003, pivot_fraction=0.3, **options).section_at(z)
 
 
 @pytest.fixture(scope="module")
@@ -98,7 +95,7 @@ def test_from_geometry_laminate_lookup_and_checks(cut, laminates):
 def _geometry(stations=None, **kw):
     options = dict(spar_cap_thickness=0.008, shear_web_thickness=0.002, web_positions=(0.18, 0.48))
     options.update(kw)
-    return BladeGeometry(stations or _prismatic(), "2D-F", 0.003, **options)
+    return BladeGeometry(stations or _prismatic(), "2D-F-LC-0R", 0.003, pivot_fraction=0.3, **options)
 
 
 @pytest.fixture(scope="module")
@@ -123,18 +120,20 @@ def test_geometry_mesh_matches_the_region_mesh(sections, laminates):
         assert getattr(geometry_section, name) == pytest.approx(getattr(region_section, name), rel=0.015), name
 
 
-@pytest.mark.parametrize("layout", SYSTEM_TYPE_KEYS)
+@pytest.mark.parametrize("layout", SYSTEM_TYPE_LAYOUT_KEYS)
 def test_every_layout_gives_a_section(layout, laminates):
-    geo = BladeGeometry(_prismatic(), layout, 0.003, spar_cap_thickness=0.008, shear_web_thickness=0.002)
+    geo = BladeGeometry(_prismatic(), layout, 0.003, spar_cap_thickness=0.008, shear_web_thickness=0.002,
+                        pivot_fraction=0.3)
     cut = geo.section_at(1.0)
     section = ThinWalledSection.from_geometry(cut, laminates)
     assert section.n_cells == len(cut.cells) >= 1
     assert section.GJ > 0.0 and section.EA > 0.0
 
 
-@pytest.mark.parametrize("layout", ["0A", "1C-F", "3B-CN", "5D-F"])
+@pytest.mark.parametrize("layout", ["0A-LC-0R", "1C-F-LC-0R", "3B-CN-LC-0R", "5D-F-LC-0R"])
 def test_layouts_mesh(layout, laminates):
-    geo = BladeGeometry(_prismatic(), layout, 0.003, spar_cap_thickness=0.008, shear_web_thickness=0.002)
+    geo = BladeGeometry(_prismatic(), layout, 0.003, spar_cap_thickness=0.008, shear_web_thickness=0.002,
+                        pivot_fraction=0.3)
     blade = BladeBuilder.from_geometry(geo, n_span=1, element="quad4").build(laminates, FSDTModel())
     from_mesh = ThinWalledSection.from_blade_mesh(blade, z=0.0)
     direct = ThinWalledSection.from_geometry(geo.section_at(0.0), laminates)
