@@ -44,7 +44,7 @@ from .beam import BeamSolution, TimoshenkoBeam, euler_bernoulli_beam
 from .closed_form import channel_properties, i_section_properties, rectangle_properties
 from .geometry_to_properties import section_properties_from_geometry
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "BeamSolution",

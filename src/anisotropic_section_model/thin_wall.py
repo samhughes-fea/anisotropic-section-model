@@ -24,8 +24,11 @@ Axes: z along the beam, (x, y) in the section. A wall runs from ``start`` to ``e
 its contour coordinate s points that way and its laminate normal is z x s (the left of
 the wall seen from +z, looking along s). Ply angles are measured from the beam axis
 about that normal, so a wall cut from a shell model with the beam axis as the material
-axis keeps its plies. The laminate ABD of a wall is taken about its own mid-plane (any
-offset is used only to place the wall).
+axis keeps its plies. A wall lies on its laminate's reference surface: a laminate with
+an ``offset`` has its mid-plane that far along the wall normal, and its ABD is taken
+about the wall (the reference surface), so the eccentricity is in the wall law. The
+classical closed-form values (``classical``) place each wall's membrane stiffness at
+its mid-plane instead.
 
 Wall stiffness: membrane resultants act with no hoop stress (N_ss = 0) and no
 curvature of the wall itself, which gives the effective axial stiffness
@@ -163,6 +166,7 @@ class ThinWalledSection:
         self.D66 = 1.0 / F[:, 5, 5]
         self.thickness = np.array([w.laminate.thickness for w in ws])
         self.areal_density = np.array([sum(p.thickness * p.material.density for p in w.laminate.plies) for w in ws])
+        self.eccentricity = np.array([float(getattr(w.laminate, "offset", 0.0)) for w in ws])
         self._solve()
         self._couple()
 
@@ -191,10 +195,10 @@ class ThinWalledSection:
         """The section of a ``BladeMesh`` (or any shell ``FEAMesh`` along z) at mesh section ``z``.
 
         Every shell element edge that lies on the section plane becomes one wall per
-        element edge segment (two for quadratic elements), placed on the laminate
-        mid-surface (the mesh node moved by the laminate offset along the element
-        normal, averaged over the elements at each node) and oriented so that its
-        laminate normal is the element normal. Wall names are the element set names
+        element edge segment (two for quadratic elements), on the mesh nodes (the
+        elements' reference surface) and oriented so that its laminate normal is the
+        element normal. A laminate offset stays with the laminate, as the wall's
+        eccentricity. Wall names are the element set names
         of ``BladeMesh`` (``spar_cap_ss``, ``web_fwd``, ...) when available.
         """
         mesh = getattr(blade, "mesh", blade)
@@ -215,7 +219,7 @@ class ThinWalledSection:
                     names[e] = name
         scale = max(1.0, abs(z))
         raw = []  # (node_a, node_b, laminate, name, normal)
-        shifts: Dict[int, List[np.ndarray]] = {}
+        on_plane = set()
         for e in mesh.shell_elements:
             ids = list(e.node_ids)
             X = np.array([mesh.node_coordinates(n) for n in ids])
@@ -237,13 +241,12 @@ class ThinWalledSection:
                 chain.append(ids[b])
                 for p, q in zip(chain[:-1], chain[1:]):
                     raw.append((p, q, e.laminate, names.get(e.element_id, ""), n3))
-                for n in chain:
-                    shifts.setdefault(n, []).append(e.laminate.mid_plane * n3)
+                on_plane.update(chain)
         if not raw:
             raise ValueError(f"no shell element edges lie on the section z = {z}")
-        order = sorted(shifts)
+        order = sorted(on_plane)
         index = {n: i for i, n in enumerate(order)}
-        P = np.array([mesh.node_coordinates(n)[:2] + np.mean(shifts[n], axis=0)[:2] for n in order])
+        P = np.array([mesh.node_coordinates(n)[:2] for n in order])
         walls = []
         seen = set()
         for p, q, lam, name, n3 in raw:
@@ -270,8 +273,9 @@ class ThinWalledSection:
         (``"skin_suction_surface:bay_0"``), then its region (``"skin_suction_surface"``),
         then its kind (``"skin"``, ``"web"``, ``"cap"``). A spar cap is merged with the
         skin it is bonded to: along the bond the wall is the skin and cap stacked (cap
-        plies inside, skin plies outside) on their combined mid-surface, named after
-        the cap, as a cap laid on a skin is in a shell model. Laminates list their plies
+        plies inside, skin plies outside), named after the cap, as a cap laid on a skin
+        is in a shell model. The wall stays on the skin mid-surface and the stacked
+        laminate has an offset of half the cap thickness inward. Laminates list their plies
         from the inside of the section out: skin and cap normals point out of the
         section, web normals towards the trailing edge.
 
@@ -305,7 +309,8 @@ class ThinWalledSection:
             if lam is None:
                 parts = [laminate_for(label) for label in seg.layers]
                 lam = parts[0] if len(parts) == 1 else Laminate(
-                    [ply for part in parts for ply in part.plies], "+".join(part.name for part in parts))
+                    [ply for part in parts for ply in part.plies], "+".join(part.name for part in parts),
+                    offset=parts[-1].offset - 0.5 * sum(part.thickness for part in parts[:-1]))
                 stacks[seg.layers] = lam
             walls.append(Wall(seg.start, seg.end, lam, seg.name))
         P = mid.points
@@ -325,13 +330,17 @@ class ThinWalledSection:
         x, y = P[:, 0], P[:, 1]
         Et, Gt = self.Et, self.Gt
         self.EA = float(np.sum(Et * b))
-        xc = self._integrals(x[i], x[j], weight=Et) / self.EA
-        yc = self._integrals(y[i], y[j], weight=Et) / self.EA
+        # each wall's membrane stiffness acts at its mid-plane: the wall moved by its
+        # laminate's eccentricity along the wall normal
+        ex, ey = self.eccentricity * self.normal[:, 0], self.eccentricity * self.normal[:, 1]
+        xi, xj, yi, yj = x[i] + ex, x[j] + ex, y[i] + ey, y[j] + ey
+        xc = self._integrals(xi, xj, weight=Et) / self.EA
+        yc = self._integrals(yi, yj, weight=Et) / self.EA
         self.centroid = (xc, yc)
-        X, Y = x - xc, y - yc
-        self.EI_xx = self._integrals(Y[i], Y[j], Y[i], Y[j], Et)  # about the x axis: integral Et y^2
-        self.EI_yy = self._integrals(X[i], X[j], X[i], X[j], Et)
-        self.EI_xy = self._integrals(X[i], X[j], Y[i], Y[j], Et)
+        Xi, Xj, Yi, Yj = xi - xc, xj - xc, yi - yc, yj - yc
+        self.EI_xx = self._integrals(Yi, Yj, Yi, Yj, Et)  # about the x axis: integral Et y^2
+        self.EI_yy = self._integrals(Xi, Xj, Xi, Xj, Et)
+        self.EI_xy = self._integrals(Xi, Xj, Yi, Yj, Et)
         self.mass_per_length = float(np.sum(self.areal_density * b))
 
         # Saint-Venant warping about the origin: minimise sum Gt b (r_n - d omega/ds)^2
@@ -361,8 +370,8 @@ class ThinWalledSection:
 
         # shear centre: the pole that makes omega orthogonal to x and y
         # omega_P = omega_0 - xP y + yP x + const
-        Iwx = self._integrals(omega0[i], omega0[j], X[i], X[j], Et)
-        Iwy = self._integrals(omega0[i], omega0[j], Y[i], Y[j], Et)
+        Iwx = self._integrals(omega0[i], omega0[j], Xi, Xj, Et)
+        Iwy = self._integrals(omega0[i], omega0[j], Yi, Yj, Et)
         A = np.array([[-self.EI_xy, self.EI_yy], [-self.EI_xx, self.EI_xy]])
         xs, ys = np.linalg.solve(A, [-Iwx, -Iwy])
         self.shear_centre = (float(xs), float(ys))
@@ -402,8 +411,7 @@ class ThinWalledSection:
         for k, w in enumerate(self.walls):
             lid = ids.setdefault(id(w.laminate), len(ids))
             if lid not in laminates:
-                lam = w.laminate if w.laminate.offset == 0.0 else w.laminate.with_offset(0.0)
-                laminates[lid] = WallLaminate.from_laminate(lam)
+                laminates[lid] = WallLaminate.from_laminate(w.laminate)
             geometry_walls.append(_GeometryWall(k, int(w.start), int(w.end), lid))
         geometry = _Geometry({k: p for k, p in enumerate(self.points)}, geometry_walls)
         self.analysis = ThinWalledSectionAnalysis(geometry, laminates, hoop=self.wall_bending)

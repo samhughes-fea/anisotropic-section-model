@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-11-11
+
+- Tests, README and example 06 use implicit-geometry-kernel 0.9.1: full layout codes
+  (`"2D-F-LC-0R"`) and `pivot_fraction`. CI installs the v0.9.1 tag and `libgeos-dev`.
+- **Eccentric walls.** `WallLaminate` takes an `offset` (mid-plane above the wall's
+  reference line) and its `A`, `B`, `D` are about that line. `WallLaminate.from_laminate`
+  keeps a laminate's offset instead of refusing it.
+- `ThinWalledSection.from_geometry` and `thin_walled_from_cut` keep a spar cap bonded to a
+  skin on the skin mid-surface, where the kernel now puts it, with the stacked laminate
+  offset by half the cap thickness inward. On the example 20 section EA, EI and GJ are
+  within 0.5 % of before; the shear centre moves from 5.9 mm to 4.5 mm (the solid section
+  gives 5.2 mm on a 2 mm mesh).
+- `ThinWalledSection.from_blade_mesh` leaves walls on the mesh nodes and keeps laminate
+  offsets as eccentricity (it moved the nodes by the offset before). The classical
+  closed-form values place each wall's membrane stiffness at its mid-plane.
 - CI and the install notes pin laminate-constitutive-model v0.3.0 (was a commit on its main).
 - Example 03 reads the IEA 15 MW sections from the private reference-blades catalogue
   (`examples/_shared/reference_blades.py`) and runs its box spar part alone without it.

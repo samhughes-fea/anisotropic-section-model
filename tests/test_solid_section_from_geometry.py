@@ -56,9 +56,9 @@ def compare(cut, lams, h):
     return mesh, numbers(SolidSectionAnalysis(mesh)), numbers(thin_walled_from_cut(cut, lams).analysis())
 
 
-@pytest.mark.parametrize("layout", ["0A", "2A-F"])
+@pytest.mark.parametrize("layout", ["0A-LC-0R", "2A-F-LC-0R"])
 def test_isotropic_layouts_match_thin_walled(layout):
-    cut = BladeGeometry(stations(), layout, 0.003, 0.008, 0.002).section_at(3.0)
+    cut = BladeGeometry(stations(), layout, 0.003, 0.008, 0.002, pivot_fraction=0.3).section_at(3.0)
     mesh, a, b = compare(cut, ISOTROPIC, 0.01)
     for key in ("EA", "EI_flap", "EI_edge", "GJ"):
         assert a[key] == pytest.approx(b[key], rel=5e-3), key
@@ -68,11 +68,13 @@ def test_isotropic_layouts_match_thin_walled(layout):
 
 
 def test_composite_box_spar_section():
-    cut = BladeGeometry(stations(), "2D-F", 0.003, 0.008, 0.002, web_positions=(0.18, 0.48)).section_at(3.0)
+    cut = BladeGeometry(stations(), "2D-F-LC-0R", 0.003, 0.008, 0.002, web_positions=(0.18, 0.48), pivot_fraction=0.3).section_at(3.0)
     mesh, a, b = compare(cut, COMPOSITE, 0.02)
     for key in ("EA", "EI_flap", "EI_edge", "GJ"):
         assert a[key] == pytest.approx(b[key], rel=0.02), key
-    assert a["shear_centre_y"] == pytest.approx(b["shear_centre_y"], abs=1e-3)
+    # the solid shear centre moves from 5.9 mm at this element size to 5.2 mm at 2 mm; the
+    # thin-walled one (caps carried as an eccentricity on the skin mid-surface) is 4.5 mm
+    assert a["shear_centre_y"] == pytest.approx(b["shear_centre_y"], abs=1.5e-3)
     assert {"shear_web_0", "shear_web_1", "spar_cap_suction_surface"} <= set(mesh.labels)
     # one row of elements per ply: the cap carries 16 rows, the skin 6, the webs 4
     n_cap = sum(1 for lb in mesh.labels if lb == "spar_cap_suction_surface")
@@ -80,7 +82,7 @@ def test_composite_box_spar_section():
 
 
 def test_mesh_refinement_converges():
-    cut = BladeGeometry(stations(), "2D-F", 0.003, 0.008, 0.002, web_positions=(0.18, 0.48)).section_at(3.0)
+    cut = BladeGeometry(stations(), "2D-F-LC-0R", 0.003, 0.008, 0.002, web_positions=(0.18, 0.48), pivot_fraction=0.3).section_at(3.0)
     coarse = numbers(SolidSectionAnalysis(section_mesh_from_cut(cut, COMPOSITE, element_size=0.02)))
     fine = numbers(SolidSectionAnalysis(section_mesh_from_cut(cut, COMPOSITE, element_size=0.01)))
     for key in ("EA", "EI_flap", "GJ"):
@@ -88,7 +90,7 @@ def test_mesh_refinement_converges():
 
 
 def test_write_and_read_section_mesh_2d(tmp_path):
-    cut = BladeGeometry(stations(), "0A", 0.003).section_at(1.0)
+    cut = BladeGeometry(stations(), "0A-LC-0R", 0.003, pivot_fraction=0.3).section_at(1.0)
     mesh = section_mesh_from_cut(cut, ISOTROPIC, element_size=0.03, section_id=7)
     path = tmp_path / "section_mesh_2d.txt"
     write_section_mesh_2d(str(path), {7: mesh})
@@ -99,7 +101,7 @@ def test_write_and_read_section_mesh_2d(tmp_path):
 
 
 def test_missing_laminate_names_the_wall():
-    cut = BladeGeometry(stations(), "1A-F", 0.003, 0.008, 0.002).section_at(1.0)
+    cut = BladeGeometry(stations(), "1A-F-LC-0R", 0.003, 0.008, 0.002, pivot_fraction=0.3).section_at(1.0)
     with pytest.raises(KeyError, match="shear_web_0"):
         section_mesh_from_cut(cut, {"skin": ISOTROPIC["skin"]})
 
@@ -130,7 +132,7 @@ def test_thick_skins_closing_at_a_sharp_trailing_edge():
     Each side fills only up to the medial axis there, so no element is inverted and the two
     sides do not overlap (before, an element at the tip inverted and the skins overlapped).
     """
-    cut = BladeGeometry(stations(), "2D-F", 0.018, 0.024, 0.008, web_positions=(0.18, 0.48)).section_at(3.0)
+    cut = BladeGeometry(stations(), "2D-F-LC-0R", 0.018, 0.024, 0.008, web_positions=(0.18, 0.48), pivot_fraction=0.3).section_at(3.0)
     mesh = section_mesh_from_cut(cut, THICK, element_size=0.01)
     assert _overlapping_elements(mesh) == 0
     a = numbers(SolidSectionAnalysis(mesh))

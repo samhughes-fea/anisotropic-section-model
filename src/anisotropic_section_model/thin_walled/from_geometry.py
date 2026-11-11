@@ -10,7 +10,9 @@ its laminates, using the cut's mid-surface graph (``SectionCut.mid_surface()``):
 - each straight midline segment becomes one wall;
 - a spar cap is merged with the skin it is bonded to, so along the bond the wall is
   the cap and skin stacked on their combined mid-surface (cap plies inside, skin plies
-  outside), as a cap laid on a skin is in a shell model;
+  outside), as a cap laid on a skin is in a shell model. The wall stays on the skin
+  mid-surface, where the geometry puts it, and the stacked laminate has an ``offset``
+  of half the cap thickness inward, so its wall law carries the eccentricity;
 - walls take their laminate by label: the full label, then its region (the label
   without the ``:bay_k`` part), then its kind (``"skin"``, ``"cap"``, ``"web"``).
 
@@ -166,8 +168,11 @@ def thin_walled_from_cut(
     for k, seg in enumerate(mid.segments, start=1):
         if seg.layers not in stack_id:
             parts = [laminate_for(label) for label in seg.layers]
+            # the wall is on the outer layer's (the skin's) mid-surface: the stack's
+            # mid-plane lies half the inner layers' thickness inside it (-e_n)
             lam = parts[0] if len(parts) == 1 else WallLaminate(
-                [ply for part in parts for ply in part.plies], shear_correction=parts[-1].shear_correction)
+                [ply for part in parts for ply in part.plies], shear_correction=parts[-1].shear_correction,
+                offset=parts[-1].offset - 0.5 * sum(part.thickness for part in parts[:-1]))
             lid = len(stack_id) + 1
             stack_id[seg.layers] = lid
             lams[lid] = lam

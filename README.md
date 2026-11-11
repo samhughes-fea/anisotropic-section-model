@@ -40,9 +40,9 @@ later, which has the ply exposures `ply_failure` uses):
 
 ```bash
 pip install "laminate-constitutive-model @ git+https://github.com/samhughes-fea/laminate-constitutive-model@v0.3.0"
-# for the tests and examples:
-pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@v0.2.0"
-pip install "shell-fem @ git+https://github.com/samhughes-fea/shell-fem@v0.1.0"
+# for the tests and examples (the kernel needs the system GEOS library: libgeos-dev):
+pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@v0.9.1"
+pip install "shell-fem @ git+https://github.com/samhughes-fea/shell-fem@v0.2.0"
 pip install -e .             # NumPy and the constitutive model
 pip install -e ".[sparse]"   # + SciPy sparse solves for GBT
 pip install -e ".[examples]" # + SciPy and matplotlib for the examples
@@ -186,8 +186,8 @@ A cut of the geometry kernel's `BladeGeometry` gives the thin-walled section dir
 from implicit_geometry_kernel import BladeGeometry
 from anisotropic_section_model import ThinWalledSection
 
-geo = BladeGeometry(stations, "2D-F", skin_thickness=0.003, spar_cap_thickness=0.008,
-                    shear_web_thickness=0.002, web_positions=(0.18, 0.48))
+geo = BladeGeometry(stations, "2D-F-LC-0R", skin_thickness=0.003, spar_cap_thickness=0.008,
+                    shear_web_thickness=0.002, web_positions=(0.18, 0.48), pivot_fraction=0.3)
 section = ThinWalledSection.from_geometry(geo.section_at(1.0), {"skin": skin, "cap": cap, "web": web})
 ```
 

@@ -35,10 +35,16 @@ def test_wall_laminate_from_lcm_laminate_has_the_same_stiffness():
     assert [p.angle_deg for p in wall.plies] == [0, 45, -45, 90, 30]
 
 
-def test_offset_laminates_are_refused():
+def test_offset_laminates_keep_their_eccentricity():
+    """The wall law is about the laminate's reference surface, as the shell's ABD is."""
     lam = Laminate.from_angles(CARD, [0, 90], 1e-3, offset=1e-3)
-    with pytest.raises(ValueError):
-        WallLaminate.from_laminate(lam)
+    wall = WallLaminate.from_laminate(lam)
+    assert wall.offset == 1e-3
+    abd = integrate_abd(lam)
+    assert np.allclose(wall.ABD(), abd, rtol=1e-12, atol=1e-12 * np.abs(abd).max())
+    centred = WallLaminate.from_laminate(lam.with_offset(0.0))
+    assert np.allclose(wall.A(), centred.A(), rtol=1e-13)
+    assert np.allclose(wall.B(), centred.B() + 1e-3 * centred.A(), rtol=1e-12, atol=1e-12 * np.abs(wall.B()).max())
 
 
 def test_materials_from_lcm():
