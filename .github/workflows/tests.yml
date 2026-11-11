@@ -24,7 +24,7 @@ jobs:
         run: |
           pip install "laminate-constitutive-model @ git+https://github.com/samhughes-fea/laminate-constitutive-model@v0.3.0"
           pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@v0.9.1"
-          pip install --no-deps "shell-fem @ git+https://github.com/samhughes-fea/shell-fem@v0.1.0"
+          pip install --no-deps "shell-fem @ git+https://github.com/samhughes-fea/shell-fem@v0.2.0"
       - name: Install package
         run: pip install -e ".[dev]"
       - name: Run tests
