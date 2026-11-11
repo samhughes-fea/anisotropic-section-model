@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-11-11
+
 - Tests, README and example 06 use implicit-geometry-kernel 0.9.1: full layout codes
   (`"2D-F-LC-0R"`) and `pivot_fraction`. CI installs the v0.9.1 tag and `libgeos-dev`.
 - **Eccentric walls.** `WallLaminate` takes an `offset` (mid-plane above the wall's
