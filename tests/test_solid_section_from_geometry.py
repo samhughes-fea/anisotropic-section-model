@@ -72,7 +72,9 @@ def test_composite_box_spar_section():
     mesh, a, b = compare(cut, COMPOSITE, 0.02)
     for key in ("EA", "EI_flap", "EI_edge", "GJ"):
         assert a[key] == pytest.approx(b[key], rel=0.02), key
-    assert a["shear_centre_y"] == pytest.approx(b["shear_centre_y"], abs=1e-3)
+    # the solid shear centre moves from 5.9 mm at this element size to 5.2 mm at 2 mm; the
+    # thin-walled one (caps carried as an eccentricity on the skin mid-surface) is 4.5 mm
+    assert a["shear_centre_y"] == pytest.approx(b["shear_centre_y"], abs=1.5e-3)
     assert {"shear_web_0", "shear_web_1", "spar_cap_suction_surface"} <= set(mesh.labels)
     # one row of elements per ply: the cap carries 16 rows, the skin 6, the webs 4
     n_cap = sum(1 for lb in mesh.labels if lb == "spar_cap_suction_surface")

@@ -202,10 +202,16 @@ class WallLaminate:
         Bottom ply first.
     shear_correction : float, optional
         Factor applied to the transverse shear stiffness ``H`` (default 5/6).
+    offset : float, optional
+        Height of the laminate mid-plane above the wall's reference line, along the
+        wall normal. Zero (default) puts the reference line on the mid-surface. A
+        stack laid on the inside of a skin whose mid-surface is the reference line
+        has a negative offset. ``A``, ``B`` and ``D`` are taken about the reference
+        line, so the eccentricity enters through ``B`` and ``D``.
 
     Notes
     -----
-    With ply ``k`` between ``n_{k-1}`` and ``n_k`` (mid-surface at ``n = 0``)::
+    With ply ``k`` between ``n_{k-1}`` and ``n_k`` (reference line at ``n = 0``)::
 
         A = sum Q_bar_k (n_k - n_{k-1})
         B = sum Q_bar_k (n_k^2 - n_{k-1}^2) / 2
@@ -215,9 +221,11 @@ class WallLaminate:
 
     plies: Tuple[Ply, ...]
     shear_correction: float = DEFAULT_SHEAR_CORRECTION
+    offset: float = 0.0
     _interfaces: npt.NDArray[np.float64] = field(init=False, repr=False, compare=False)
 
-    def __init__(self, plies: Sequence[Ply], shear_correction: float = DEFAULT_SHEAR_CORRECTION):
+    def __init__(self, plies: Sequence[Ply], shear_correction: float = DEFAULT_SHEAR_CORRECTION,
+                 offset: float = 0.0):
         plies_t = tuple(plies)
         if not plies_t:
             raise ValueError("WallLaminate needs at least one ply")
@@ -226,7 +234,10 @@ class WallLaminate:
         object.__setattr__(self, "plies", plies_t)
         object.__setattr__(self, "shear_correction", float(shear_correction))
         h = sum(p.thickness for p in plies_t)
-        z = np.concatenate([[0.0], np.cumsum([p.thickness for p in plies_t])]) - 0.5 * h
+        if not np.isfinite(offset):
+            raise ValueError("offset must be finite")
+        object.__setattr__(self, "offset", float(offset))
+        z = np.concatenate([[0.0], np.cumsum([p.thickness for p in plies_t])]) - 0.5 * h + float(offset)
         object.__setattr__(self, "_interfaces", z)
 
     @classmethod
@@ -239,13 +250,11 @@ class WallLaminate:
     def from_laminate(cls, laminate, shear_correction: float = DEFAULT_SHEAR_CORRECTION) -> "WallLaminate":
         """From laminate-constitutive-model's ``Laminate`` (plies bottom to top).
 
-        The wall's reference surface is its mid-surface, so the laminate must have no
-        ``offset``; offset walls are placed by the section geometry instead.
+        The laminate's ``offset`` (its mid-plane above the reference surface) is kept,
+        so the wall law is about the same reference surface as the shell's.
         """
-        if getattr(laminate, "offset", 0.0) != 0.0:
-            raise ValueError(f"WallLaminate.from_laminate needs a laminate without offset, got {laminate.offset}")
         plies = [Ply(PlyMaterial.from_material_card(p.material), p.angle, p.thickness) for p in laminate.plies]
-        return cls(plies, shear_correction)
+        return cls(plies, shear_correction, offset=float(getattr(laminate, "offset", 0.0)))
 
     @property
     def thickness(self) -> float:
@@ -253,7 +262,7 @@ class WallLaminate:
 
     @property
     def interfaces(self) -> npt.NDArray[np.float64]:
-        """Ply interface coordinates ``n_0 .. n_N`` (``n_0 = -h/2``, ``n_N = +h/2``)."""
+        """Ply interface coordinates ``n_0 .. n_N`` from the reference line (``offset -/+ h/2`` at the faces)."""
         return self._interfaces.copy()
 
     @property
