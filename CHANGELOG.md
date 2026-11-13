@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `reduced_section_from_integrals` accepts geometric integrals (area, centroid,
+  second moments, including a cap offset already in those moments) and returns
+  the elastic centre, shear centre, principal axes, mass centre and warping
+  constant. It does not import the geometry kernel or read a wall graph. For a
+  homogeneous section the three centres are the centroid and the warping
+  constant is zero.
+
 ## 0.3.0 - 2026-11-11
 
 - Tests, README and example 06 use implicit-geometry-kernel 0.9.1: full layout codes
