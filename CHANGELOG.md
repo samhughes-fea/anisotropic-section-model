@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- CI and the install notes pin implicit-geometry-kernel to tag K9
+  (`d3f6c4fb74bff47131fd3dcbabb1228c3eea6b0b`). The package still does not
+  import the kernel.
 - `reduced_section_from_integrals` accepts geometric integrals (area, centroid,
   second moments, including a cap offset already in those moments) and returns
   the elastic centre, shear centre, principal axes, mass centre and warping

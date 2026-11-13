@@ -41,7 +41,7 @@ later, which has the ply exposures `ply_failure` uses):
 ```bash
 pip install "laminate-constitutive-model @ git+https://github.com/samhughes-fea/laminate-constitutive-model@v0.3.0"
 # for the tests and examples (the kernel needs the system GEOS library: libgeos-dev):
-pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@v0.9.1"
+pip install "implicit-geometry-kernel @ git+https://github.com/samhughes-fea/implicit-geometry-kernel@K9"
 pip install "shell-fem @ git+https://github.com/samhughes-fea/shell-fem@v0.2.0"
 pip install -e .             # NumPy and the constitutive model
 pip install -e ".[sparse]"   # + SciPy sparse solves for GBT
