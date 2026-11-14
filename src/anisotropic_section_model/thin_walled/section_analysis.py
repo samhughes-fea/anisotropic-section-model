@@ -91,6 +91,7 @@ from typing import Dict, List, Mapping, Tuple
 import numpy as np
 import numpy.typing as npt
 
+from anisotropic_section_model.stage_log import stage
 from anisotropic_section_model.thin_walled.laminate import WallLaminate
 from anisotropic_section_model.thin_walled.thin_walled_geometry import (
     ThinWalledSection,
@@ -393,29 +394,30 @@ class ThinWalledSectionAnalysis:
 
     @cached_property
     def _solution(self) -> Dict[str, npt.NDArray[np.float64]]:
-        m = self._matrices
-        nd = self.n_dof
-        C, Lm, Ly, Q = m["C"], m["L"], m["Ly"], m["Q"]
-        S = self._system
+        with stage("anisotropic_section_model", "section_analysis"):
+            m = self._matrices
+            nd = self.n_dof
+            C, Lm, Ly, Q = m["C"], m["L"], m["Ly"], m["Q"]
+            S = self._system
 
-        n_tot = S.shape[0]
-        rhs1 = np.zeros((n_tot, 6))
-        rhs1[nd:nd + 6] = T_RATE
-        X1 = _solve(S, rhs1)
-        W1, P1 = X1[:nd], X1[nd:nd + 6]
+            n_tot = S.shape[0]
+            rhs1 = np.zeros((n_tot, 6))
+            rhs1[nd:nd + 6] = T_RATE
+            X1 = _solve(S, rhs1)
+            W1, P1 = X1[:nd], X1[nd:nd + 6]
 
-        rhs0 = np.zeros((n_tot, 6))
-        rhs0[:nd] = -(C - C.T) @ W1 + (Lm - Ly) @ P1
-        rhs0[nd:nd + 6] = np.eye(6) - (Lm - Ly).T @ W1 - (Q - Q.T) @ P1
-        X0 = _solve(S, rhs0)
-        W0, P0 = X0[:nd], X0[nd:nd + 6]
+            rhs0 = np.zeros((n_tot, 6))
+            rhs0[:nd] = -(C - C.T) @ W1 + (Lm - Ly) @ P1
+            rhs0[nd:nd + 6] = np.eye(6) - (Lm - Ly).T @ W1 - (Q - Q.T) @ P1
+            X0 = _solve(S, rhs0)
+            W0, P0 = X0[:nd], X0[nd:nd + 6]
 
-        flex = np.zeros((6, 6))
-        for g in self._gauss_points:
-            Phi = g.Z @ P0 + g.Y @ P1 + g.B_local @ W0[g.dofs] + g.Nx_local @ W1[g.dofs]
-            flex += g.weight * Phi.T @ g.K @ Phi
-        flex = 0.5 * (flex + flex.T)
-        return {"W0": W0, "W1": W1, "P0": P0, "P1": P1, "flexibility": flex}
+            flex = np.zeros((6, 6))
+            for g in self._gauss_points:
+                Phi = g.Z @ P0 + g.Y @ P1 + g.B_local @ W0[g.dofs] + g.Nx_local @ W1[g.dofs]
+                flex += g.weight * Phi.T @ g.K @ Phi
+            flex = 0.5 * (flex + flex.T)
+            return {"W0": W0, "W1": W1, "P0": P0, "P1": P1, "flexibility": flex}
 
     # ------------------------------------------------------------------ #
     # Stiffness

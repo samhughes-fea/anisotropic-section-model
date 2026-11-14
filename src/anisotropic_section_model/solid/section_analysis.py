@@ -69,6 +69,7 @@ import numpy.typing as npt
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
+from anisotropic_section_model.stage_log import stage
 from anisotropic_section_model.solid.elements import shape
 from anisotropic_section_model.solid.material import bond_matrix, material_axes
 from anisotropic_section_model.solid.mesh import SectionMesh
@@ -299,31 +300,32 @@ class SolidSectionAnalysis:
 
     @cached_property
     def _solution(self) -> Dict[str, npt.NDArray[np.float64]]:
-        m = self._matrices
-        nd = self.n_dof
-        D = self._independent(m["D_modes"])
-        lu = self._saddle(D)
-        n_tot = nd + 6 + D.shape[1]
-        Cx, L = m["Cx"], m["L"]
+        with stage("anisotropic_section_model", "section_analysis"):
+            m = self._matrices
+            nd = self.n_dof
+            D = self._independent(m["D_modes"])
+            lu = self._saddle(D)
+            n_tot = nd + 6 + D.shape[1]
+            Cx, L = m["Cx"], m["L"]
 
-        rhs1 = np.zeros((n_tot, 6))
-        rhs1[nd:nd + 6] = T_RATE
-        X1 = lu.solve(rhs1)
-        W1, P1 = X1[:nd], X1[nd:nd + 6]
+            rhs1 = np.zeros((n_tot, 6))
+            rhs1[nd:nd + 6] = T_RATE
+            X1 = lu.solve(rhs1)
+            W1, P1 = X1[:nd], X1[nd:nd + 6]
 
-        rhs0 = np.zeros((n_tot, 6))
-        rhs0[:nd] = -(Cx - Cx.T) @ W1 + L @ P1
-        rhs0[nd:nd + 6] = np.eye(6) - L.T @ W1
-        X0 = lu.solve(rhs0)
-        W0, P0 = X0[:nd], X0[nd:nd + 6]
-        W0f, W1f = self.T @ W0, self.T @ W1
+            rhs0 = np.zeros((n_tot, 6))
+            rhs0[:nd] = -(Cx - Cx.T) @ W1 + L @ P1
+            rhs0[nd:nd + 6] = np.eye(6) - L.T @ W1
+            X0 = lu.solve(rhs0)
+            W0, P0 = X0[:nd], X0[nd:nd + 6]
+            W0f, W1f = self.T @ W0, self.T @ W1
 
-        flex = np.zeros((6, 6))
-        for p in self._points:
-            Phi = self._phi(p, P0, W0f, W1f)
-            flex += p.weight * Phi.T @ p.C @ Phi
-        flex = 0.5 * (flex + flex.T)
-        return {"W0": W0f, "W1": W1f, "P0": P0, "P1": P1, "flexibility": flex}
+            flex = np.zeros((6, 6))
+            for p in self._points:
+                Phi = self._phi(p, P0, W0f, W1f)
+                flex += p.weight * Phi.T @ p.C @ Phi
+            flex = 0.5 * (flex + flex.T)
+            return {"W0": W0f, "W1": W1f, "P0": P0, "P1": P1, "flexibility": flex}
 
     @staticmethod
     def _phi(p: _Point, P0, W0f, W1f) -> npt.NDArray[np.float64]:

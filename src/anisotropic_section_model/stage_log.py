@@ -1,9 +1,9 @@
-"""Wall-clock stage reports shared by the blade packages.
+"""Wall-clock stage reports on one shared logger.
 
-Every package logs on the ``blade.stage`` logger. Tidalshell attaches
-:class:`StageCollector` and folds the reports into one timings object.
-A stage that is not entered is absent. A stage that raises reports the
-seconds up to the error and the error text, then the exception propagates.
+Every stage logs on ``blade.stage``. A collector keeps the reports in memory.
+A printer writes one line when a stage ends. A stage that is not entered is
+absent. A stage that raises reports the seconds up to the error and the error
+text, then the exception propagates.
 
 The level sits above INFO, so silencing INFO does not drop a stage report.
 Times are seconds from :func:`time.perf_counter`.
@@ -77,7 +77,7 @@ def stage(package: str, name: str) -> Iterator[None]:
 
 
 class StageCollector(logging.Handler):
-    """The orchestrator's handler: every ``blade.stage`` report in one list."""
+    """Handler that keeps every ``blade.stage`` report in one list."""
 
     def __init__(self) -> None:
         super().__init__(level=STAGE)
@@ -119,6 +119,50 @@ def collecting() -> Iterator[StageCollector]:
     log.addHandler(handler)
     try:
         yield handler
+    finally:
+        log.removeHandler(handler)
+        log.setLevel(previous)
+
+
+class StagePrinter(logging.Handler):
+    """Print one line when a stage ends."""
+
+    def __init__(self) -> None:
+        super().__init__(level=STAGE)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        name = getattr(record, "stage_name", None)
+        seconds = getattr(record, "stage_seconds", None)
+        if not isinstance(name, str):
+            return
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)):
+            return
+        package = getattr(record, "stage_package", "")
+        error = getattr(record, "stage_error", None)
+        line = f"{package} {name} {float(seconds):.6f}s"
+        if error not in (None, ""):
+            line += f" error={error}"
+        print(line, flush=True)
+
+
+@contextmanager
+def echoing() -> Iterator[None]:
+    """Print one line for each stage that ends until the block exits.
+
+    A printer already attached is left in place, so a nested block does not
+    print the same line twice.
+    """
+    log = logging.getLogger(LOGGER_NAME)
+    if any(isinstance(handler, StagePrinter) for handler in log.handlers):
+        yield
+        return
+    handler = StagePrinter()
+    previous = log.level
+    if log.level == logging.NOTSET or log.level > STAGE:
+        log.setLevel(STAGE)
+    log.addHandler(handler)
+    try:
+        yield
     finally:
         log.removeHandler(handler)
         log.setLevel(previous)
