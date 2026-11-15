@@ -35,7 +35,8 @@ def test_public_contract() -> None:
 
     assert LOGGER_NAME == "blade.stage"
     assert [item.name for item in dataclasses.fields(StageReport)] == [
-        "package", "stage", "seconds", "error", "depth", "started"]
+        "package", "stage", "seconds", "error", "depth", "started",
+        "cpu_seconds", "measures"]
     assert callable(stage) and callable(fold_reports)
     assert issubclass(StageCollector, logging.Handler)
 
@@ -50,5 +51,7 @@ def test_section_analysis_reports_on_the_shared_logger() -> None:
     laminate = WallLaminate.isotropic(70.0e9, 0.3, 0.001)
     with collecting() as sink:
         ThinWalledSectionAnalysis(section, {1: laminate}).stiffness
-    folded = fold_reports(sink.take())
+    reports = sink.take()
+    assert reports[0].measures["stations"] == 1
+    folded = fold_reports(reports)
     assert folded["section_analysis"] >= 0.0

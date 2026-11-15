@@ -394,7 +394,8 @@ class ThinWalledSectionAnalysis:
 
     @cached_property
     def _solution(self) -> Dict[str, npt.NDArray[np.float64]]:
-        with stage("anisotropic_section_model", "section_analysis"):
+        with stage("anisotropic_section_model", "section_analysis") as rec:
+            rec.set("stations", 1)
             m = self._matrices
             nd = self.n_dof
             C, Lm, Ly, Q = m["C"], m["L"], m["Ly"], m["Q"]
