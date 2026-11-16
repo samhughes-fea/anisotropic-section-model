@@ -39,6 +39,14 @@ tests and examples.
 """
 
 from .thin_wall import ThinWalledSection, Wall, condensed_wall_stiffness
+from .thin_walled.fields import (
+    FORMULATION_CSV_SCHEMA,
+    FormulationWriter,
+    GaussField,
+    PlyField,
+    SectionField,
+    WallField,
+)
 from .torsion import RestrainedTorsionBeam, TorsionResponse
 from .gbt import GBTSolution, GeneralizedBeam, SectionModes
 from .beam import BeamSolution, TimoshenkoBeam, euler_bernoulli_beam
@@ -55,14 +63,20 @@ __version__ = "0.3.0"
 
 __all__ = [
     "BeamSolution",
+    "FORMULATION_CSV_SCHEMA",
+    "FormulationWriter",
     "GBTSolution",
+    "GaussField",
     "GeneralizedBeam",
+    "PlyField",
     "RestrainedTorsionBeam",
+    "SectionField",
     "SectionModes",
     "ThinWalledSection",
     "TimoshenkoBeam",
     "TorsionResponse",
     "Wall",
+    "WallField",
     "channel_properties",
     "condensed_wall_stiffness",
     "euler_bernoulli_beam",

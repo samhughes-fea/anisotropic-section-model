@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `FormulationWriter` returns warping, shear flow and wall strains at section, wall,
+  Gauss and ply levels of a `ThinWalledSectionAnalysis`, and writes one CSV per level
+  (`to_csv`). Warping is force-independent; strains, shear flow and ply stresses are
+  for the given section forces.
 - Solid 2D section at root and cap stations. `solid.compare_cut` and
   `compare_thick_stations` run the 2D finite-element 6 x 6 beside the
   thin-walled 6 x 6 of the same cut and report the difference. A published
