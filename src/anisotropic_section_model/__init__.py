@@ -14,7 +14,8 @@ Beams           TimoshenkoBeam (exact Timoshenko / Euler-Bernoulli beam elements
                 6 x 6 or 4 x 4 section stiffness, all couplings), BeamSolution,
                 euler_bernoulli_beam
 Closed form     rectangle_properties, i_section_properties, channel_properties,
-                section_properties_from_geometry, reduced_section_from_integrals
+                section_properties_from_geometry, reduced_section_from_integrals,
+                principal axes of the full section (not only the reduced one)
 
 Subpackages moved from 1d-fem's ``section_integration`` (step 6 of the split; they are
 folded into the API above in a later step):
@@ -42,7 +43,13 @@ from .torsion import RestrainedTorsionBeam, TorsionResponse
 from .gbt import GBTSolution, GeneralizedBeam, SectionModes
 from .beam import BeamSolution, TimoshenkoBeam, euler_bernoulli_beam
 from .closed_form import channel_properties, i_section_properties, rectangle_properties
-from .geometry_to_properties import ReducedBeamSection, reduced_section_from_integrals, section_properties_from_geometry
+from .geometry_to_properties import (
+    ReducedBeamSection,
+    principal_axes_from_mass,
+    principal_axes_from_moments,
+    reduced_section_from_integrals,
+    section_properties_from_geometry,
+)
 
 __version__ = "0.3.0"
 
@@ -62,6 +69,8 @@ __all__ = [
     "i_section_properties",
     "ReducedBeamSection",
     "rectangle_properties",
+    "principal_axes_from_mass",
+    "principal_axes_from_moments",
     "reduced_section_from_integrals",
     "section_properties_from_geometry",
 ]

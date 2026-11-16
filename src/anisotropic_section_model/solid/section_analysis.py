@@ -682,3 +682,21 @@ class SolidSectionAnalysis:
         m = t["m"]
         return {"m": m, "y_m": t["my"] / m if m > 0 else 0.0, "z_m": t["mz"] / m if m > 0 else 0.0,
                 "I_yy": t["yy"], "I_zz": t["zz"], "I_yz": t["yz"], "I_p": t["yy"] + t["zz"]}
+
+    @property
+    def principal_axes(self) -> Tuple[float, Tuple[float, float]]:
+        """Principal angle and centroidal mass moments of the full 2D section.
+
+        Same convention as ``ReducedBeamSection`` and ``SectionAnalysis.principal_axes``.
+        """
+        from anisotropic_section_model.geometry_to_properties import principal_axes_from_mass
+
+        return principal_axes_from_mass(self.mass_properties)
+
+    @property
+    def principal_angle(self) -> float:
+        return self.principal_axes[0]
+
+    @property
+    def principal_moments(self) -> Tuple[float, float]:
+        return self.principal_axes[1]

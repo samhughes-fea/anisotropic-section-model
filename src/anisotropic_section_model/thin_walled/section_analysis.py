@@ -891,6 +891,25 @@ class ThinWalledSectionAnalysis:
             "I_p": tot["yy"] + tot["zz"],
         }
 
+    @property
+    def principal_axes(self) -> Tuple[float, Tuple[float, float]]:
+        """Principal angle and centroidal mass moments of the full thin-walled section.
+
+        Same convention as ``ReducedBeamSection`` and ``SectionAnalysis.principal_axes``:
+        the angle is from ``y`` toward ``z``, and the first moment is the larger one.
+        """
+        from anisotropic_section_model.geometry_to_properties import principal_axes_from_mass
+
+        return principal_axes_from_mass(self.mass_properties)
+
+    @property
+    def principal_angle(self) -> float:
+        return self.principal_axes[0]
+
+    @property
+    def principal_moments(self) -> Tuple[float, float]:
+        return self.principal_axes[1]
+
 
 def translation_matrix(dy: float, dz: float) -> npt.NDArray[np.float64]:
     """Strain map ``psi_new = P @ psi`` when the reference point moves by ``(dy, dz)``.

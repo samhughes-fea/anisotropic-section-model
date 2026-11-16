@@ -16,6 +16,44 @@ from anisotropic_section_model.closed_form import (
 Integrals = Union[Mapping[str, Any], object]
 
 
+def principal_axes_from_moments(ixx: float, iyy: float, ixy: float) -> tuple[float, tuple[float, float]]:
+    """Principal angle and moments of the second-moment tensor ``[[ixx, ixy], [ixy, iyy]]``.
+
+    ``ixx`` is ``∫ y²``, ``iyy`` is ``∫ x²`` (``∫ z²`` in beam section axes) and
+    ``ixy`` is the product moment. The angle is from the first axis toward the
+    second, in ``(-π/2, π/2]``, and the first principal moment is the larger one.
+    """
+    mean = 0.5 * (ixx + iyy)
+    radius = math.hypot(0.5 * (ixx - iyy), ixy)
+    if radius <= 1e-14 * max(abs(mean), 1.0):
+        return 0.0, (mean, mean)
+    # ixx = ∫ y², iyy = ∫ x²: a rotation from the first axis toward the second
+    # zeros the product when tan 2θ = -2 ixy / (ixx - iyy).
+    theta = 0.5 * math.atan2(-2.0 * ixy, ixx - iyy)
+    c, s = math.cos(theta), math.sin(theta)
+    about_x = c * c * ixx + s * s * iyy - 2.0 * s * c * ixy
+    if about_x < mean:
+        theta += math.pi / 2.0
+    theta = (theta + math.pi / 2.0) % math.pi - math.pi / 2.0
+    return theta, (mean + radius, mean - radius)
+
+
+def principal_axes_from_mass(mass: Mapping[str, float]) -> tuple[float, tuple[float, float]]:
+    """Principal axes of a section mass dictionary, about the mass centre.
+
+    ``mass`` has ``m``, ``y_m``, ``z_m``, ``I_yy`` (``∫ ρ z²``), ``I_zz``
+    (``∫ ρ y²``) and ``I_yz`` (``∫ ρ y z``), all about the origin as in
+    ``SectionAnalysis.mass``. The angle is from ``y`` toward ``z``.
+    """
+    m = float(mass.get("m", 0.0))
+    ym = float(mass.get("y_m", 0.0))
+    zm = float(mass.get("z_m", 0.0))
+    iyy = float(mass.get("I_yy", 0.0)) - m * zm * zm
+    izz = float(mass.get("I_zz", 0.0)) - m * ym * ym
+    iyz = float(mass.get("I_yz", 0.0)) - m * ym * zm
+    return principal_axes_from_moments(izz, iyy, iyz)
+
+
 def section_properties_from_geometry(
     section_type: str,
     **kwargs: float,
@@ -151,14 +189,7 @@ def reduced_section_from_integrals(
         ixy = 0.0 if origin is None else float(origin) - area * xc * yc
     ixx, iyy, ixy = float(ixx), float(iyy), float(ixy)
     centre = (xc, yc)
-    theta = 0.5 * math.atan2(2.0 * ixy, ixx - iyy)
-    c, s = math.cos(theta), math.sin(theta)
-    about_x = c * c * ixx + s * s * iyy - 2.0 * s * c * ixy
-    mean = 0.5 * (ixx + iyy)
-    if about_x < mean:
-        theta += math.pi / 2.0
-    theta = (theta + math.pi / 2.0) % math.pi - math.pi / 2.0
-    radius = math.hypot(0.5 * (ixx - iyy), ixy)
+    theta, moments = principal_axes_from_moments(ixx, iyy, ixy)
     given_j = _optional(integrals, "torsion_constant", "j_t")
     j_t = float(torsion_constant if torsion_constant is not None else (0.0 if given_j is None else given_j))
     return ReducedBeamSection(
@@ -171,7 +202,7 @@ def reduced_section_from_integrals(
         shear_centre=centre,
         mass_centre=centre,
         principal_angle=theta,
-        principal_moments=(mean + radius, mean - radius),
+        principal_moments=moments,
         warping_constant=0.0,
         torsion_constant=j_t,
         density=float(density),
