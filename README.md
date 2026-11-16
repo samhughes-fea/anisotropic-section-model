@@ -96,6 +96,18 @@ coupling is included. The classical thin-wall values it used before are kept in
 for balanced, symmetric walls. For BeamDyn's own input, the stiffness is usually
 wanted about the reference axis: `section.timoshenko_stiffness(reference)`.
 
+`FormulationWriter` exposes the in-memory Gauss cache as arrays at four levels:
+section (stiffness, centres, EΓ), wall (geometry and condensed wall law), Gauss
+(warping, shear flow, wall strains) and ply (through-thickness recovery):
+
+```python
+from anisotropic_section_model import FormulationWriter
+
+w = FormulationWriter(section.analysis, forces=[N, My, Mz, Vy, Vz, T])
+w.section(), w.walls(), w.gauss(), w.ply()
+w.to_csv("fields/")
+```
+
 ## Torsion: Saint-Venant, restrained warping and distortion
 
 shell-fem's `beam_section_properties` gives the Saint-Venant GJ of a

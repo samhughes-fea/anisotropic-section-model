@@ -1,6 +1,14 @@
 # anisotropic_section_model/thin_walled/__init__.py
 """Thin-walled anisotropic sections: wall laminates, condensed wall laws, mid-line geometry, Saint-Venant analysis."""
 
+from anisotropic_section_model.thin_walled.fields import (
+    FORMULATION_CSV_SCHEMA,
+    FormulationWriter,
+    GaussField,
+    PlyField,
+    SectionField,
+    WallField,
+)
 from anisotropic_section_model.thin_walled.laminate import (
     DEFAULT_SHEAR_CORRECTION,
     Ply,
@@ -29,8 +37,14 @@ from anisotropic_section_model.thin_walled.wall_stiffness import (
 
 __all__ = [
     "DEFAULT_SHEAR_CORRECTION",
+    "FORMULATION_CSV_SCHEMA",
+    "FormulationWriter",
+    "GaussField",
     "Ply",
+    "PlyField",
     "PlyMaterial",
+    "SectionField",
+    "WallField",
     "WallLaminate",
     "FORCES",
     "STRAINS",
