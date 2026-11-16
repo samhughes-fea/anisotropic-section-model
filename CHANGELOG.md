@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Solid 2D section at root and cap stations. `solid.compare_cut` and
+  `compare_thick_stations` run the 2D finite-element 6 x 6 beside the
+  thin-walled 6 x 6 of the same cut and report the difference. A published
+  matrix is compared only when the caller supplies held named terms (or a
+  `K6` already in `STRAINS` order); missing fields stay `absent`. No VABS
+  or BECAS gate is added.
 - Principal axes of the full section. `SectionAnalysis`, `ThinWalledSectionAnalysis`
   and `SolidSectionAnalysis` export `principal_angle` and `principal_moments` from
   the mass second moments about the mass centre, the same pair `reduced_section_from_integrals`
