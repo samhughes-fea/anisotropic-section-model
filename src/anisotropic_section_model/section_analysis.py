@@ -80,6 +80,8 @@ class SectionAnalysis:
         In section coordinates ``(y, z)`` about the beam reference axis.
     mass : dict
         ``m``, ``y_m``, ``z_m``, ``I_yy``, ``I_zz``, ``I_yz``, ``I_p`` per length.
+        Principal axes of those moments about the mass centre are ``principal_angle``
+        and ``principal_moments``.
     source : str
         ``"isotropic"``, ``"thin_walled"`` or ``"solid"`` (a section meshed in 2D).
     section_id : int or None
@@ -508,6 +510,28 @@ class SectionAnalysis:
         D = np.zeros((6, 6))
         D[np.ix_(CLASSICAL_INDEX, CLASSICAL_INDEX)] = self.classical_stiffness
         return D
+
+    def principal_axes(self) -> Tuple[float, Tuple[float, float]]:
+        """Principal angle and centroidal mass moments ``(I_1, I_2)`` of this section.
+
+        The angle is from ``y`` toward ``z``, in ``(-π/2, π/2]``, and ``I_1`` is
+        the larger moment. The reduced section exports the same pair; this is
+        that export on the full ``SectionAnalysis`` (thin-walled, solid or
+        isotropic), from the mass second moments about the mass centre.
+        """
+        from anisotropic_section_model.geometry_to_properties import principal_axes_from_mass
+
+        if not self.mass:
+            raise ValueError("this SectionAnalysis has no mass properties")
+        return principal_axes_from_mass(self.mass)
+
+    @property
+    def principal_angle(self) -> float:
+        return self.principal_axes()[0]
+
+    @property
+    def principal_moments(self) -> Tuple[float, float]:
+        return self.principal_axes()[1]
 
     def mass_matrix(self) -> npt.NDArray[np.float64]:
         """Rigid-section mass per length (6, 6) for nodal fields ``[u_x, u_y, u_z, theta_x, theta_y, theta_z]``.

@@ -237,6 +237,28 @@ def test_uniform_axial_strain_for_isotropic_section():
         assert abs(e[1]) < 1e-14
 
 
+def test_full_thin_walled_section_exports_principal_axes():
+    from anisotropic_section_model.geometry_to_properties import principal_axes_from_mass
+    from anisotropic_section_model.section_analysis import SectionAnalysis
+
+    R, t, n, rho = 0.5, 5e-3, 64, 2700.0
+    tw = ThinWalledSectionAnalysis(polygon_tube(R, n), {1: iso(t, rho=rho)})
+    assert tw.principal_angle == pytest.approx(0.0, abs=1e-8)
+    assert tw.principal_moments[0] == pytest.approx(tw.principal_moments[1], rel=1e-12)
+    wrapped = SectionAnalysis.from_thin_walled(tw)
+    assert wrapped.principal_angle == pytest.approx(tw.principal_angle)
+    assert wrapped.principal_moments == pytest.approx(tw.principal_moments)
+
+    pts = {1: (0.0, 0.0), 2: (0.12, 0.0), 3: (0.0, 0.08)}
+    walls = [Wall(1, 1, 2, 1), Wall(2, 1, 3, 1)]
+    ell = ThinWalledSectionAnalysis(ThinWalledSection(pts, walls), {1: iso(2e-3, rho=rho)})
+    theta, moments = principal_axes_from_mass(ell.mass_properties)
+    assert ell.principal_angle == pytest.approx(theta)
+    assert ell.principal_moments == moments
+    assert abs(ell.principal_angle) > 0.05
+    assert ell.principal_moments[0] > ell.principal_moments[1]
+
+
 def test_mass_properties():
     R, t, n, rho = 0.5, 5e-3, 64, 2700.0
     sa = ThinWalledSectionAnalysis(polygon_tube(R, n), {1: iso(t, rho=rho)})

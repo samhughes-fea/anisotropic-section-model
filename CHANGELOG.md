@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Principal axes of the full section. `SectionAnalysis`, `ThinWalledSectionAnalysis`
+  and `SolidSectionAnalysis` export `principal_angle` and `principal_moments` from
+  the mass second moments about the mass centre, the same pair `reduced_section_from_integrals`
+  already gave on the reduced section. `principal_axes_from_moments` and
+  `principal_axes_from_mass` are the shared helpers. No VABS or BECAS gate is added.
 - CI and the install notes pin implicit-geometry-kernel to tag K9
   (`d3f6c4fb74bff47131fd3dcbabb1228c3eea6b0b`). The package still does not
   import the kernel.

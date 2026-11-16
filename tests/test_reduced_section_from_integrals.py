@@ -2,7 +2,12 @@
 
 import math
 
-from anisotropic_section_model.geometry_to_properties import reduced_section_from_integrals
+from anisotropic_section_model.geometry_to_properties import (
+    principal_axes_from_mass,
+    principal_axes_from_moments,
+    reduced_section_from_integrals,
+)
+from anisotropic_section_model.section_analysis import SectionAnalysis
 
 
 def _rotated_product(ixx, iyy, ixy, theta):
@@ -62,3 +67,28 @@ def test_origin_moments_keep_a_cap_offset():
     assert abs(section.ixx) < 1e-15
     assert section.elastic_centre[1] == e
     assert section.shear_centre[1] == e
+
+
+def test_principal_axes_helper_matches_the_reduced_section():
+    ixx, iyy, ixy = 4.0, 1.0, 0.5
+    theta, moments = principal_axes_from_moments(ixx, iyy, ixy)
+    section = reduced_section_from_integrals({
+        "area": 1.0, "centroid": (0.0, 0.0), "ixx": ixx, "iyy": iyy, "ixy": ixy,
+    })
+    assert math.isclose(theta, section.principal_angle)
+    assert math.isclose(moments[0], section.principal_moments[0])
+    assert math.isclose(moments[1], section.principal_moments[1])
+    ixx2, ixy2 = _rotated_product(ixx, iyy, ixy, theta)
+    assert abs(ixy2) < 1e-12
+    assert abs(ixx2 - moments[0]) < 1e-12
+
+
+def test_full_section_exports_principal_axes():
+    rho, A, I_y, I_z = 1000.0, 1.0e-3, 1.0e-7, 4.0e-7
+    sa = SectionAnalysis.from_isotropic(E=70e9, G=27e9, A=A, I_y=I_y, I_z=I_z, J_t=I_y + I_z, rho=rho)
+    theta, moments = principal_axes_from_mass(sa.mass)
+    assert sa.principal_angle == theta
+    assert sa.principal_moments == moments
+    assert theta == 0.0
+    assert math.isclose(moments[0], rho * I_z)
+    assert math.isclose(moments[1], rho * I_y)
