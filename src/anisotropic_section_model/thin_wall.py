@@ -633,6 +633,38 @@ class ThinWalledSection:
         K[6, 6] = self.EGamma
         return K
 
+    def mass_matrix(self, reference=(0.0, 0.0)) -> np.ndarray:
+        """6 x 6 sectional mass matrix about ``reference`` (in the section axes).
+
+        Same order and form as BeamDyn's: [u_x, u_y, u_z, theta_x, theta_y, theta_z],
+
+            [[m, 0, 0, 0, 0, -m yc], [0, m, 0, 0, 0, m xc], [0, 0, m, m yc, -m xc, 0],
+             [0, 0, m yc, i_xx, -i_xy, 0], [0, 0, -m xc, -i_xy, i_yy, 0],
+             [-m yc, m xc, 0, 0, 0, i_xx + i_yy]]
+
+        with (xc, yc) the mass centre from ``reference``, i_xx = ∫ρ (y - y_r)²,
+        i_yy = ∫ρ (x - x_r)² and i_xy = ∫ρ (x - x_r)(y - y_r) per unit length. From the
+        coupled analysis' ``mass_properties``: ply densities through each wall's
+        thickness, laminate offsets included.
+        """
+        mp = self.analysis.mass_properties  # analysis axes (y, z) are (x, y) here
+        xr, yr = float(reference[0]), float(reference[1])
+        m = mp["m"]
+        xm, ym = mp["y_m"], mp["z_m"]
+        ixx = mp["I_yy"] - 2.0 * yr * m * ym + m * yr * yr
+        iyy = mp["I_zz"] - 2.0 * xr * m * xm + m * xr * xr
+        ixy = mp["I_yz"] - xr * m * ym - yr * m * xm + m * xr * yr
+        xc, yc = xm - xr, ym - yr
+        M = np.zeros((6, 6))
+        M[0, 0] = M[1, 1] = M[2, 2] = m
+        M[0, 5] = M[5, 0] = -m * yc
+        M[1, 5] = M[5, 1] = m * xc
+        M[2, 3] = M[3, 2] = m * yc
+        M[2, 4] = M[4, 2] = -m * xc
+        M[3, 3], M[4, 4], M[5, 5] = ixx, iyy, ixx + iyy
+        M[3, 4] = M[4, 3] = -ixy
+        return M
+
     def contour(self) -> List[Tuple[np.ndarray, np.ndarray]]:
         """(start, end) point pairs of the walls, for plotting."""
         return [(self.points[a], self.points[b]) for a, b in zip(self.start, self.end)]
