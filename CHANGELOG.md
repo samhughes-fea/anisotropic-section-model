@@ -24,6 +24,20 @@
   `solid.structured` (`structured_mesh`, `rectangle_patch`, `arc_patch`): conforming mapped
   meshes of rectangles and annular sectors in `Q4`, `Q8` or `T6`, with plies that follow
   curved walls.
+- **BeamDyn and windIO export.** `BeamDynBlade.from_geometry` sweeps a `BladeGeometry`
+  (one `ThinWalledSection.from_geometry` cut per station; laminates can be a function of
+  z) and `from_sections` takes sections you have. `write` gives a complete BeamDyn deck,
+  the primary file (one member through the stations' pitch-axis points, initial twist,
+  solver options) and the blade file (6 × 6 stiffness and mass per station, damping),
+  for OpenFAST 5 or, with `version=4`, OpenFAST 3 and 4. `to_windio` / `write_windio`
+  give the windIO 2.0 `reference_axis`, `twist` and `elastic_properties`. `read`,
+  `read_blade` and `from_windio` read them back. Matrices are about the pitch axis in
+  the chord-aligned frame, in BeamDyn's axes (mirrored from the geometry kernel's), and
+  the twist takes BeamDyn's sign. New `ThinWalledSection.mass_matrix(reference)`.
+  Checked against the IEA 15 MW windIO and BeamDyn files (1e-12) and in BeamDyn itself
+  (OpenFAST 4.1.2 and 5.0.0) against `TimoshenkoBeam`; example 07. New `windio` extra
+  (PyYAML).
+
 - **Torsion from the coupled section analysis.** `ThinWalledSection.omega`, `S_warping`
   and `Ip` now come from `section.analysis` (its torsional warping and Benscoter
   stiffness), like `GJ` and `EGamma` already did; the classical values move to

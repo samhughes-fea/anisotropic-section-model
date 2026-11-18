@@ -10,3 +10,5 @@ reference_blades/
 
 # generated BECAS input/output of benchmarks/becas_same_mesh (BECAS itself never lives here)
 benchmarks/becas_same_mesh/_work/
+# Public reference files example 07 downloads (IEA-15-240-RWT, Apache-2.0)
+examples/07_beamdyn_windio_export/data/reference/
