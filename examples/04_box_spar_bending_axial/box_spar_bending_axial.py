@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 
+from _shared.checks import Checks
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import add_rib, box_spar, contour_coordinate, loop_order, shell_section_motion
 from anisotropic_section_model import GeneralizedBeam, ThinWalledSection, TimoshenkoBeam
@@ -444,6 +445,32 @@ def report(r):
           f"N_ss {p['GBT extensible_Nss'][0]:.3f}; inextensible {p['GBT_Nzz'][0]:.3f}")
 
 
+def check(r) -> Checks:
+    c = Checks("04 box spar bending and axial load")
+    b, d, a = r["bending"], r["distortion"], r["axial"]
+    tip = b["tip"]
+    c.close("tip deflection, Timoshenko against shell", tip["Timoshenko"], tip["shell"], 0.03, "shell model")
+    c.close("tip deflection, GBT + distortion against shell", tip["GBT + distortion"], tip["shell"], 0.025, "shell model")
+    c.true("Euler-Bernoulli misses the shear: under 0.6 of the shell at L/h = 6",
+           tip["Euler-Bernoulli"] < 0.6 * tip["shell"], "shell model")
+    none = d["ribs"]["none"]
+    c.close("cap pressure, no ribs: cap centre, GBT all modes against shell", none["gbt"]["all"][-1][0],
+            none["shell"][-1][0], 0.01, "shell model")
+    c.close("cap pressure, no ribs: webs, GBT all modes against shell", none["gbt"]["all"][-1][1],
+            none["shell"][-1][1], 0.02, "shell model")
+    c.true("cap pressure, no ribs: the cap deflects over 8 x the beam", abs(none["shell"][-1][0]) > 8 * abs(d["timoshenko"][-1]),
+           "shell model")
+    far = int(np.argmax(a["corner"]["distance"]))
+    c.close("corner load far from the tip: peak N_zz, extensible GBT against shell",
+            a["corner"]["peak"]["GBT + shear lag, extensible"][far], a["corner"]["peak"]["shell"][far], 0.05, "shell model")
+    p = a["poisson"]
+    c.close("clamp, top-cap N_zz / far field, extensible GBT against shell", p["GBT extensible_Nzz"][0], p["shell_Nzz"][0],
+            0.02, "shell model")
+    c.close("clamp, top-cap N_ss / far field, extensible GBT against shell", p["GBT extensible_Nss"][0], p["shell_Nss"][0],
+            0.01, "shell model", scale=1.0)
+    return c
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--reuse", action="store_true", help="redraw from data/results.json")
@@ -455,10 +482,12 @@ def main():
         r = {"bending": bending(lib), "distortion": distortion(lib), "axial": axial(lib)}
         DATA.parent.mkdir(exist_ok=True)
         DATA.write_text(json.dumps(r, indent=1))
+        r = json.loads(DATA.read_text())   # the same (string) keys as --reuse
     report(r)
     figure_bending(r["bending"])
     figure_distortion(r["distortion"])
     figure_axial(r["axial"])
+    check(r).report()
 
 
 if __name__ == "__main__":

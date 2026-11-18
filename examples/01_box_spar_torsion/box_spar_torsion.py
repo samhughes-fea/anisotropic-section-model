@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 
+from _shared.checks import Checks
 from _shared.plotting import DIVERGING, REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import (add_rib, box_spar, contour_coordinate, loop_order, section_nodes,
                              shell_bimoment, shell_section_motion)
@@ -132,6 +133,22 @@ def main():
         label = "no ribs" if spacing is None else f"ribs every {spacing:g} m"
         print(f"Web couple, {label}: tip twist shell {1e3 * shell_tw[-1]:.4f} mrad; GBT " + ", ".join(
             f"{'all' if n is None else n} modes {1e3 * v[-1]:.4f}" for n, v in gbt.items()))
+    checks = Checks("01 box spar torsion")
+    checks.close("GJ, coupled analysis against classical Bredt-Batho", sec.GJ, sec.classical["GJ"], 1e-3,
+                 "closed form (balanced walls)")
+    checks.close("tip twist, Benscoter against shell", tip["Benscoter"], tip["shell"], 0.02, "shell model")
+    checks.close("tip twist, GBT + distortion against shell", tip["GBT + distortion"], tip["shell"], 0.005, "shell model")
+    checks.close("GBT rigid section reproduces Benscoter", tip["GBT rigid section"], tip["Benscoter"], 0.005,
+                 "closed form")
+    checks.close("root bimoment, GBT + distortion against shell (first element row)", g_full.bimoment([zb[0]])[0],
+                 shell_B[0], 0.05, "shell model")
+    for spacing, (shell_tw, gbt) in couple.items():
+        label = "no ribs" if spacing is None else f"ribs every {spacing:g} m"
+        checks.close(f"web couple, {label}: GBT all modes against shell", gbt[None][-1], shell_tw[-1], 0.02,
+                     "shell model")
+    checks.true("web couple, no ribs: distortion makes the box 20 x softer than the rigid section",
+                couple[None][0][-1] > 20 * couple[None][1][0][-1], "shell model")
+
     # distorted tip sections, no ribs
     _, _, sol_c = shell_case(box, sec, [], "couple")
     g_c = gbt_case(sec, [], "couple", "full", None)
@@ -305,6 +322,7 @@ def main():
              color=TEXT_SECONDARY)
     fig.tight_layout()
     save(fig, __file__, "box_spar_distortion.png")
+    checks.report()
 
 
 if __name__ == "__main__":

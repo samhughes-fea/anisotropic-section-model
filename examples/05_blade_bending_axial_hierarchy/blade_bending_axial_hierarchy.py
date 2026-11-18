@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 
+from _shared.checks import Checks
 from _shared.plotting import REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import add_rib, contour_coordinate, loop_order, shell_section_motion
 from anisotropic_section_model import GeneralizedBeam, ThinWalledSection, TimoshenkoBeam
@@ -409,6 +410,33 @@ def report(r):
                                                           for k, v in a["te_share"].items()))
 
 
+def check(r) -> Checks:
+    c = Checks("05 blade bending and axial hierarchy")
+    b, d, a = r["bending"], r["suction"], r["axial"]
+    tip = b["tip"]
+    for k, tol in (("Timoshenko, thin-wall 6 x 6", 0.01), ("Timoshenko, shell 6 x 6", 0.015),
+                   ("GBT + all shear-lag modes", 0.005), ("GBT + distortion", 0.005)):
+        c.close(f"tip deflection, {k} against shell", tip[k], tip["shell"], tol, "shell model")
+    c.true("Euler-Bernoulli misses a quarter: under 0.8 of the shell", tip["Euler-Bernoulli"] < 0.8 * tip["shell"],
+           "shell model")
+    for key in ("none", "0.75"):
+        v = d["ribs"][key]
+        c.close(f"suction, ribs {key}: skin, GBT all modes against shell", v["gbt"]["all"][-1][0], v["shell"][-1][0], 0.05,
+                "shell model")
+        c.close(f"suction, ribs {key}: webs, GBT all modes against shell", v["gbt"]["all"][-1][1], v["shell"][-1][1], 0.06,
+                "shell model")
+    ext = "GBT + shear lag, extensible"
+    c.close("axial: far-field TE skin N_zz, extensible GBT against shell", a["te_far"][ext], a["te_far"]["shell"], 0.02,
+            "shell model")
+    i = int(np.argmin(a["distance"]))
+    j = int(np.argmax(a["distance"]))
+    for k in (i, j):
+        c.close(f"axial: TE skin share {a['distance'][k]:.2f} m from the load, extensible GBT against shell",
+                a["te_share"][ext][k] / a["te_far"][ext], a["te_share"]["shell"][k] / a["te_far"]["shell"], 0.03,
+                "shell model", scale=1.0)
+    return c
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--reuse", action="store_true", help="redraw from data/results.json")
@@ -425,10 +453,12 @@ def main():
              "axial": axial(blade, sec, sections, zs)}
         DATA.parent.mkdir(exist_ok=True)
         DATA.write_text(json.dumps(r, indent=1))
+        r = json.loads(DATA.read_text())   # the same (string) keys as --reuse
     report(r)
     figure_bending(r["bending"])
     figure_suction(r["suction"])
     figure_axial(r["axial"])
+    check(r).report()
 
 
 if __name__ == "__main__":

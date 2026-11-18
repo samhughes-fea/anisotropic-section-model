@@ -65,7 +65,7 @@ the boundary conditions.
 T / GJ_free.
 - Vlasov forces the warping to zero exactly at the clamp, so its twist rate starts at
   zero. That is too stiff for a closed box, whose walls shear as they warp.
-- Benscoter lets the warping shear. It gets the right level at the clamp and recovers
+- Benscoter lets the warping shear. It starts near the shell's level at the clamp and recovers
   over the warping decay length (0.16 m).
 - The shell then stays a few percent below the free twist rate out to about 0.8 m. This
   is the clamp also holding the stretch, spread out by shear lag.
