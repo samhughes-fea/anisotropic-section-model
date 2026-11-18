@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **VABS and BECAS benchmark** for the solid section (`benchmarks/vabs_becas`, gated by
+  `tests/test_benchmark_vabs_becas.py`). On the BECAS user guide's own 10 x 10 mesh of its
+  squares (isotropic, two-material, orthotropic at 0, 22.5 and 90 degrees) ASM reproduces
+  every published term to the printed digits, couplings included; converged, it matches the
+  closed forms and sits about 0.85 % below BECAS's coarse-mesh shear and torsion values. The
+  BECAS tube and half tube agree to 0.15 % (centres included), the Chen et al. aluminium tube
+  to 0.02 % (VABS's GJ is 2 % above the exact value, which ASM matches), and the Yu et al.
+  multi-layer composite pipe to 0.2 % on all nine VABS terms, extension-twist and
+  shear-bending couplings included. `RESULTS.md` has the tables.
+- Solid section: a bilinear `Q4` element, to run the BECAS user guide's meshes, and
+  `solid.structured` (`structured_mesh`, `rectangle_patch`, `arc_patch`): conforming mapped
+  meshes of rectangles and annular sectors in `Q4`, `Q8` or `T6`, with plies that follow
+  curved walls.
 - `FormulationWriter` returns warping, shear flow and wall strains at section, wall,
   Gauss and ply levels of a `ThinWalledSectionAnalysis`, and writes one CSV per level
   (`to_csv`). Warping is force-independent; strains, shear flow and ply stresses are

@@ -26,6 +26,7 @@ src/anisotropic_section_model/
 └── beam.py         TimoshenkoBeam: exact Timoshenko / Euler-Bernoulli beams from a 6 × 6 or 4 × 4
 tests/              pytest suite, with shell models as references
 examples/           six worked examples, each with its script, figures and README
+benchmarks/         the solid section against published VABS and BECAS results (vabs_becas/)
 ```
 
 ## Install
