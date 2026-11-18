@@ -118,7 +118,7 @@ one physical contribution:
 from anisotropic_section_model import GeneralizedBeam, RestrainedTorsionBeam, ThinWalledSection
 
 section = ThinWalledSection.from_blade_mesh(blade, z=5.0)       # or from_segments(...)
-section.GJ, section.shear_flow, section.omega, section.shear_centre, section.EGamma
+section.GJ, section.GJ_free, section.shear_flow, section.omega, section.shear_centre, section.EGamma
 
 beam = RestrainedTorsionBeam.from_section(section, length=10.0)    # Benscoter; vlasov=True for Vlasov
 r = beam.cantilever_tip_torque(1e3)      # twist, warping amplitude, bimoment, Saint-Venant / warping torque
@@ -138,7 +138,8 @@ sol.mean_twist(z), sol.bimoment(z), sol.distortion(z, 0), sol.wall_resultants(z)
   shear centre is the pole that makes ω orthogonal to bending, and EΓ = ∫ Et ω² ds
   plus the walls' own bending.
 - **Restrained warping** (`RestrainedTorsionBeam`). Benscoter's theory gives the
-  warping its own amplitude φ(z), with shear stiffness S = Ip − J; Vlasov's ties it to
+  warping its own amplitude φ(z), with shear stiffness S (Ip − J in thin-wall theory,
+  from the coupled analysis here); Vlasov's ties it to
   the twist rate (S → ∞). Solved in closed form for cantilevers and by finite elements
   for any supports. Outputs: bimoment B = −EΓ φ', warping stress N_zz = B Et ω / EΓ,
   and the split of the torque into Saint-Venant and warping parts.
@@ -243,11 +244,15 @@ python examples/run_all.py
 
 - Linear and small-deflection.
 - `ThinWalledSection`, `RestrainedTorsionBeam` and `GeneralizedBeam` describe prismatic
-  beams with straight walls between section points; the closed-form section properties
-  (and the thin-wall 6 × 6 and 7 × 7) use the uncoupled wall stiffnesses, with each wall
-  stretching and shearing without curving (GBT keeps all couplings). Off-axis walls'
-  couplings (bend-twist, extension-twist, shear-bending) come only from a shell model
-  (example 03). A tapered blade is handled one cut at a time.
+  beams with straight walls between section points. The 6 × 6 and 7 × 7, the warping
+  function, EΓ and Benscoter's S come from the coupled section analysis, so off-axis
+  walls' couplings (bend-twist, extension-twist, shear-bending) are kept; the classical
+  thin-wall values are in `section.classical`. `RestrainedTorsionBeam` has the twist as
+  its only degree of freedom: it takes `GJ_free` (the other strains free, the default)
+  or `GJ` (held), and for coupled bending and twist along the span use `TimoshenkoBeam`
+  or `GeneralizedBeam`. GBT's energy keeps the full wall stiffness; its distortional
+  modes are made free of work with the classical Saint-Venant shear flows. A tapered
+  blade is handled one cut at a time.
 
 ## License
 
