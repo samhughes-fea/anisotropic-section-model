@@ -75,6 +75,7 @@ to 4 to 5 digits on every case (`RESULTS.md`, `T6 %` column).
   **Before quoting these numbers upstream, check the S2 and C1 / C2 values against the
   user guide's tables**: C1 and C2's BECAS meshes are not stated, so they are compared on
   converged meshes only.
-- Not yet covered: the BECAS user guide's C3, C4 (layered cylinder) and T1, T2 (three-cell)
-  sections, the Chen et al. composite airfoil (MH-104), and the CAS / CUS box beams of
-  Chandra et al. Their input data was not available here.
+- C3, C4 (layered cylinder), T1 to T3 (three-cell), an MH-104-style airfoil and CAS / CUS box
+  beams are compared with BECAS on the same meshes in [../becas_same_mesh](../becas_same_mesh/README.md).
+  The Chen et al. MH-104 layup and the Chandra et al. box specimens themselves are still not
+  reproduced: their input data was not available here.

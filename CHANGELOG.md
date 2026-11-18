@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Same-mesh BECAS benchmark** (`benchmarks/becas_same_mesh`, gated by
+  `tests/test_benchmark_becas_same_mesh.py`). A reader and writer of BECAS's 2D input
+  (`becas_io`) puts ASM and BECAS on identical meshes. On BECAS's own validation meshes ASM
+  matches the full 6 x 6 and both centres of the BECAS and VABS outputs shipped with them to
+  1e-9 or better (S2, S3, C1, C2, C3 at E1/E2 up to 1e5, C4 layered cylinder), and the user
+  guide's three-cell T1 to T3 tables to their printed digits. Adds an MH-104-style two-web
+  section, CAS and CUS box beams and a layered composite cylinder, written to BECAS input; the
+  BECAS runs on them are pending a MATLAB or Octave runtime. Records stale result files and
+  mislabelled tables found in BECAS's examples and guide.
+
 - **VABS and BECAS benchmark** for the solid section (`benchmarks/vabs_becas`, gated by
   `tests/test_benchmark_vabs_becas.py`). On the BECAS user guide's own 10 x 10 mesh of its
   squares (isotropic, two-material, orthotropic at 0, 22.5 and 90 degrees) ASM reproduces
