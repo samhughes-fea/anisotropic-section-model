@@ -30,7 +30,8 @@ classifiers = [
 [project.optional-dependencies]
 sparse = ["scipy>=1.8"]
 examples = ["scipy>=1.8", "matplotlib>=3.5"]
-dev = ["scipy>=1.8", "matplotlib>=3.5", "pytest>=7", "build>=1.0"]
+windio = ["pyyaml>=5.1"]
+dev = ["scipy>=1.8", "matplotlib>=3.5", "pyyaml>=5.1", "pytest>=7", "build>=1.0"]
 
 [project.urls]
 Homepage = "https://github.com/samhughes-fea/anisotropic-section-model"
