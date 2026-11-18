@@ -41,8 +41,13 @@ One engine: the headline properties (``EA``, ``EI_*``, ``GJ``, the centroid and 
 centre, ``EGamma``) and the stiffness matrices come from the coupled
 ``thin_walled.ThinWalledSectionAnalysis`` of the same walls (``section.analysis``,
 1d-fem's Giavotto analysis on Kirchhoff walls), which keeps every coupling between
-extension, shear, bending and twist of unbalanced walls. The shear flows, ``omega`` and
-the Benscoter quantities (``Ip``, ``S_warping``) stay classical.
+extension, shear, bending and twist of unbalanced walls. So do the torsional warping
+``omega``, the Benscoter warping shear stiffness ``S_warping`` (with ``Ip`` =
+``S_warping`` + the membrane part of ``GJ``) and the warping couplings of
+``vlasov_stiffness``. ``GJ_free`` is the torsional stiffness with every other section
+force zero, which an unbalanced wall makes lower than ``GJ``. The Saint-Venant
+``shear_flow`` stays classical: ``GeneralizedBeam`` uses it to make its distortional
+modes free of work with a torque, while its own energy takes the full wall stiffness.
 """
 
 from __future__ import annotations
@@ -425,6 +430,18 @@ class ThinWalledSection:
         self.EI_xy = float(-Kc[3, 4])
         self.GJ = float(self.timoshenko_stiffness(self.shear_centre)[5, 5])
         self.EGamma = a.warping_constant
+        # warping: the coupled torsional warping and Benscoter warping shear stiffness.
+        # The analysis' warping is +omega per unit twist rate (u = ... + omega theta'),
+        # Benscoter's here is w = -omega phi, hence the sign.
+        self.classical.update({"omega": self.omega, "Ip": self.Ip, "S_warping": self.S_warping,
+                               "J_membrane": self.J_membrane})
+        pw = a.point_warping()
+        self.omega = -np.array([pw[k] for k in range(len(self.points))])
+        K8 = a.benscoter_stiffness
+        self.S_warping = max(float(K8[6, 6]), 0.0)
+        self.J_membrane = max(self.GJ - self.GJ_walls, 0.0)
+        self.Ip = self.S_warping + self.J_membrane
+        self._warping_coupling = K8[7, :6].copy()  # psi' against the six strains, about the origin
 
     # ------------------------------------------------------------ derived values
     @property
@@ -439,6 +456,20 @@ class ThinWalledSection:
             self.GJ / self.EGamma
         return float(1.0 / np.sqrt(k2))
 
+    @property
+    def GJ_free(self) -> float:
+        """Torsional stiffness with every other section force zero: 1 / F[5, 5] of the 6 x 6 compliance.
+
+        ``GJ`` is ``K[5, 5]`` about the shear centre, the torque per unit twist rate when
+        the other five beam strains are held at zero. A beam loaded by a torque alone is
+        free to stretch, bend and shear, and an unbalanced wall couples those to the
+        twist (extension-twist in a circumferentially uniform box, bend-twist in a
+        circumferentially asymmetric one), so it twists by T / GJ_free. The two are the
+        same when the twist is uncoupled.
+        """
+        F = np.linalg.inv(self.timoshenko_stiffness(self.shear_centre))
+        return float(1.0 / F[5, 5])
+
     def warping_stress_resultant(self, bimoment: float) -> np.ndarray:
         """N_zz at each section point for a bimoment (warping normal stress resultant, N/m).
 
@@ -451,11 +482,11 @@ class ThinWalledSection:
             for p in (self.start[k], self.end[k]):
                 Et_node[p] += self.Et[k]
                 cnt[p] += 1
-        return bimoment * Et_node / cnt * self.omega / self.classical["EGamma"]
+        return bimoment * Et_node / cnt * self.omega / self.EGamma
 
     def wall_warping_resultant(self, bimoment: float) -> Tuple[np.ndarray, np.ndarray]:
         """N_zz at the start and end of every wall for a bimoment."""
-        f = bimoment / self.classical["EGamma"] * self.Et
+        f = bimoment / self.EGamma * self.Et
         return f * self.omega[self.start], f * self.omega[self.end]
 
     # ------------------------------------------------------------ beam stiffness matrices
@@ -588,8 +619,17 @@ class ThinWalledSection:
         ``S_warping`` is the extra shear stiffness Benscoter's theory needs for a closed
         section.
         """
+        from anisotropic_section_model.thin_walled.section_analysis import translation_matrix
+
         K = np.zeros((7, 7))
         K[:6, :6] = self.timoshenko_stiffness(reference)
+        # couplings of the warping gradient with the six strains (zero for balanced walls).
+        # The analysis' warping amplitude psi is the twist rate here (its warping
+        # omega_analysis psi is -omega phi with omega = -omega_analysis)
+        P = translation_matrix(float(reference[0]), float(reference[1]))
+        c = (np.linalg.inv(P).T @ self._warping_coupling)[BEAMDYN_FROM_ONEDFEM]
+        K[6, :6] = c
+        K[:6, 6] = c
         K[6, 6] = self.EGamma
         return K
 

@@ -95,9 +95,21 @@ class RestrainedTorsionBeam:
         self.n_elements = int(n_elements)
 
     @classmethod
-    def from_section(cls, section, length: float, vlasov: bool = False, n_elements: int = 80):
-        """From a ``ThinWalledSection``; ``vlasov=True`` drops the warping shear flexibility."""
-        return cls(section.GJ, section.EGamma, length, None if vlasov else section.S_warping, n_elements)
+    def from_section(cls, section, length: float, vlasov: bool = False, n_elements: int = 80,
+                     other_strains: str = "free"):
+        """From a ``ThinWalledSection``; ``vlasov=True`` drops the warping shear flexibility.
+
+        GJ, EΓ and S all come from the section's coupled analysis. ``other_strains``
+        says what the beam's extension, bending and shear do while it twists:
+        ``"free"`` (the default: a beam loaded by torques alone, so GJ is
+        ``section.GJ_free``, which counts any extension-twist or bend-twist coupling of
+        the walls) or ``"held"`` (those strains held at zero: ``section.GJ``). The two
+        are the same for balanced walls.
+        """
+        if other_strains not in ("free", "held"):
+            raise ValueError("other_strains must be 'free' or 'held'")
+        GJ = section.GJ_free if other_strains == "free" else section.GJ
+        return cls(GJ, section.EGamma, length, None if vlasov else section.S_warping, n_elements)
 
     # ------------------------------------------------------------ closed form
     @property

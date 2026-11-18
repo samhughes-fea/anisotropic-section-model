@@ -11,7 +11,6 @@
   section, CAS and CUS box beams and a layered composite cylinder, written to BECAS input; the
   BECAS runs on them are pending a MATLAB or Octave runtime. Records stale result files and
   mislabelled tables found in BECAS's examples and guide.
-
 - **VABS and BECAS benchmark** for the solid section (`benchmarks/vabs_becas`, gated by
   `tests/test_benchmark_vabs_becas.py`). On the BECAS user guide's own 10 x 10 mesh of its
   squares (isotropic, two-material, orthotropic at 0, 22.5 and 90 degrees) ASM reproduces
@@ -25,6 +24,18 @@
   `solid.structured` (`structured_mesh`, `rectangle_patch`, `arc_patch`): conforming mapped
   meshes of rectangles and annular sectors in `Q4`, `Q8` or `T6`, with plies that follow
   curved walls.
+- **Torsion from the coupled section analysis.** `ThinWalledSection.omega`, `S_warping`
+  and `Ip` now come from `section.analysis` (its torsional warping and Benscoter
+  stiffness), like `GJ` and `EGamma` already did; the classical values move to
+  `section.classical`. `vlasov_stiffness` gains the couplings of the warping gradient
+  with the six beam strains. The new `GJ_free` is the torsional stiffness with every
+  other section force zero (1 / F[5, 5] about the shear centre).
+  `RestrainedTorsionBeam.from_section` takes `other_strains="free"` (the default,
+  `GJ_free`) or `"held"` (`GJ`, the old behaviour). Balanced walls are unchanged to
+  about 1e-4. On a box with one off-axis layup ([30]4, extension-twist coupled),
+  `GJ_free` is 0.44 GJ, and a shell model of the box twists within 3 % of it
+  (`tests/test_coupled_torsion.py`); the old `from_section` was about 2.2 times too stiff.
+  GBT's classical torsional warping mode follows the coupled `omega`.
 - `FormulationWriter` returns warping, shear flow and wall strains at section, wall,
   Gauss and ply levels of a `ThinWalledSectionAnalysis`, and writes one CSV per level
   (`to_csv`). Warping is force-independent; strains, shear flow and ply stresses are
