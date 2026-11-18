@@ -30,6 +30,7 @@ src/anisotropic_section_model/
 └── beamdyn.py      BeamDynBlade: spanwise sweep to OpenFAST BeamDyn and windIO 2.0 files
 tests/              pytest suite, with shell models as references
 examples/           seven worked examples, each with its script, figures and README
+benchmarks/         the solid section against published VABS and BECAS results (vabs_becas/)
 ```
 
 ## Install
