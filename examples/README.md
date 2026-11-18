@@ -4,10 +4,11 @@ Worked examples of the section theory, each checked against closed forms and she
 models built with [shell-fem](https://github.com/samhughes-fea/shell-fem).
 01 and 02 take torsion beyond Saint-Venant, to restrained warping and cross-section
 distortion; 03 takes the section stiffness to the Timoshenko 6 × 6 and the
-Timoshenko-Vlasov 7 × 7; 04 and 05 do the same for bending and axial load; and 06 cuts
-the sections from the implicit geometry. Each one lives in its own folder with its
+Timoshenko-Vlasov 7 × 7; 04 and 05 do the same for bending and axial load; 06 cuts
+the sections from the implicit geometry; and 07 writes a blade's sections for BeamDyn
+and windIO. Each one lives in its own folder with its
 script, the figures it produces and a README that walks through the model and how to
-read the results. Example numbers above 06 (20, 24, 26 and so on) refer to
+read the results. Example numbers above 07 (20, 24, 26 and so on) refer to
 [shell-fem's examples](https://github.com/samhughes-fea/shell-fem/tree/main/examples/).
 
 | # | Example | What it shows | Main API |
@@ -18,6 +19,7 @@ read the results. Example numbers above 06 (20, 24, 26 and so on) refer to
 | 04 | [Box spar bending and axial load](04_box_spar_bending_axial/) | Beyond Euler-Bernoulli on a composite box: shear deflection at L/h = 6, shear lag in the caps, distortion under a cap pressure, and the diffusion and Poisson end effects of an axial load | `TimoshenkoBeam`, `GeneralizedBeam(extensible=True)`, `ThinWalledSection.timoshenko_stiffness` |
 | 05 | [Blade bending and axial hierarchy](05_blade_bending_axial_hierarchy/) | The same hierarchy on a three-cell blade section: flapwise tip force, shear lag across the spar caps at the root, skin suction and ribs, and an axial load fed into the caps alone | `TimoshenkoBeam`, `GeneralizedBeam`, `beam_section_properties` |
 | 06 | [Blade from its implicit geometry](06_blade_from_implicit_geometry/) | Any of the 40 section layouts lofted along a blade, cut anywhere and meshed; the thin-walled section and the shell model from the same cut, against shell-fem's [example 20](https://github.com/samhughes-fea/shell-fem/tree/main/examples/20_blade_beam_properties/) region-based model; a tapered, twisted segment; flapwise webs under twist | `BladeGeometry.section_at`, `ThinWalledSection.from_geometry`, `BladeBuilder.from_geometry` |
+| 07 | [BeamDyn and windIO export](07_beamdyn_windio_export/) | A blade swept station by station into an OpenFAST BeamDyn deck and windIO 2.0 elastic properties: the IEA 15 MW windIO file reproduces the official BeamDyn blade file, the decks run in BeamDyn (OpenFAST 4 and 5), and BeamDyn matches `TimoshenkoBeam` on a twisted, coupled section | `BeamDynBlade.from_geometry`, `write`, `write_windio`, `from_windio` |
 
 All examples are linear static analyses.
 

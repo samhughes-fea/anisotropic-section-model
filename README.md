@@ -17,15 +17,19 @@ sections whose walls are composite laminates. Linear static.
   Poisson end effects.
 - **Exact beams** (`TimoshenkoBeam`): Timoshenko and Euler-Bernoulli beam elements from
   any 6 × 6 or 4 × 4 section stiffness, all couplings kept.
+- **Blade export** (`BeamDynBlade`): a section at every station of a blade, written as
+  an OpenFAST BeamDyn deck (6 × 6 stiffness and mass, reference axis, twist) and as
+  windIO 2.0 elastic properties, and read back from both.
 
 ```
 src/anisotropic_section_model/
 ├── thin_wall.py    ThinWalledSection: Saint-Venant shear flows, GJ, warping function, EΓ, 6 × 6 / 7 × 7
 ├── torsion.py      RestrainedTorsionBeam: Benscoter / Vlasov torsion, bimoment
 ├── gbt.py          GeneralizedBeam, SectionModes: GBT warping and distortion, ribs
-└── beam.py         TimoshenkoBeam: exact Timoshenko / Euler-Bernoulli beams from a 6 × 6 or 4 × 4
+├── beam.py         TimoshenkoBeam: exact Timoshenko / Euler-Bernoulli beams from a 6 × 6 or 4 × 4
+└── beamdyn.py      BeamDynBlade: spanwise sweep to OpenFAST BeamDyn and windIO 2.0 files
 tests/              pytest suite, with shell models as references
-examples/           six worked examples, each with its script, figures and README
+examples/           seven worked examples, each with its script, figures and README
 benchmarks/         the solid section against published VABS and BECAS results (vabs_becas/)
 ```
 
@@ -210,13 +214,37 @@ are bonded to. On shell-fem's example 20 section it matches
 `from_blade_mesh` within 1% in EA, EI and GJ
 ([example 06](examples/06_blade_from_implicit_geometry/)).
 
+## BeamDyn and windIO export
+
+`BeamDynBlade` cuts a `BladeGeometry` at each station, builds the section of every cut,
+and writes the beam model OpenFAST's BeamDyn reads, or the windIO 2.0 blade fields
+WISDEM reads:
+
+```python
+from anisotropic_section_model import BeamDynBlade
+
+blade = BeamDynBlade.from_geometry(geo, laminates, z=np.linspace(0.0, 20.0, 11))  # laminates: dict, or z -> dict
+blade.write("blade_BeamDyn.dat", damping=[3e-3] * 6)  # primary file + blade_BeamDyn_blade.dat (OpenFAST 5)
+blade.write("blade_BeamDyn.dat", version=4)           # the format OpenFAST 3 and 4 read
+blade.write_windio("blade.yaml")                      # reference_axis, twist, elastic_properties
+BeamDynBlade.read("IEA-15-240-RWT_BeamDyn.dat"), BeamDynBlade.from_windio("IEA-15-240-RWT.yaml")
+```
+
+Each station's 6 × 6 stiffness and mass (`ThinWalledSection.mass_matrix`) are taken
+about the pitch axis in the chord-aligned frame and put in BeamDyn's axes (x to the
+suction side, y to the trailing edge), the mirror image of the geometry kernel's; the
+twist changes sign on the way, as BeamDyn's turns the leading edge towards the pressure
+side. The IEA 15 MW windIO file written this way reproduces the official BeamDyn blade
+file to 1e-12, and BeamDyn (OpenFAST 4.1 and 5.0) on a written deck matches
+`TimoshenkoBeam` on the section ([example 07](examples/07_beamdyn_windio_export/)).
+
 ## Examples
 
-Six worked examples in [examples/](examples/), each with its script, figures and a
+Seven worked examples in [examples/](examples/), each with its script, figures and a
 README on the model and the results: torsion of a box spar and of a three-cell blade
 section, the 6 × 6 and 7 × 7 section stiffness (including six IEA 15 MW stations), the
-bending and axial hierarchy on both sections, and sections cut from the implicit
-geometry. Each checks itself against closed forms and shell models built with
+bending and axial hierarchy on both sections, sections cut from the implicit
+geometry, and a blade written for BeamDyn and windIO. Each checks itself against closed forms and shell models built with
 shell-fem.
 
 ```bash
@@ -240,6 +268,11 @@ python examples/run_all.py
   without shear (`tests/test_timoshenko_beam.py`).
 - `from_geometry` against `from_blade_mesh` and the shell model on the same section, and
   on all 40 layouts (`tests/test_section_from_geometry.py`).
+- BeamDyn export (`tests/test_beamdyn_export.py`, example 07): the mass matrix against
+  a thin box's closed forms; a twisted cut gives the untwisted local matrices; files
+  read back exactly; the IEA 15 MW windIO file reproduces its official BeamDyn blade
+  file. With `BEAMDYN_DRIVER` set, BeamDyn on a written deck matches `TimoshenkoBeam`
+  under six tip loads and self-weight.
 
 ## Limitations
 
