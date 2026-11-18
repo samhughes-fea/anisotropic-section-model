@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-11-18
 
 - **Torsion from the coupled section analysis.** `ThinWalledSection.omega`, `S_warping`
   and `Ip` now come from `section.analysis` (its torsional warping and Benscoter
