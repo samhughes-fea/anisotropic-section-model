@@ -49,35 +49,12 @@ from typing import Callable, Dict, Mapping, Optional, Sequence, Union
 
 import numpy as np
 
+from .axes import MIRROR, rotation6, to_beamdyn_frame, twist_from_beamdyn, twist_to_beamdyn  # noqa: F401
 from .thin_wall import ThinWalledSection
 
 PathLike = Union[str, os.PathLike]
 
-_SWAP = np.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
-#: section axes (x to the trailing edge, y to the suction side) to BeamDyn's (x to the
-#: suction side, y to the trailing edge): a mirror, so moments and rotations change sign
-MIRROR = np.block([[_SWAP, np.zeros((3, 3))], [np.zeros((3, 3)), -_SWAP]])
-
-
-def rotation6(angle_deg: float) -> np.ndarray:
-    """6 x 6 rotation of a force-moment (or strain, or displacement-rotation) vector by
-    ``angle_deg`` about z: the same 3 x 3 rotation on both halves."""
-    t = np.radians(float(angle_deg))
-    c, s = np.cos(t), np.sin(t)
-    R = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
-    return np.block([[R, np.zeros((3, 3))], [np.zeros((3, 3)), R]])
-
-
-def to_beamdyn_frame(matrix: np.ndarray, twist: float = 0.0) -> np.ndarray:
-    """A 6 x 6 stiffness or mass matrix in a section's axes, to BeamDyn's local frame.
-
-    ``matrix`` is in the axes the section was built in (the kernel's blade frame:
-    x to the trailing edge, y to the suction side), with the section turned by
-    ``twist`` degrees in the kernel's sense (``SectionCut.twist``). The result is in
-    the untwisted, chord-aligned frame and mirrored into BeamDyn's axes (``MIRROR``).
-    """
-    T = MIRROR @ rotation6(twist)
-    return T @ np.asarray(matrix, dtype=float) @ T.T
+# MIRROR, rotation6 and to_beamdyn_frame are defined in ``axes`` and re-exported here
 
 
 def section_matrices(section: ThinWalledSection, reference=(0.0, 0.0), twist: float = 0.0):
@@ -162,7 +139,7 @@ class BeamDynBlade:
         off = np.broadcast_to(np.asarray(offset, dtype=float), (n, 2))
         K, M = zip(*(section_matrices(s, off[i], tw[i]) for i, s in enumerate(sections)))
         kp = np.column_stack([off[:, 1] - off[0, 1], off[:, 0] - off[0, 0], z - z[0]])  # from the root
-        return cls(_arc_eta(kp), np.array(K), np.array(M), kp, -tw, name=name, sections=sections)
+        return cls(_arc_eta(kp), np.array(K), np.array(M), kp, twist_to_beamdyn(tw), name=name, sections=sections)
 
     @classmethod
     def from_geometry(cls, geometry, laminates: Union[Mapping, Callable[[float], Mapping]], z=None,

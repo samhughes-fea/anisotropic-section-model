@@ -60,6 +60,8 @@ import numpy as np
 from laminate_constitutive_model.laminate_kinematics import integrate_abd
 from laminate_constitutive_model.laminate_mechanics import Laminate
 
+from .axes import FROM_ENGINE
+
 
 @dataclass(frozen=True)
 class Wall:
@@ -83,9 +85,9 @@ def condensed_wall_stiffness(laminate: Laminate) -> np.ndarray:
     return K[np.ix_(keep, keep)] - np.outer(K[keep, 1], K[1, keep]) / K[1, 1]
 
 
-#: positions of this module's strains [gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z] (BeamDyn
-#: order, beam axis z) in 1d-fem's [eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi] (beam axis x)
-BEAMDYN_FROM_ONEDFEM = [3, 4, 0, 1, 2, 5]
+#: positions of the public strains [gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z] in the
+#: engine's [eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi]; kept for older code, see ``axes``
+BEAMDYN_FROM_ONEDFEM = list(FROM_ENGINE)
 
 
 def _line_integral(fi, fj, gi, gj, b):
