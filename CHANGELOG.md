@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-11-19
 
 - **One axis convention.** New `axes` module defines the public frame (beam axis z, x to
   the trailing edge, y to the suction side, BeamDyn's strain order, right-handed twist)
