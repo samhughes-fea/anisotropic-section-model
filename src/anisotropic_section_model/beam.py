@@ -16,20 +16,6 @@ element are recovered exactly too.
 It needs only a section stiffness, from any source: ``beam_section_properties`` (the
 shell model) or ``ThinWalledSection.timoshenko_stiffness`` (thin-wall theory). Linear
 static analysis.
-
-Tapered beams
--------------
-The stiffness can vary along the span: give one 6 x 6 per node (interpolated linearly in
-between) or a function of z. Each element's flexibility is then the integral of the
-compliance that varies along it, not that of one cut, so a coarse mesh of a tapered beam
-gives the response of the tapered beam, where a stepped (piecewise prismatic) one needs
-many elements to converge. The taper's other effect, the Resal coupling of shear with
-bending and extension through the inclined walls, is in the section stiffness
-(``thin_walled.taper``, ``solid.taper``); ``from_section_order`` puts the right-handed
-section stiffness of ``thin_walled`` and ``solid`` (beam along x) into this order.
-
-``BeamSolution.displacement_derivative`` differentiates the nodal displacements exactly
-for a change of the stiffness along the span (a layup sensitivity).
 """
 
 from __future__ import annotations
@@ -62,71 +48,6 @@ def _load_resultant(q: np.ndarray, a: float) -> np.ndarray:
     return f
 
 
-#: ``from_section_order``: this order's entry ``i`` is the section order's ``_SECTION_ORDER[i]``
-#: ([gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z] from [eps, kappa_y, kappa_z, gamma_xy,
-#: gamma_xz, phi]): the section's (x, y, z) are this beam's (z, x, y), a rotation, so no signs change
-_SECTION_ORDER = (3, 4, 0, 1, 2, 5)
-
-
-def from_section_order(matrix) -> np.ndarray:
-    """A right-handed section 6 x 6 of ``thin_walled`` / ``solid`` (beam along x, order
-    ``[eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi]``) in this module's order (beam along
-    z, section axes ``(x, y)`` = the section's ``(y, z)``). Works on (..., 6, 6) stacks."""
-    K = np.asarray(matrix, dtype=float)
-    idx = np.array(_SECTION_ORDER)
-    return K[..., idx[:, None], idx[None, :]]
-
-
-def _compliance(K: np.ndarray, shear: bool, dK: Optional[np.ndarray] = None) -> np.ndarray:
-    """6 x 6 compliance of a 6 x 6 or 4 x 4 stiffness (shear rows zero without shear), or its
-    derivative ``-C dK C`` for the stiffness changing by ``dK``."""
-    K = np.asarray(K, dtype=float)
-    if K.shape not in ((6, 6), (4, 4)):
-        raise ValueError("stiffness must be 6 x 6 (Timoshenko) or 4 x 4 (classical)")
-    Ci = np.linalg.inv(0.5 * (K + K.T))
-    if dK is not None:
-        Ci = -Ci @ (0.5 * (dK + dK.T)) @ Ci
-    if K.shape == (6, 6) and shear:
-        return Ci
-    C = np.zeros((6, 6))
-    C[2:, 2:] = Ci[-4:, -4:]
-    return C
-
-
-def _stiffness_field(stiffness, z_nodes: np.ndarray):
-    """``z -> stiffness``: a constant, one matrix per node interpolated linearly, or a function."""
-    if callable(stiffness):
-        return lambda z: np.asarray(stiffness(z), dtype=float)
-    K = np.asarray(stiffness, dtype=float)
-    if K.ndim == 2:
-        if K.shape not in ((6, 6), (4, 4)):
-            raise ValueError("stiffness must be 6 x 6 (Timoshenko) or 4 x 4 (classical)")
-        return lambda z: K
-    if K.ndim != 3 or K.shape[0] != len(z_nodes) or K.shape[1:] not in ((6, 6), (4, 4)):
-        raise ValueError(f"a stiffness per node needs shape ({len(z_nodes)}, 6, 6) or ({len(z_nodes)}, 4, 4)")
-
-    def at(z):
-        j = int(np.clip(np.searchsorted(z_nodes, z, side="right") - 1, 0, len(z_nodes) - 2))
-        t = (z - z_nodes[j]) / (z_nodes[j + 1] - z_nodes[j])
-        return (1.0 - t) * K[j] + t * K[j + 1]
-
-    return at
-
-
-_GL_X, _GL_W = np.polynomial.legendre.leggauss(4)
-
-
-def _gauss(fun, h: float, n: int = 8):
-    """Composite 4-point Gauss-Legendre integral of fun(a) over [0, h] in n pieces: the
-    integrands of a tapered element are smooth but not polynomial (a compliance)."""
-    edges = np.linspace(0.0, h, n + 1)
-    total = 0.0
-    for a0, a1 in zip(edges[:-1], edges[1:]):
-        m, r = 0.5 * (a0 + a1), 0.5 * (a1 - a0)
-        total = total + sum(w * r * fun(m + r * x) for x, w in zip(_GL_X, _GL_W))
-    return total
-
-
 def _simpson(fun, h: float, n: int = 8):
     """Composite Simpson integral of fun(a) over [0, h] (exact for the cubic integrands here)."""
     a = np.linspace(0.0, h, 2 * n + 1)
@@ -144,9 +65,7 @@ class TimoshenkoBeam:
     ----------
     stiffness:
         6 x 6 Timoshenko stiffness (BeamDyn order) or 4 x 4 classical stiffness
-        [N, Mx, My, Mz] (an Euler-Bernoulli beam). For a beam whose section changes along
-        the span (tapered): one per node, shape ``(n_nodes, 6, 6)`` (or 4 x 4), linear in
-        between, or a function ``z -> 6 x 6``.
+        [N, Mx, My, Mz] (an Euler-Bernoulli beam).
     length:
         Span, when ``z_nodes`` is not given.
     n_elements:
@@ -161,6 +80,20 @@ class TimoshenkoBeam:
 
     def __init__(self, stiffness, length: Optional[float] = None, n_elements: int = 20,
                  z_nodes: Optional[Sequence[float]] = None, shear: bool = True):
+        K = np.asarray(stiffness, dtype=float)
+        if K.shape == (6, 6):
+            C = np.linalg.inv(0.5 * (K + K.T))
+            if not shear:
+                C4 = C[2:, 2:]
+                C = np.zeros((6, 6))
+                C[2:, 2:] = C4
+        elif K.shape == (4, 4):
+            C = np.zeros((6, 6))
+            C[2:, 2:] = np.linalg.inv(0.5 * (K + K.T))
+        else:
+            raise ValueError("stiffness must be 6 x 6 (Timoshenko) or 4 x 4 (classical)")
+        self.compliance = C
+        self.shear = bool(shear) and K.shape == (6, 6)
         if z_nodes is None:
             if length is None or length <= 0:
                 raise ValueError("give a positive length or z_nodes")
@@ -168,13 +101,6 @@ class TimoshenkoBeam:
         self.z_nodes = np.asarray(z_nodes, dtype=float)
         if len(self.z_nodes) < 2 or np.any(np.diff(self.z_nodes) <= 0):
             raise ValueError("z_nodes must increase")
-        self._stiffness_at = _stiffness_field(stiffness, self.z_nodes)
-        K0 = self._stiffness_at(self.z_nodes[0])
-        self.shear = bool(shear) and K0.shape == (6, 6)
-        self._shear_option = bool(shear)
-        prismatic = not callable(stiffness) and np.asarray(stiffness).ndim == 2
-        #: the compliance of a prismatic beam (``None`` for a tapered one: ``compliance_at``)
-        self.compliance = _compliance(K0, shear) if prismatic else None
         self.length = float(self.z_nodes[-1] - self.z_nodes[0])
         self.n_nodes = len(self.z_nodes)
         self._fixed: Dict[int, set] = {}
@@ -196,40 +122,14 @@ class TimoshenkoBeam:
             raise ValueError(f"z = {z} is not a node; build the beam with TimoshenkoBeam.with_nodes_at")
         return j
 
-    @property
-    def tapered(self) -> bool:
-        return self.compliance is None
+    def _element_flexibility(self, h: float) -> np.ndarray:
+        C = self.compliance
+        return _simpson(lambda a: _transport(a).T @ C @ _transport(a), h)
 
-    def stiffness_at(self, z: float) -> np.ndarray:
-        """The section stiffness at ``z`` (as given: 6 x 6 or 4 x 4)."""
-        return self._stiffness_at(float(z))
-
-    def compliance_at(self, z: float) -> np.ndarray:
-        """The 6 x 6 section compliance at ``z`` (zero shear rows without shear)."""
-        if self.compliance is not None:
-            return self.compliance
-        return _compliance(self._stiffness_at(float(z)), self._shear_option)
-
-    def _compliance_rate(self, dstiffness, z: float) -> np.ndarray:
-        """``d compliance_at(z)`` for the stiffness changing by ``dstiffness(z)``: ``-C dK C``."""
-        return _compliance(self._stiffness_at(float(z)), self._shear_option, np.asarray(dstiffness(float(z)), float))
-
-    def _element_flexibility(self, e: int, compliance=None) -> np.ndarray:
-        """Flexibility of element ``e`` as a cantilever clamped at its start: ``int T^T C T``
-        with ``C`` at ``z_b - a`` (``compliance(z)`` replaces ``compliance_at``)."""
-        zb = self.z_nodes[e + 1]
-        h = zb - self.z_nodes[e]
-        Cz = compliance or self.compliance_at
-        rule = _simpson if (compliance is None and not self.tapered) else _gauss
-        return rule(lambda a: _transport(a).T @ Cz(zb - a) @ _transport(a), h)
-
-    def _element_load_flexibility(self, e: int, q: np.ndarray, compliance=None) -> np.ndarray:
+    def _element_load_flexibility(self, h: float, q: np.ndarray) -> np.ndarray:
         """Tip displacement of a cantilever element (clamped at its start) under the uniform load q."""
-        zb = self.z_nodes[e + 1]
-        h = zb - self.z_nodes[e]
-        Cz = compliance or self.compliance_at
-        rule = _simpson if (compliance is None and not self.tapered) else _gauss
-        return rule(lambda a: _transport(a).T @ Cz(zb - a) @ _load_resultant(q, a), h)
+        C = self.compliance
+        return _simpson(lambda a: _transport(a).T @ C @ _load_resultant(q, a), h)
 
     # ------------------------------------------------------------ supports
     def fix(self, z: float, dofs: Sequence[int] = (0, 1, 2, 3, 4, 5), values: Optional[Sequence[float]] = None
@@ -288,14 +188,14 @@ class TimoshenkoBeam:
     # ------------------------------------------------------------ solve
     def _element(self, e: int):
         h = self.z_nodes[e + 1] - self.z_nodes[e]
-        F = self._element_flexibility(e)
+        F = self._element_flexibility(h)
         Kbb = np.linalg.pinv(0.5 * (F + F.T), rcond=1e-14)
         T = _transport(h)
         D = np.vstack([-T, np.eye(6)])  # nodal forces on the element = D f_b
         K = D @ Kbb @ D.T
         q = self._q[e]
         if np.any(q):
-            dq = self._element_load_flexibility(e, q)
+            dq = self._element_load_flexibility(h, q)
             fb = -Kbb @ dq  # end force that holds end b in place
             fa = -T @ fb - _load_resultant(q, h)
             P = -np.concatenate([fa, fb])
@@ -328,7 +228,6 @@ class TimoshenkoBeam:
         except np.linalg.LinAlgError as exc:
             raise ValueError("the beam is not supported against every rigid-body motion") from exc
         reactions = K @ U - F
-        self._system = (K, free)
         return BeamSolution(self, U, reactions)
 
 
@@ -343,44 +242,6 @@ class BeamSolution:
     def node_displacement(self, z: float) -> np.ndarray:
         j = self.beam._node(z)
         return self.U[6 * j:6 * j + 6].copy()
-
-    def displacement_derivative(self, dstiffness) -> np.ndarray:
-        """Exact ``d U`` (n_nodes, 6) of the nodal displacements for a change ``dstiffness`` of
-        the section stiffness along the span, given as the stiffness is (one matrix, one per
-        node, or a function of z), the loads and supports held.
-
-        Each element's flexibility ``int T^T C T`` changes by ``int T^T dC T`` with
-        ``dC = -C dK C``, its stiffness ``K_bb = F^-1`` by ``-K_bb dF K_bb`` (and the
-        distributed-load terms likewise), and ``K dU = dP - dK U`` on the free DOFs.
-        """
-        b = self.beam
-        if getattr(b, "_system", None) is None:
-            raise ValueError("solve the beam first")
-        K, free = b._system
-        dfield = _stiffness_field(dstiffness, b.z_nodes)
-
-        def dC(z):
-            return b._compliance_rate(dfield, z)
-
-        n = 6 * b.n_nodes
-        dK = np.zeros((n, n))
-        dP = np.zeros(n)
-        for e in range(b.n_nodes - 1):
-            Kbb, T = b._cache[e]
-            dF = b._element_flexibility(e, dC)
-            dKbb = -Kbb @ (0.5 * (dF + dF.T)) @ Kbb
-            D = np.vstack([-T, np.eye(6)])
-            idx = np.arange(6 * e, 6 * e + 12)
-            dK[np.ix_(idx, idx)] += D @ dKbb @ D.T
-            q = b._q[e]
-            if np.any(q):
-                dq, ddq = b._element_load_flexibility(e, q), b._element_load_flexibility(e, q, dC)
-                dfb = -dKbb @ dq - Kbb @ ddq
-                dP[idx] -= np.concatenate([-T @ dfb, dfb])
-        dU = np.zeros(n)
-        rhs = (dP - dK @ self.U)[free]
-        dU[free] = np.linalg.solve(K[np.ix_(free, free)], rhs)
-        return dU.reshape(-1, 6)
 
     def reaction(self, z: float) -> np.ndarray:
         j = self.beam._node(z)
@@ -398,7 +259,8 @@ class BeamSolution:
         fb = Kbb @ (db - T.T @ da)
         q = b._q[e]
         if np.any(q):
-            fb -= Kbb @ b._element_load_flexibility(e, q)
+            h = b.z_nodes[e + 1] - b.z_nodes[e]
+            fb -= Kbb @ b._element_load_flexibility(h, q)
         return fb
 
     def section_forces(self, z) -> np.ndarray:
@@ -413,13 +275,12 @@ class BeamSolution:
 
     def strains(self, z) -> np.ndarray:
         """[gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z] at each z."""
-        b = self.beam
-        z = np.atleast_1d(z)
-        return np.array([b.compliance_at(zz) @ f for zz, f in zip(z, self.section_forces(z))])
+        return self.section_forces(z) @ self.beam.compliance.T
 
     def displacement(self, z) -> np.ndarray:
         """[ux, uy, uz, theta_x, theta_y, theta_z] at each z (exact inside the elements)."""
         b = self.beam
+        C = b.compliance
         out = []
         for zz in np.atleast_1d(z):
             e = self._element_of(float(zz))
@@ -434,9 +295,9 @@ class BeamSolution:
 
                 def integrand(t):  # strain at z0 + t, carried to the point at s
                     f = _transport(h - t) @ fb + _load_resultant(q, h - t)
-                    return _transport(s - t).T @ (b.compliance_at(z0 + t) @ f)
+                    return _transport(s - t).T @ (C @ f)
 
-                d = d + (_gauss if b.tapered else _simpson)(integrand, s)
+                d = d + _simpson(integrand, s)
             out.append(d)
         return np.array(out)
 
@@ -446,4 +307,4 @@ def euler_bernoulli_beam(stiffness, length: Optional[float] = None, **options) -
     return TimoshenkoBeam(stiffness, length, shear=False, **options)
 
 
-__all__ = ["TimoshenkoBeam", "BeamSolution", "euler_bernoulli_beam", "from_section_order", "DOF_NAMES", "FORCE_NAMES"]
+__all__ = ["TimoshenkoBeam", "BeamSolution", "euler_bernoulli_beam", "DOF_NAMES", "FORCE_NAMES"]

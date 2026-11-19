@@ -22,13 +22,6 @@
   (`timoshenko_stiffness(reference)`, `mass_matrix`, centres, `GJ_free`,
   `strain_response`). New `FormulationWriter.from_section`, which takes forces in the
   public order. Section coordinates are the same numbers in both frames.
-- **Tapered beams.** `TimoshenkoBeam` takes a stiffness that varies along the span: one
-  6 x 6 (or 4 x 4) per node, linear in between, or a function of z. Each element
-  integrates the compliance as it varies along it, so a tapered beam converges with a few
-  elements instead of treating each element as one prismatic cut. New
-  `beam.from_section_order` puts the right-handed section 6 x 6 of `thin_walled` and
-  `solid` into the beam's order. `BeamSolution.displacement_derivative(dK)` gives the
-  exact derivative of the nodal displacements for a change of the stiffness along the span.
 - **Resal coupling for 2D-meshed sections.** `solid.taper.solid_section_taper` is the taper
   coupling of `thin_walled.taper.section_taper` for a `SectionMesh` (two meshes of the same
   topology a step apart), with the axial modulus of each element. New
@@ -47,9 +40,9 @@
 - **Fix:** `SectionMesh.from_thin_walled` merged coincident nodes by rounding them to a grid,
   so a pair either side of a grid line stayed apart (a loose node at a junction). Nodes now
   merge by distance.
-- **Example 12**, tapered beams and ply-thickness sensitivities: a box spar whose depth
-  halves, against a tapered shell model (the Resal coupling takes the beam from 29 % too
-  soft to 1.6 %), and the tip deflection's exact ply-thickness derivatives, per kg added.
+- **Scope:** ASM covers one cross-section at a time. Beam solves along the span (tapered
+  beams, beam-level sensitivities, modal analysis, spanwise strength) belong to 1d-fem, which
+  uses these sections; see `docs/package_boundary.md`.
 
 ## 0.4.0 - 2026-11-19
 
