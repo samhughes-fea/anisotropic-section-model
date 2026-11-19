@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        example: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11"]
+        example: ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

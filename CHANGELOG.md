@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+- **Tapered beams.** `TimoshenkoBeam` takes a stiffness that varies along the span: one
+  6 x 6 (or 4 x 4) per node, linear in between, or a function of z. Each element
+  integrates the compliance as it varies along it, so a tapered beam converges with a few
+  elements instead of treating each element as one prismatic cut. New
+  `beam.from_section_order` puts the right-handed section 6 x 6 of `thin_walled` and
+  `solid` into the beam's order. `BeamSolution.displacement_derivative(dK)` gives the
+  exact derivative of the nodal displacements for a change of the stiffness along the span.
+- **Resal coupling for 2D-meshed sections.** `solid.taper.solid_section_taper` is the taper
+  coupling of `thin_walled.taper.section_taper` for a `SectionMesh` (two meshes of the same
+  topology a step apart), with the axial modulus of each element. New
+  `thin_walled.taper.taper_derivative`, and `section_derivative(..., taper=)` /
+  `solid_section_derivative(..., taper=)` return the coupling's layup derivative
+  (`SectionDerivative.taper`), which `element_section_derivative` adds.
+- **Ply-thickness sensitivities of 2D-meshed sections.** `solid_section_derivative` takes
+  `LayupParameter(..., "thickness")`. `SectionMesh.from_thin_walled` records how its nodes
+  move with each ply's thickness (`SectionMesh.velocities`, exact: the nodes are affine in
+  the thicknesses) and how each tied node was tied (`SectionMesh.tie_points`). The
+  derivative carries the motion through the element Jacobians, the tie weights, the
+  Saint-Venant and restrained-warping solves (with the moving warping constraint that fixes
+  the torsional warping's in-plane rotation), the second-order terms, the axial quadrature
+  (`SectionDerivative.axial_positions`) and the mass. Checked against finite differences of
+  rebuilt and of moved meshes, and against the thin-walled derivatives.
+- **Fix:** `SectionMesh.from_thin_walled` merged coincident nodes by rounding them to a grid,
+  so a pair either side of a grid line stayed apart (a loose node at a junction). Nodes now
+  merge by distance.
+- **Example 12**, tapered beams and ply-thickness sensitivities: a box spar whose depth
+  halves, against a tapered shell model (the Resal coupling takes the beam from 29 % too
+  soft to 1.6 %), and the tip deflection's exact ply-thickness derivatives, per kg added.
+
 ## 0.4.0 - 2026-11-19
 
 - **Worked example suite.** Four new examples: isotropic sections against the closed forms,

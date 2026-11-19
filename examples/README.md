@@ -30,6 +30,7 @@ builds up from the simplest case:
 | | 05 | [Blade bending and axial hierarchy](05_blade_bending_axial_hierarchy/) | The same hierarchy on a three-cell blade section: flapwise tip force, shear lag across the spar caps, skin suction and ribs, an axial load fed into the caps | shell | 12 | 2 min |
 | **4 · From geometry to a turbine model** | 06 | [Blade from its implicit geometry](06_blade_from_implicit_geometry/) | Any of the 40 section layouts lofted along a blade, cut anywhere and meshed; the thin-walled section and the shell model from the same cut, against shell-fem's [example 20](https://github.com/samhughes-fea/shell-fem/tree/main/examples/20_blade_beam_properties/) model; a tapered, twisted segment | shell-fem example 20 | 16 | 1 min |
 | | 07 | [BeamDyn and windIO export](07_beamdyn_windio_export/) | A blade swept station by station into an OpenFAST BeamDyn deck and windIO 2.0 elastic properties: the IEA 15 MW windIO file reproduces the official BeamDyn blade file, and BeamDyn matches `TimoshenkoBeam` on a twisted, coupled section | IEA 15 MW files, BeamDyn | 14 | 10 s |
+| | 12 | [Tapered beams and ply-thickness sensitivities](12_tapered_beams_layup_sensitivities/) | A box spar whose depth halves: the Resal coupling of the inclined caps (the cuts alone are 29 % too soft), beam elements whose stiffness varies along them; exact tip-deflection derivatives with respect to every ply thickness, per kg added, and the 2D-meshed section's thickness derivatives | shell, finite differences, thin-wall | 28 | 45 s |
 
 The main API each one uses:
 
@@ -46,6 +47,7 @@ The main API each one uses:
 | 09 | `ThinWalledSection.timoshenko_stiffness`, `SolidSectionAnalysis`, `TimoshenkoBeam` |
 | 10 | `ThinWalledSection.GJ_free`, `RestrainedTorsionBeam.from_section(other_strains=...)`, `GeneralizedBeam` |
 | 11 | `SolidSectionAnalysis`, `solid.structured` (`arc_patch`, `rectangle_patch`) |
+| 12 | `thin_walled.taper.section_taper`, `TimoshenkoBeam` (stiffness per node), `section_derivative`, `solid_section_derivative`, `BeamSolution.displacement_derivative` |
 
 All examples are linear static analyses.
 
