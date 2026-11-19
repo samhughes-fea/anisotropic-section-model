@@ -48,7 +48,7 @@ the conversion to each, so nothing else spells them out.
 Public API
 ----------
 STRAINS, FORCES, DISPLACEMENTS, ENGINE_STRAINS, ENGINE_FORCES, FROM_ENGINE, TO_ENGINE,
-from_engine, to_engine, to_element, MIRROR, rotation6, to_beamdyn_frame,
+from_engine, to_engine, to_element, stiffness_about, mass_matrix, MIRROR, rotation6, to_beamdyn_frame,
 twist_from_kernel, twist_to_kernel.
 """
 
@@ -151,6 +151,46 @@ def twist_to_kernel(twist: npt.ArrayLike) -> npt.NDArray[np.float64]:
     return -np.asarray(twist, dtype=np.float64)
 
 
+def mass_matrix(mass: dict, reference=(0.0, 0.0)) -> npt.NDArray[np.float64]:
+    """Public 6 x 6 sectional mass matrix about ``reference`` from an engine
+    ``mass_properties`` dictionary (``m``, ``y_m``, ``z_m``, ``I_yy`` = int rho z^2,
+    ``I_zz`` = int rho y^2, ``I_yz``, about the origin; engine (y, z) are public (x, y)).
+
+    BeamDyn's order and form: [u_x, u_y, u_z, theta_x, theta_y, theta_z],
+
+        [[m, 0, 0, 0, 0, -m yc], [0, m, 0, 0, 0, m xc], [0, 0, m, m yc, -m xc, 0],
+         [0, 0, m yc, i_xx, -i_xy, 0], [0, 0, -m xc, -i_xy, i_yy, 0],
+         [-m yc, m xc, 0, 0, 0, i_xx + i_yy]]
+
+    with (xc, yc) the mass centre from ``reference``, i_xx = int rho (y - y_r)^2,
+    i_yy = int rho (x - x_r)^2 and i_xy = int rho (x - x_r)(y - y_r) per unit length.
+    """
+    xr, yr = float(reference[0]), float(reference[1])
+    m = float(mass["m"])
+    xm, ym = float(mass["y_m"]), float(mass["z_m"])
+    ixx = mass["I_yy"] - 2.0 * yr * m * ym + m * yr * yr
+    iyy = mass["I_zz"] - 2.0 * xr * m * xm + m * xr * xr
+    ixy = mass["I_yz"] - xr * m * ym - yr * m * xm + m * xr * yr
+    xc, yc = xm - xr, ym - yr
+    M = np.zeros((6, 6))
+    M[0, 0] = M[1, 1] = M[2, 2] = m
+    M[0, 5] = M[5, 0] = -m * yc
+    M[1, 5] = M[5, 1] = m * xc
+    M[2, 3] = M[3, 2] = m * yc
+    M[2, 4] = M[4, 2] = -m * xc
+    M[3, 3], M[4, 4], M[5, 5] = ixx, iyy, ixx + iyy
+    M[3, 4] = M[4, 3] = -ixy
+    return M
+
+
+def stiffness_about(K_engine: npt.ArrayLike, reference=(0.0, 0.0)) -> npt.NDArray[np.float64]:
+    """An engine 6 x 6 stiffness about the origin, as the public 6 x 6 about ``reference``
+    (public (x, y), which are the engine's (y, z) numbers)."""
+    from anisotropic_section_model.thin_walled.section_analysis import stiffness_about as _about
+
+    return from_engine(_about(K_engine, float(reference[0]), float(reference[1])))
+
+
 __all__ = [
     "DISPLACEMENTS",
     "ELEMENT_SIGN",
@@ -162,7 +202,9 @@ __all__ = [
     "STRAINS",
     "TO_ENGINE",
     "from_engine",
+    "mass_matrix",
     "rotation6",
+    "stiffness_about",
     "to_beamdyn_frame",
     "to_element",
     "to_engine",

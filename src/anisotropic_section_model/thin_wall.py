@@ -61,6 +61,7 @@ from laminate_constitutive_model.laminate_kinematics import integrate_abd
 from laminate_constitutive_model.laminate_mechanics import Laminate
 
 from .axes import FROM_ENGINE
+from .axes import mass_matrix as _mass_matrix
 
 
 @dataclass(frozen=True)
@@ -649,23 +650,7 @@ class ThinWalledSection:
         coupled analysis' ``mass_properties``: ply densities through each wall's
         thickness, laminate offsets included.
         """
-        mp = self.analysis.mass_properties  # analysis axes (y, z) are (x, y) here
-        xr, yr = float(reference[0]), float(reference[1])
-        m = mp["m"]
-        xm, ym = mp["y_m"], mp["z_m"]
-        ixx = mp["I_yy"] - 2.0 * yr * m * ym + m * yr * yr
-        iyy = mp["I_zz"] - 2.0 * xr * m * xm + m * xr * xr
-        ixy = mp["I_yz"] - xr * m * ym - yr * m * xm + m * xr * yr
-        xc, yc = xm - xr, ym - yr
-        M = np.zeros((6, 6))
-        M[0, 0] = M[1, 1] = M[2, 2] = m
-        M[0, 5] = M[5, 0] = -m * yc
-        M[1, 5] = M[5, 1] = m * xc
-        M[2, 3] = M[3, 2] = m * yc
-        M[2, 4] = M[4, 2] = -m * xc
-        M[3, 3], M[4, 4], M[5, 5] = ixx, iyy, ixx + iyy
-        M[3, 4] = M[4, 3] = -ixy
-        return M
+        return _mass_matrix(self.analysis.mass_properties, reference)
 
     def contour(self) -> List[Tuple[np.ndarray, np.ndarray]]:
         """(start, end) point pairs of the walls, for plotting."""

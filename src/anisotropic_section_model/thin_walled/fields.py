@@ -100,7 +100,9 @@ class FormulationWriter:
     """Section, wall, Gauss and ply fields of a ``ThinWalledSectionAnalysis``.
 
     Warping is independent of the section forces. Wall strains, shear flow and ply
-    stresses are for ``forces`` (order ``FORCES``). Default forces are unit torsion.
+    stresses are for ``forces`` (engine order ``FORCES``, ``[N, M_y, M_z, V_y, V_z, T]``;
+    ``from_section`` takes a public ``ThinWalledSection`` and forces in the public order).
+    Default forces are zero.
     """
 
     def __init__(
@@ -120,6 +122,19 @@ class FormulationWriter:
         self._walls: Optional[WallField] = None
         self._gauss: Optional[GaussField] = None
         self._ply: Optional[PlyField] = None
+
+    @classmethod
+    def from_section(cls, section, forces: Optional[npt.ArrayLike] = None,
+                     points_per_ply: int = 3) -> "FormulationWriter":
+        """The writer of a public ``ThinWalledSection`` (its ``analysis``), with ``forces`` in
+        the public order ``[Fx, Fy, N, Mx, My, Mz]`` about the section origin
+        (``axes.FORCES``). The fields it writes are the engine's (``axes``: positions
+        ``(y, z)`` are the public ``(x, y)``, and stiffnesses are in ``ENGINE_STRAINS``).
+        """
+        from anisotropic_section_model.axes import to_engine
+
+        f = None if forces is None else to_engine(np.asarray(forces, dtype=np.float64))
+        return cls(section.analysis, f, points_per_ply)
 
     def _gauss_rows(self):
         an = self.analysis
