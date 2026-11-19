@@ -13,6 +13,8 @@ from anisotropic_section_model.solid.compare import (
 from anisotropic_section_model.solid.material import SolidMaterial, bond_matrix, material_axes
 from anisotropic_section_model.solid.mesh import SectionMesh, parse_section_mesh_2d, read_gmsh
 from anisotropic_section_model.solid.section_analysis import SolidSectionAnalysis
+from anisotropic_section_model.solid.layup_sensitivity import solid_section_derivative
+from anisotropic_section_model.solid.taper import solid_section_taper, solid_taper_derivative
 
 __all__ = [
     "ABSENT",
@@ -30,4 +32,7 @@ __all__ = [
     "read_gmsh",
     "SectionMesh",
     "SolidSectionAnalysis",
+    "solid_section_derivative",
+    "solid_section_taper",
+    "solid_taper_derivative",
 ]

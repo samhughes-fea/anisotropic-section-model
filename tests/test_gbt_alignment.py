@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from anisotropic_section_model.gbt_alignment import (
+    align_gbt_pair,
     align_gbt_sections,
     gbt_signature,
     rotate_gbt_basis,
@@ -65,6 +66,20 @@ def test_alignment_undoes_a_turn_swap_and_sign_flip(channel):
     Sw, Sm = gbt_signature(out[1])
     Sw0, Sm0 = gbt_signature(channel)
     np.testing.assert_allclose(Sm, Sm0, atol=1e-6)
+
+
+def test_pair_alignment_is_what_the_walk_does(channel):
+    p = channel.gbt_sv_modes
+    turned = rotate_gbt_basis(channel, _orthogonal(p, 5), _orthogonal(4, 6))
+    pair, info = align_gbt_pair(channel, turned)
+    walk, winfo = align_gbt_sections([channel, turned], [[0, 1], [1, 2]])
+    np.testing.assert_allclose(pair.gbt_stiffness, walk[1].gbt_stiffness, rtol=0, atol=1e-12 * np.abs(walk[1].gbt_stiffness).max())
+    np.testing.assert_allclose(info["Rm"], winfo[1]["Rm"])
+    assert info["match"] == pytest.approx(winfo[1]["match"])
+    same, info = align_gbt_pair(channel, channel)
+    assert same is channel and info["match"] > 0.999999
+    with pytest.raises(ValueError, match="different numbers"):
+        align_gbt_pair(channel, SectionAnalysis.from_thin_walled(box(), gbt_modes=2))
 
 
 def test_elements_of_one_section_share_its_bases(channel):

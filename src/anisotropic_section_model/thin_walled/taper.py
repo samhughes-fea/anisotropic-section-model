@@ -43,7 +43,7 @@ from anisotropic_section_model.thin_walled.laminate import WallLaminate
 from anisotropic_section_model.thin_walled.thin_walled_geometry import ThinWalledSection
 from anisotropic_section_model.thin_walled.wall_stiffness import beam_wall_stiffness
 
-__all__ = ["SectionTaper", "section_taper", "section_taper_from_geometry"]
+__all__ = ["SectionTaper", "section_taper", "section_taper_from_geometry", "taper_derivative"]
 
 
 @dataclass(frozen=True)
@@ -65,6 +65,9 @@ class SectionTaper:
     coupling: npt.NDArray[np.float64]
     shear: npt.NDArray[np.float64]
     parts: Optional[Dict[int, npt.NDArray[np.float64]]] = field(default=None, compare=False)
+    #: ``(start, end, distance)``: the two ``SectionMesh`` es of ``solid.taper.solid_section_taper``
+    #: (``None`` for a thin-walled taper), for its layup derivatives
+    source: Optional[tuple] = field(default=None, compare=False, repr=False)
 
     @staticmethod
     def zero() -> "SectionTaper":
@@ -174,3 +177,24 @@ def section_taper_from_geometry(
         except ValueError:
             h *= 0.5
     raise ValueError(f"cuts either side of z = {z} differ in topology; no taper coupling")
+
+
+def taper_derivative(taper: SectionTaper, d) -> SectionTaper:
+    """``d`` of the taper coupling for the layup parameter of a ``SectionDerivative`` ``d``.
+
+    A thin-walled taper is ``sum A_l parts[l]`` with the wall geometry held (the mid-lines
+    stay put), so its derivative is ``dA parts[l]`` of the parameter's laminate
+    (``d.wall_axial``). A ``solid.taper.solid_section_taper`` one is differentiated through
+    its meshes (``solid_taper_derivative``).
+    """
+    if taper.source is not None:
+        from anisotropic_section_model.solid.taper import solid_taper_derivative
+
+        return solid_taper_derivative(taper, d.parameter)
+    if taper.parts is None:
+        raise ValueError("the taper is not split by laminate (SectionTaper.parts); its derivative is unknown")
+    row = taper.parts.get(d.parameter.laminate_id)
+    if row is None:
+        return SectionTaper.zero()
+    T = SectionTaper.from_row(row)
+    return SectionTaper(d.wall_axial * T.coupling, d.wall_axial * T.shear)

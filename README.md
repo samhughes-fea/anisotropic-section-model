@@ -5,6 +5,12 @@
 Beam-section theory for anisotropic thin-walled sections: blade, wing and spar
 sections whose walls are composite laminates. Linear static.
 
+ASM works on one cross-section at a time and is the section provider of
+[1d-fem](https://github.com/samhughes-fea/1d-fem), which solves the beam along its span.
+The split and the versioned contract between them are in
+[docs/package_boundary.md](docs/package_boundary.md). The beams below are frozen
+reference checks of a section, not a beam solver.
+
 - **Saint-Venant** section properties (`ThinWalledSection`): multi-cell shear flows and
   GJ, the warping function, shear centre and EΓ, and the Timoshenko 6 × 6 and
   Timoshenko-Vlasov 7 × 7 stiffness from thin-wall theory. Sections are built from
@@ -15,8 +21,12 @@ sections whose walls are composite laminates. Linear static.
 - **Generalised beam theory** (`GeneralizedBeam`, `SectionModes`): warping, shear lag,
   cross-section distortion, ribs and, with extensible walls, hoop strain and the
   Poisson end effects.
-- **Exact beams** (`TimoshenkoBeam`): Timoshenko and Euler-Bernoulli beam elements from
-  any 6 × 6 or 4 × 4 section stiffness, all couplings kept.
+- **Exact reference beams** (`TimoshenkoBeam`): prismatic Timoshenko and Euler-Bernoulli
+  beams from any 6 × 6 or 4 × 4 section stiffness, all couplings kept, to check a section.
+- **Strength** (`SectionStrength`): ply stresses and maximum stress, Tsai-Wu, Hashin and
+  Puck exposures over a section under its six forces, with the critical ply and point.
+- **Section tables** (`SectionAnalysis.from_matrices`): a section given only as its 6 × 6
+  stiffness and mass (BeamDyn, windIO, VABS or BECAS output), for 1d-fem.
 - **Blade export** (`BeamDynBlade`): a section at every station of a blade, written as
   an OpenFAST BeamDyn deck (6 × 6 stiffness and mass, reference axis, twist) and as
   windIO 2.0 elastic properties, and read back from both.

@@ -1,5 +1,14 @@
 """Generalised Beam Theory (GBT) for thin-walled blade sections: warping and distortion.
 
+Reference beam (frozen)
+-----------------------
+``GeneralizedBeam`` (the cross-section modes here are section-level) is one of the
+package's three reference beams (``beam.TimoshenkoBeam``,
+``torsion.RestrainedTorsionBeam``, ``gbt.GeneralizedBeam``). They stay as quick, exact
+checks of a section in the examples and tests, and get no new features: solving along
+the span (tapered beams, dynamics, buckling, sensitivities, load cases) is 1d-fem's,
+which uses this package's sections (``docs/package_boundary.md``).
+
 Saint-Venant and Benscoter/Vlasov torsion keep the cross-section rigid in its own
 plane. A thin-walled section is not rigid: a torque introduced as forces on the skins
 or webs rather than as the Saint-Venant shear flows also distorts it (a box turns
