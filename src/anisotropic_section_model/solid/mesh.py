@@ -65,6 +65,15 @@ class SectionMesh:
     #: ``None`` (an element of no laminate ply); ``None`` for an untagged mesh. Ply-angle
     #: sensitivities (``solid.layup_sensitivity``) turn the elements of a ply together.
     plies: Optional[List[Optional[Tuple[int, int]]]] = None
+    #: How the nodes move with each ply's thickness: ``{(laminate_id, ply): (n_nodes, 2)}``,
+    #: ``d nodes / d t`` (``SectionMesh.from_thin_walled`` fills it; ply-thickness sensitivities
+    #: need it). The wall mid-lines stay put and each stack stays centred on its mid-line, as
+    #: in ``thin_walled.layup_sensitivity``.
+    velocities: Optional[Dict[Tuple[int, int], npt.NDArray[np.float64]]] = None
+    #: How each tied node was tied, in order: ``(node, master element, xi, eta)``, the node
+    #: lying at ``(xi, eta)`` of the element (``_junction_ties``). Thickness sensitivities
+    #: differentiate the tie weights through it.
+    tie_points: Optional[List[Tuple[int, int, float, float]]] = None
 
     def __post_init__(self) -> None:
         self.nodes = np.asarray(self.nodes, dtype=np.float64).reshape(-1, 2)
@@ -176,6 +185,10 @@ class SectionMesh:
             corners = {}
         normal_of = {w.wall_id: _wall_normal(section, w) for w in section.walls}
         extend = _butt_extensions(section, laminates, corners) if junctions == "auto" else {}
+        extend_rate = _butt_extension_rates(section, laminates, corners) if junctions == "auto" else {}
+        used_laminates = sorted({w.laminate_id for w in section.walls})
+        thickness_keys = [(int(lid), k) for lid in used_laminates for k in range(len(laminates[lid].plies))]
+        velocity: Dict[Tuple[int, int], List[np.ndarray]] = {key: [] for key in thickness_keys}
         all_nodes: List[np.ndarray] = []
         elements: List[np.ndarray] = []
         strips: Dict[int, List[int]] = {}                   # wall id -> its element indices
@@ -192,11 +205,7 @@ class SectionMesh:
             lam = laminates[w.laminate_id]
             h = lam.thickness
             bounds = np.concatenate([[-0.5 * h], -0.5 * h + np.cumsum([p.thickness for p in lam.plies])])
-            rows = []
-            for k, p in enumerate(lam.plies):
-                rows += list(np.linspace(bounds[k], bounds[k + 1], rows_per_ply + 1)[:-1])
-            rows.append(0.5 * h)
-            rows = np.array(rows)
+            rows = _rows(bounds, rows_per_ply)
             ply_of_row = np.repeat(np.arange(len(lam.plies)), rows_per_ply)
             L = float(np.linalg.norm(b - a))
 
@@ -204,18 +213,33 @@ class SectionMesh:
             n0 = normal_of[corners[w.start][0]] if w.start in corners else None
             n1 = normal_of[corners[w.end][1]] if w.end in corners else None
 
-            def at(u, v):
-                # v in [0, 1] runs over the rows; map piecewise linearly onto the ply bounds
-                r = np.interp(v * (len(rows) - 1), np.arange(len(rows)), rows)
-                # a mitred end sits at offset r from both walls' mid-lines (the bisector)
-                pa = a + r * (n_vec if n0 is None else (n_vec + n0) / (1.0 + n_vec @ n0)) \
-                    - extend.get((w.wall_id, w.start), 0.0) * t
-                pb = b + r * (n_vec if n1 is None else (n_vec + n1) / (1.0 + n_vec @ n1)) \
-                    + extend.get((w.wall_id, w.end), 0.0) * t
-                p = pa + u * (pb - pa)
-                return p[0], p[1]
+            # the nodes are affine in the row offsets and the butt extensions: ``place`` with
+            # ``origin=False`` and their derivatives gives the nodes' velocities
+            def place(rows, ext0, ext1, origin=True):
+                def at(u, v):
+                    # v in [0, 1] runs over the rows; map piecewise linearly onto the ply bounds
+                    r = np.interp(v * (len(rows) - 1), np.arange(len(rows)), rows)
+                    # a mitred end sits at offset r from both walls' mid-lines (the bisector)
+                    pa = r * (n_vec if n0 is None else (n_vec + n0) / (1.0 + n_vec @ n0)) - ext0 * t
+                    pb = r * (n_vec if n1 is None else (n_vec + n1) / (1.0 + n_vec @ n1)) + ext1 * t
+                    if origin:
+                        pa, pb = pa + a, pb + b
+                    p = pa + u * (pb - pa)
+                    return p[0], p[1]
+                return at
 
-            nodes, elems = _structured_q8(at, elements_along, len(rows) - 1)
+            e0, e1 = extend.get((w.wall_id, w.start), 0.0), extend.get((w.wall_id, w.end), 0.0)
+            nodes, elems = _structured_q8(place(rows, e0, e1), elements_along, len(rows) - 1)
+            for key in thickness_keys:
+                lid, k = key
+                drows = _rows(_interface_derivative(len(lam.plies), k), rows_per_ply) \
+                    if lid == w.laminate_id else np.zeros_like(rows)
+                d0, d1 = extend_rate.get((w.wall_id, w.start, lid), 0.0), extend_rate.get((w.wall_id, w.end, lid), 0.0)
+                if not (np.any(drows) or d0 or d1):
+                    velocity[key].append(np.zeros_like(nodes))
+                    continue
+                velocity[key].append(_structured_q8(place(drows, d0, d1, origin=False), elements_along,
+                                                    len(rows) - 1)[0])
             gv = 2 * (len(rows) - 1) + 1
             n_edge = gv                                      # nodes on the u = 0 (and u = 1) edge
             edges[(w.wall_id, w.start)] = list(range(offset, offset + n_edge))
@@ -240,9 +264,11 @@ class SectionMesh:
         nodes = np.vstack(all_nodes)
         nodes, elements, rank = _merge_nodes(nodes, elements, return_map=True)
         edges = {k: [int(rank[n]) for n in v] for k, v in edges.items()}
-        ties = _junction_ties(section, nodes, elements, strips, edges, skip=set(corners))
+        tie_points: List[Tuple[int, int, float, float]] = []
+        ties = _junction_ties(section, nodes, elements, strips, edges, skip=set(corners), record=tie_points)
+        velocities = {key: _merged_velocity(np.vstack(v), rank, nodes.shape[0]) for key, v in velocity.items()}
         return cls(nodes, elements, kinds, mids, thetas, alphas, mats, getattr(section, "section_id", None), ties,
-                   plies)
+                   plies, velocities, tie_points)
 
     @classmethod
     def from_gmsh(cls, path: str, groups: Mapping[object, Tuple[int, float, float]],
@@ -337,8 +363,51 @@ def _butt_extensions(section, laminates, corners) -> Dict[Tuple[int, int], float
     return out
 
 
+def _rows(bounds: np.ndarray, rows_per_ply: int) -> np.ndarray:
+    """Offsets of the element rows through a stack with ply interfaces at ``bounds`` (linear in them)."""
+    rows: List[float] = []
+    for k in range(len(bounds) - 1):
+        rows += list(np.linspace(bounds[k], bounds[k + 1], rows_per_ply + 1)[:-1])
+    rows.append(bounds[-1])
+    return np.array(rows)
+
+
+def _interface_derivative(n_plies: int, ply: int) -> np.ndarray:
+    """``d n_j / d t_ply`` of every interface of a stack centred on its mid-line."""
+    return np.array([(1.0 if j > ply else 0.0) - 0.5 for j in range(n_plies + 1)])
+
+
+def _butt_extension_rates(section, laminates, corners) -> Dict[Tuple[int, int, int], float]:
+    """``d extension / d t`` for any ply of laminate ``lid``: ``{(wall id, point, lid): rate}``
+    (``_butt_extensions`` is half the other wall's thickness over the sine of the corner)."""
+    out = {}
+    for (wid, pid), _ in _butt_extensions(section, laminates, corners).items():
+        walls = [w for w in section.walls if pid in (w.start, w.end)]
+        master, other = walls
+        n0, n1 = _wall_normal(section, master), _wall_normal(section, other)
+        s = abs(float(n0[0] * n1[1] - n0[1] * n1[0]))
+        out[(wid, pid, int(other.laminate_id))] = 0.5 / s
+    return out
+
+
+def _merged_velocity(v: np.ndarray, rank: np.ndarray, n: int) -> np.ndarray:
+    """Velocities of the merged nodes: the mean of the strips' nodes merged into each.
+
+    Where strips share a node that their own velocities would move apart (a mitred corner of
+    two laminates with the same ply thicknesses, or mid-line nodes of walls meeting at a tied
+    junction) the shared node moves with their mean: the mesh stays conforming, and the
+    derivative is that of the discrete section with that motion, the same in the limit of a
+    fine mesh (only the motion of the boundaries and ply interfaces matters there).
+    """
+    out = np.zeros((n, 2))
+    count = np.zeros(n)
+    np.add.at(out, rank, v)
+    np.add.at(count, rank, 1.0)
+    return out / count[:, None]
+
+
 def _junction_ties(section, nodes, elements, strips, edges,
-                   skip=frozenset()) -> Dict[int, List[Tuple[int, float]]]:
+                   skip=frozenset(), record=None) -> Dict[int, List[Tuple[int, float]]]:
     """Tie each wall's end edge into the strips of the walls listed before it at that point.
 
     At a section point the first wall listed is the master. Every later wall's end-edge
@@ -363,6 +432,8 @@ def _junction_ties(section, nodes, elements, strips, edges,
                     if best is None or d < best[0]:
                         best = (d, e, xi, eta)
                 _, e, xi, eta = best
+                if record is not None:
+                    record.append((int(n), int(e), float(xi), float(eta)))
                 N, _ = shape("Q8", xi, eta)
                 row: Dict[int, float] = {}
                 for m, c in zip(elements[e], N):
@@ -389,14 +460,28 @@ def _closest_natural(X: np.ndarray, p: np.ndarray) -> Tuple[float, float, float]
 
 def _merge_nodes(nodes: np.ndarray, elements: List[np.ndarray], tol: float = 1e-10, return_map: bool = False):
     """Merge coincident nodes (walls that meet at a section point)."""
+    from scipy.spatial import cKDTree
+
     scale = max(float(np.ptp(nodes, axis=0).max()), 1e-300)
-    keys = np.round(nodes / (tol * scale)).astype(np.int64)
-    _, first, inverse = np.unique(keys, axis=0, return_index=True, return_inverse=True)
+    # nodes closer than tol * scale are one node (by distance, not by rounding to a grid,
+    # which splits a pair that straddles a grid line)
+    parent = np.arange(nodes.shape[0])
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, j in sorted(cKDTree(nodes).query_pairs(tol * scale)):
+        ri, rj = root(i), root(j)
+        if ri != rj:
+            parent[max(ri, rj)] = min(ri, rj)
+    group = np.array([root(i) for i in range(nodes.shape[0])])
+    first, inverse = np.unique(group, return_inverse=True)   # each group's first node, in order
     inverse = np.asarray(inverse).reshape(-1)
-    order = np.argsort(first)
-    rank = np.empty_like(order)
-    rank[order] = np.arange(order.size)
-    new_nodes = nodes[first[order]]
+    rank = np.arange(first.size)
+    new_nodes = nodes[first]
     if return_map:
         return new_nodes, [rank[inverse[e]] for e in elements], rank[inverse]
     return new_nodes, [rank[inverse[e]] for e in elements]
