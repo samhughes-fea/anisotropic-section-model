@@ -52,17 +52,17 @@ def test_to_element_matches_section_analysis():
     np.testing.assert_allclose(axes.to_element(K), to_element_voigt(axes.to_engine(K)))
 
 
-def test_mirror_is_an_involution_and_twist_flips():
+def test_mirror_is_an_involution_and_kernel_twist_flips():
     np.testing.assert_array_equal(axes.MIRROR @ axes.MIRROR, np.eye(6))
     assert np.linalg.det(axes.MIRROR[:3, :3]) == -1.0
-    np.testing.assert_array_equal(axes.twist_to_beamdyn([10.0, -2.5]), [-10.0, 2.5])
-    np.testing.assert_array_equal(axes.twist_from_beamdyn(axes.twist_to_beamdyn(7.0)), 7.0)
+    np.testing.assert_array_equal(axes.twist_from_kernel([10.0, -2.5]), [-10.0, 2.5])
+    np.testing.assert_array_equal(axes.twist_to_kernel(axes.twist_from_kernel(7.0)), 7.0)
 
 
 def test_to_beamdyn_frame_untwists_then_mirrors():
     K = _spd(6, 4)
-    K_twisted = axes.rotation6(15.0) @ K @ axes.rotation6(15.0).T  # a section turned by +15 degrees
-    np.testing.assert_allclose(axes.to_beamdyn_frame(K_twisted, -15.0), axes.MIRROR @ K @ axes.MIRROR.T,
+    K_twisted = axes.rotation6(15.0) @ K @ axes.rotation6(15.0).T  # a section twisted by +15 degrees
+    np.testing.assert_allclose(axes.to_beamdyn_frame(K_twisted, 15.0), axes.MIRROR @ K @ axes.MIRROR.T,
                                atol=1e-12)
 
 

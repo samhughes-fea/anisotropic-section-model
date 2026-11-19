@@ -24,15 +24,15 @@ initial twist: chord-aligned, about the reference axis. WISDEM writes windIO 2.0
 ``elastic_properties`` into BeamDyn as they are (the IEA 15 MW windIO file and its
 BeamDyn deck carry the same numbers), so the windIO fields here are the same arrays.
 
-The geometry kernel's blade frame, which ``ThinWalledSection.from_geometry`` and
-shell-fem's ``BladeBuilder`` use, has x towards the trailing edge, y towards the
-suction side and z along the span. As a right-handed frame it is a mirror image of
-BeamDyn's, so going from a section's axes to BeamDyn's swaps x and y and flips the
-sign of the moments and rotations (they are pseudo-vectors); the same mirror is
-``publish_frame`` in example 03. The kernel's twist moves the leading edge towards the
-suction side; BeamDyn's and windIO's move it towards the pressure side (positive at the
-root, towards feather), so the twist changes sign. The kernel's offset (sweep along x,
-prebend along y) becomes the key points' ``kp_yr`` and ``kp_xr``.
+The package's public frame (``axes``: x towards the trailing edge, y towards the
+suction side, z along the span, the geometry kernel's and shell-fem's blade frame) is
+a mirror image of BeamDyn's, so going from a section's axes to BeamDyn's swaps x and y
+and flips the sign of the moments and rotations (they are pseudo-vectors): ``MIRROR``,
+the same mirror as ``publish_frame`` in example 03. The public twist is right-handed
+about z, positive towards feather, and is the same number as BeamDyn's and windIO's
+twist. The kernel's ``SectionCut.twist`` is its negative (it moves the leading edge
+towards the suction side), so ``from_geometry`` converts it. The kernel's offset (sweep
+along x, prebend along y) becomes the key points' ``kp_yr`` and ``kp_xr``.
 
 Sections are cut normal to the z axis, as PreComp's and the windIO files' are; BeamDyn
 takes them normal to its curved reference axis, which differs by the slope of the
@@ -49,7 +49,7 @@ from typing import Callable, Dict, Mapping, Optional, Sequence, Union
 
 import numpy as np
 
-from .axes import MIRROR, rotation6, to_beamdyn_frame, twist_from_beamdyn, twist_to_beamdyn  # noqa: F401
+from .axes import MIRROR, rotation6, to_beamdyn_frame, twist_from_kernel  # noqa: F401
 from .thin_wall import ThinWalledSection
 
 PathLike = Union[str, os.PathLike]
@@ -91,7 +91,8 @@ class BeamDynBlade:
     key_points:
         (k, 3) reference axis ``kp_xr, kp_yr, kp_zr`` (m), k >= 3, root first.
     twist:
-        (k,) initial twist at the key points (degrees, BeamDyn's sign).
+        (k,) initial twist at the key points (degrees: BeamDyn's and windIO's sign, which
+        is the public one).
     name:
         Title written on the files' second line.
     """
@@ -121,8 +122,9 @@ class BeamDynBlade:
                       name: str = "") -> "BeamDynBlade":
         """A blade from sections cut at span positions ``z`` (root first).
 
-        Each section is in the kernel's blade frame at its station: turned by
-        ``twist`` (degrees, the kernel's sign: ``SectionCut.twist``) and with its pitch
+        Each section is in the public frame at its station: turned by ``twist`` (degrees,
+        right-handed about z, as BeamDyn's and windIO's twist; the kernel's
+        ``SectionCut.twist`` is the negative, ``axes.twist_from_kernel``) and with its pitch
         axis at ``offset`` (x, y), where the stiffness and mass are taken. ``twist`` and
         ``offset`` are one value for all stations or one per station. The key points
         are the stations' pitch-axis points, measured from the root's.
@@ -139,7 +141,7 @@ class BeamDynBlade:
         off = np.broadcast_to(np.asarray(offset, dtype=float), (n, 2))
         K, M = zip(*(section_matrices(s, off[i], tw[i]) for i, s in enumerate(sections)))
         kp = np.column_stack([off[:, 1] - off[0, 1], off[:, 0] - off[0, 0], z - z[0]])  # from the root
-        return cls(_arc_eta(kp), np.array(K), np.array(M), kp, twist_to_beamdyn(tw), name=name, sections=sections)
+        return cls(_arc_eta(kp), np.array(K), np.array(M), kp, tw.copy(), name=name, sections=sections)
 
     @classmethod
     def from_geometry(cls, geometry, laminates: Union[Mapping, Callable[[float], Mapping]], z=None,
@@ -157,7 +159,7 @@ class BeamDynBlade:
         cuts = [geometry.section_at(v) for v in z]
         lams = laminates if callable(laminates) else (lambda _z: laminates)
         sections = [ThinWalledSection.from_geometry(c, lams(v), **section_options) for c, v in zip(cuts, z)]
-        return cls.from_sections(sections, z, twist=[c.twist for c in cuts], offset=[c.offset for c in cuts],
+        return cls.from_sections(sections, z, twist=twist_from_kernel([c.twist for c in cuts]), offset=[c.offset for c in cuts],
                                  name=name)
 
     # ------------------------------------------------------------ derived values

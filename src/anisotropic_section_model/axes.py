@@ -14,10 +14,11 @@ geometry kernel's and shell-fem's blade frame:
   ``[Fx, Fy, N, Mx, My, Mz]``, with ``gamma_x = u_x' - theta_y`` and
   ``gamma_y = u_y' + theta_x``. A Vlasov or Benscoter warping degree of freedom is a
   seventh entry (its force is the bimoment);
-- twist (``SectionCut.twist``, ``BeamDynBlade.from_sections``) is in degrees, in the
-  kernel's sense: positive twist moves the leading edge towards the suction side, so a
-  section twisted by ``t`` is the untwisted one turned by ``-t`` about ``+z``
-  (``rotation6(-t)``).
+- twist (``BeamDynBlade.from_sections``, ``BeamDynBlade.twist``) is in degrees,
+  right-handed about ``+z`` like every other rotation here: a section twisted by ``t`` is
+  the untwisted one turned by ``rotation6(t)``. Positive twist moves the leading edge
+  towards the pressure side (towards feather). It is the same number as BeamDyn's
+  ``initial_twist`` and windIO 2.0's ``outer_shape.twist``.
 
 Frames at the boundaries
 ------------------------
@@ -36,15 +37,19 @@ the conversion to each, so nothing else spells them out.
 - **BeamDyn and windIO** (``BeamDynBlade``): BeamDyn's blade frame has ``X`` towards the
   suction side and ``Y`` towards the trailing edge, a mirror image of the public frame.
   Going there swaps ``x`` and ``y`` and flips the sign of moments and rotations
-  (``MIRROR``, ``to_beamdyn_frame``). BeamDyn's twist, and windIO 2.0's
-  ``outer_shape.twist``, are positive towards feather: the negative of the public twist
-  (``twist_to_beamdyn``, ``twist_from_beamdyn``).
+  (``MIRROR``, ``to_beamdyn_frame``). Twist needs no conversion: BeamDyn's and windIO's
+  are the public twist.
+- **Geometry kernel twist** (``SectionCut.twist``, ``Station.twist``): the kernel's twist
+  moves the leading edge towards the suction side, so it is left-handed about ``+z``,
+  the negative of the public twist (``twist_from_kernel``, ``twist_to_kernel``). Its
+  axes are the public axes. ``BeamDynBlade.from_geometry`` converts it; the kernel's own
+  ``write_windio`` does not, so its twist has the opposite sign to windIO's.
 
 Public API
 ----------
 STRAINS, FORCES, DISPLACEMENTS, ENGINE_STRAINS, ENGINE_FORCES, FROM_ENGINE, TO_ENGINE,
 from_engine, to_engine, to_element, MIRROR, rotation6, to_beamdyn_frame,
-twist_to_beamdyn, twist_from_beamdyn.
+twist_from_kernel, twist_to_kernel.
 """
 
 from __future__ import annotations
@@ -129,21 +134,20 @@ def to_beamdyn_frame(matrix: npt.ArrayLike, twist: float = 0.0) -> npt.NDArray[n
     """A public 6 x 6 stiffness or mass matrix to BeamDyn's local frame.
 
     ``matrix`` is in the public frame with the section turned by ``twist`` degrees
-    (public sign). The result is in the untwisted, chord-aligned frame, mirrored into
-    BeamDyn's axes (``MIRROR``).
+    (public sign: ``rotation6(twist)``). The result is in the untwisted, chord-aligned
+    frame, mirrored into BeamDyn's axes (``MIRROR``).
     """
-    T = MIRROR @ rotation6(twist)
+    T = MIRROR @ rotation6(-float(twist))
     return T @ np.asarray(matrix, dtype=np.float64) @ T.T
 
 
-def twist_to_beamdyn(twist: npt.ArrayLike) -> npt.NDArray[np.float64]:
-    """Public twist (degrees) to BeamDyn's ``initial_twist`` and windIO 2.0's
-    ``outer_shape.twist``: positive towards feather, so the sign flips."""
+def twist_from_kernel(twist: npt.ArrayLike) -> npt.NDArray[np.float64]:
+    """The geometry kernel's twist (``SectionCut.twist``, degrees) to the public sign."""
     return -np.asarray(twist, dtype=np.float64)
 
 
-def twist_from_beamdyn(twist: npt.ArrayLike) -> npt.NDArray[np.float64]:
-    """BeamDyn or windIO 2.0 twist (degrees) to the public sign."""
+def twist_to_kernel(twist: npt.ArrayLike) -> npt.NDArray[np.float64]:
+    """Public twist (degrees) to the geometry kernel's sign (``Station(twist=...)``)."""
     return -np.asarray(twist, dtype=np.float64)
 
 
@@ -162,6 +166,6 @@ __all__ = [
     "to_beamdyn_frame",
     "to_element",
     "to_engine",
-    "twist_from_beamdyn",
-    "twist_to_beamdyn",
+    "twist_from_kernel",
+    "twist_to_kernel",
 ]
