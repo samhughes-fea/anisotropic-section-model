@@ -129,3 +129,16 @@ def test_forces_must_be_six():
     sa = ThinWalledSectionAnalysis(box(0.4, 0.2), {1: iso(1e-3), 2: iso(1e-3)})
     with pytest.raises(ValueError, match="shape"):
         FormulationWriter(sa, forces=[1.0, 0.0])
+
+
+def test_from_section_takes_public_forces():
+    from types import SimpleNamespace
+
+    from anisotropic_section_model.axes import to_engine
+
+    an = ThinWalledSectionAnalysis(box(0.2, 0.1), {1: iso(2e-3), 2: iso(3e-3)})
+    public = np.array([10.0, -20.0, 3e3, 40.0, -50.0, 60.0])  # [Fx, Fy, N, Mx, My, Mz]
+    w = FormulationWriter.from_section(SimpleNamespace(analysis=an), public)
+    np.testing.assert_array_equal(w.forces, to_engine(public))
+    np.testing.assert_array_equal(w.forces, [3e3, 40.0, -50.0, 10.0, -20.0, 60.0])  # [N, M_y, M_z, V_y, V_z, T]
+    np.testing.assert_allclose(w.gauss().wall_strains, FormulationWriter(an, to_engine(public)).gauss().wall_strains)

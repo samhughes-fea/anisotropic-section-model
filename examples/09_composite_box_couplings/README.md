@@ -89,9 +89,8 @@ s = box.thin(lib, box.cus(15.0))              # ThinWalledSection
 K = s.timoshenko_stiffness((0.0, 0.0))        # BeamDyn order [Fx, Fy, N, Mx, My, T]
 K[2, 5] / np.sqrt(K[2, 2] * K[5, 5])          # extension-twist
 
-from anisotropic_section_model.solid import SolidSectionAnalysis
-from anisotropic_section_model.thin_wall import BEAMDYN_FROM_ONEDFEM as p
-Ks = SolidSectionAnalysis(box.solid(lib, box.cus(15.0))).stiffness[np.ix_(p, p)]   # same order
+from anisotropic_section_model import SolidSection
+Ks = SolidSection(box.solid(lib, box.cus(15.0))).timoshenko_stiffness()   # same order
 
 TimoshenkoBeam(K, 0.762).clamp(0.0).add_force(0.762, [0, 0, 2e3, 0, 0, 0]).solve().displacement(z)
 ```

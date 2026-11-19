@@ -27,7 +27,9 @@ src/anisotropic_section_model/
 ├── torsion.py      RestrainedTorsionBeam: Benscoter / Vlasov torsion, bimoment
 ├── gbt.py          GeneralizedBeam, SectionModes: GBT warping and distortion, ribs
 ├── beam.py         TimoshenkoBeam: exact Timoshenko / Euler-Bernoulli beams from a 6 × 6 or 4 × 4
-└── beamdyn.py      BeamDynBlade: spanwise sweep to OpenFAST BeamDyn and windIO 2.0 files
+├── beamdyn.py      BeamDynBlade: spanwise sweep to OpenFAST BeamDyn and windIO 2.0 files
+├── solid_section.py SolidSection: 2D finite-element sections in the public frame
+└── axes.py         the one public axis convention and every conversion out of it
 tests/              pytest suite, with shell models as references
 examples/           eleven worked examples, each with its script, figures, README and self-checks
 benchmarks/         the solid section against published VABS and BECAS results (vabs_becas/)
@@ -76,23 +78,38 @@ kernel either.
 
 ## Axes and strain order
 
-The package has two conventions, and one section engine behind both.
+One public frame, defined in `anisotropic_section_model.axes`, for every top-level class
+(`ThinWalledSection`, `SolidSection`, `TimoshenkoBeam`, `BeamDynBlade`, `FormulationWriter.from_section`):
 
-- **Top-level API** (`ThinWalledSection`, `TimoshenkoBeam`, the closed-form
-  properties): beam axis **z**, section axes (x, y), and the BeamDyn / windIO order
-  `[Fx, Fy, N, Mx, My, Mz]` against `[gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z]`.
-- **`thin_walled`, `solid` and `section_analysis`** (moved from 1d-fem): beam axis
-  **x**, section axes (y, z), and 1d-fem's order `[eps, kappa_y, kappa_z, gamma_xy,
-  gamma_xz, phi]` (forces `[N, M_y, M_z, V_y, V_z, T]`).
+- **z** is the beam axis, root to tip; **x** points to the trailing edge and **y** to
+  the suction side (right-handed). This is the geometry kernel's and shell-fem's blade frame.
+- Strains and forces are in BeamDyn's order, `axes.STRAINS` against `axes.FORCES`:
+  `[gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z]` against `[Fx, Fy, N, Mx, My, Mz]`,
+  with `gamma_x = u_x' - theta_y` and `gamma_y = u_y' + theta_x`. A warping degree of
+  freedom (`vlasov_stiffness`) is a seventh entry, and its force is the bimoment.
+- **Twist** is in degrees and is right-handed about +z, like every other rotation in the
+  frame: a section twisted by `t` is the untwisted one turned by `axes.rotation6(t)`, so
+  positive twist moves the leading edge towards the pressure side (towards feather). It is
+  the same number as BeamDyn's `initial_twist` and windIO 2.0's `outer_shape.twist`.
 
-The axes are a cyclic relabelling, 1d-fem (x, y, z) = top-level (z, x, y), so no sign
-changes. A 6 x 6 stiffness `K` in 1d-fem order becomes BeamDyn order by reordering
-rows and columns with `p = BEAMDYN_FROM_ONEDFEM = [3, 4, 0, 1, 2, 5]`:
+Three other frames appear only at the package's boundaries. `axes` holds every conversion,
+so nothing else spells them out:
+
+| Frame | Where | Conversion |
+| --- | --- | --- |
+| Engine: beam axis x, section (y, z), `[eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi]` | the solvers in `thin_walled` and `solid` (from 1d-fem), `closed_form` | `axes.from_engine` / `to_engine`: a reordering, no signs. Engine (x, y, z) = public (z, x, y), so section coordinates are the same numbers |
+| 1d-fem element order: the engine order with the sign of kappa_y flipped | `section_analysis.SectionAnalysis` | `axes.to_element` |
+| BeamDyn and windIO: X to suction, Y to the trailing edge (a mirror image) | `BeamDynBlade` arrays and files | `axes.MIRROR`, `axes.to_beamdyn_frame`. Twist needs no conversion |
+| Geometry kernel twist: `SectionCut.twist`, `Station(twist=...)`, left-handed about z | kernel inputs | `axes.twist_from_kernel` / `twist_to_kernel` (a sign flip). `BeamDynBlade.from_geometry` applies it |
 
 ```python
-from anisotropic_section_model.thin_wall import BEAMDYN_FROM_ONEDFEM as p
-K_beamdyn = K_onedfem[np.ix_(p, p)]
+from anisotropic_section_model import axes
+K_public = axes.from_engine(analysis.stiffness)              # engine 6 x 6 to BeamDyn order
+K_public = axes.stiffness_about(analysis.stiffness, (x, y))  # ... about a point
 ```
+
+The geometry kernel's own `write_windio` writes its twist without negating it, so its
+twist has the opposite sign to windIO's and to `BeamDynBlade.write_windio`'s.
 
 `ThinWalledSection` builds a `thin_walled.ThinWalledSectionAnalysis` of the same walls
 (`section.analysis`) and takes its stiffness, centres and EΓ from it, so every wall
