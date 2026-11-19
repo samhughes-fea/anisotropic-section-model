@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 
+from _shared.checks import Checks
 from _shared.plotting import SERIES, TEXT_SECONDARY, plt, save
 from anisotropic_section_model import ThinWalledSection
 from implicit_geometry_kernel import Airfoil, BladeGeometry, ShearWeb, SkinRegion, Station
@@ -227,6 +228,26 @@ def report(r, t, g):
     print("Layouts: " + ", ".join(f"{k} GJ {v['GJ']:.3g} EA {v['EA']:.3g}" for k, v in g.items()))
 
 
+def check(r, t) -> Checks:
+    c = Checks("06 blade from its implicit geometry")
+    thin, shell = r["thin wall"], r["shell (beam_section_properties)"]
+    ref = thin["from the region mesh"]
+    for route in ("from the cut (from_geometry)", "from the geometry's mesh"):
+        for k, tol in (("EA", 0.01), ("EI_x", 0.01), ("EI_y", 0.015), ("GJ", 0.01)):
+            c.close(f"example 20 section {k}: thin wall {route} against the region mesh", thin[route][k], ref[k], tol,
+                    "shell-fem example 20 model")
+    for k, tol in (("EA", 0.01), ("EI_x", 0.01), ("GJ", 0.01)):
+        c.close(f"example 20 section {k}: shell on the geometry mesh against the region mesh",
+                shell["geometry mesh"][k], shell["region mesh"][k], tol, "shell-fem example 20 model")
+    c.close("example 20 section GJ: thin wall from the cut against the shell", thin["from the cut (from_geometry)"]["GJ"],
+            shell["geometry mesh"]["GJ"], 0.02, "shell model")
+    for k in ("EA", "EI_x", "EI_y", "GJ"):
+        err = max(abs(m / d - 1) for m, d in zip(t["mesh"][k], t["geometry"][k]))
+        c.close(f"tapered segment {k}: from_geometry against the meshed cut, every station", err, 0.0, 2e-3,
+                "same geometry", scale=1.0)
+    return c
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--reuse", action="store_true", help="redraw from data/results.json")
@@ -242,6 +263,7 @@ def main():
     figure_tapered(data["tapered"])
     figure_routes(data["routes"])
     figure_gallery(data["gallery"])
+    check(data["routes"], data["tapered"]).report()
 
 
 if __name__ == "__main__":

@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import numpy as np
 
+from _shared.checks import Checks
 from _shared.plotting import SERIES, TEXT_SECONDARY, plt, save
 from anisotropic_section_model import BeamDynBlade, TimoshenkoBeam
 from anisotropic_section_model.beamdyn import MIRROR
@@ -242,16 +243,60 @@ def plot(res):
     save(fig, __file__, "tapered_blade_properties.png")
 
 
+#: results that need BeamDyn itself: kept from the last run that had a driver when this one has none
+DRIVER_RESULTS = ("openfast_version", "prismatic", "tapered_beamdyn_tip_1kN_flap")
+DRIVER_IEA = ("beamdyn_tip_official", "beamdyn_tip_from_windio")
+
+
+def keep_driver_results(res, saved):
+    if res.get("openfast_version") is not None or not saved:
+        return res
+    for k in DRIVER_RESULTS:
+        if saved.get(k) is not None:
+            res[k] = saved[k]
+    if res.get("iea15") and saved.get("iea15"):
+        for k in DRIVER_IEA:
+            if k in saved["iea15"]:
+                res["iea15"][k] = saved["iea15"][k]
+    res["beamdyn_results_from"] = "an earlier run with BEAMDYN_DRIVER set"
+    return res
+
+
+def check(res) -> Checks:
+    c = Checks("07 BeamDyn and windIO export")
+    iea = res.get("iea15")
+    if iea:
+        c.close("IEA 15 MW: windIO -> BeamDyn stiffness against the official blade file", iea["K_max_rel_diff"], 0.0,
+                1e-10, "IEA-15-240-RWT", scale=1.0)
+        c.close("IEA 15 MW: windIO -> BeamDyn mass against the official blade file", iea["M_max_rel_diff"], 0.0, 1e-15,
+                "IEA-15-240-RWT", scale=1.0)
+        c.true("IEA 15 MW: the official deck rewritten (OpenFAST 4 and 5) reads back exactly", iea["rewrite_exact"],
+               "IEA-15-240-RWT")
+        if "beamdyn_tip_official" in iea:
+            c.close("IEA 15 MW in BeamDyn: tip deflection from windIO against the official deck",
+                    iea["beamdyn_tip_from_windio"][0], iea["beamdyn_tip_official"][0], 1e-4, "BeamDyn")
+    else:
+        c.true("IEA 15 MW reference files reachable (skipped offline)", True, "network")
+    for row in res.get("prismatic") or []:
+        c.close(f"BeamDyn against TimoshenkoBeam, {row['load']}", row["max_diff"], 0.0, 1e-4, "BeamDyn", scale=1.0)
+    t = res["tapered"]
+    c.true("tapered blade: caps at one angle give extension-twist coupling 0.2 to 0.35 at every station",
+           all(0.2 <= abs(v) <= 0.35 for v in t["c_ext_twist"]), "layup")
+    return c
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--reuse", action="store_true", help="redraw from data/results.json")
     args = parser.parse_args()
-    if args.reuse and RESULTS.exists():
-        res = json.loads(RESULTS.read_text())
+    saved = json.loads(RESULTS.read_text()) if RESULTS.exists() else None
+    if args.reuse and saved:
+        res = saved
     else:
-        res = solve()
+        res = keep_driver_results(solve(), saved)
         RESULTS.write_text(json.dumps(res, indent=1))
     plot(res)
+    check(res).report()
 
 
 if __name__ == "__main__":

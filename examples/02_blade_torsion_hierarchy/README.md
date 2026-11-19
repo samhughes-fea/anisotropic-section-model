@@ -62,13 +62,13 @@ python examples/02_blade_torsion_hierarchy/blade_torsion_hierarchy.py    # about
 
 | GJ [N m²] | | Against thin-wall |
 |---|---:|---:|
-| `ThinWalledSection` (Saint-Venant, free warping) | 1.730 × 10⁶ | |
-| Shell with ribs every 0.5 m (no distortion), twist rate between 2 and 4 m | 1.732 × 10⁶ | +0.14% |
-| `beam_section_properties` (6 m segment, no ribs) | 1.689 × 10⁶ | −2.4% |
+| `ThinWalledSection` (Saint-Venant, free warping) | 1.729 × 10⁶ | |
+| Shell with ribs every 0.5 m (no distortion), twist rate between 2 and 4 m | 1.732 × 10⁶ | +0.17% |
+| `beam_section_properties` (6 m segment, no ribs) | 1.689 × 10⁶ | −2.3% |
 | `beam_section_properties` (6 m segment, end ribs) | 1.726 × 10⁶ | −0.2% |
 
 The thin-wall Saint-Venant GJ and the shell agree once ribs keep the section in shape.
-`beam_section_properties` without end ribs reads 2.4% lower. That is not an error in either model: its
+`beam_section_properties` without end ribs reads 2.3% lower. That is not an error in either model: its
 clamped root and rigid tip restrain warping, and the section distorts between them,
 which the measured twist includes. The gap shrinks as the segment gets longer. Use the thin-wall GJ as the Saint-Venant value. The shear centre
 sits 8 mm aft of the pitch axis.
@@ -77,12 +77,12 @@ sits 8 mm aft of the pitch axis.
 
 | | Root bimoment [N m²] | Tip twist [mrad] |
 |---|---:|---:|
-| Saint-Venant | 0 | 3.4686 |
-| Vlasov | −33.8 | 3.4491 |
-| Benscoter | −5.75 | 3.4653 |
-| GBT, rigid section | −5.52 | 3.4622 |
-| GBT + distortion | −2.24 | 3.4651 |
-| Shell | | 3.4618 |
+| Saint-Venant | 0 | 3.4694 |
+| Vlasov | −33.6 | 3.4500 |
+| Benscoter | −5.66 | 3.4661 |
+| GBT, rigid section | −5.49 | 3.4588 |
+| GBT + distortion | −2.23 | 3.4618 |
+| Shell | | 3.4617 |
 | First element row (z = 0.125 m): shell / GBT + distortion | −1.79 / −1.75 | |
 
 - The section is closed and stiff in shear, so warping restraint barely changes the
@@ -98,23 +98,23 @@ sits 8 mm aft of the pitch axis.
 
 | GBT level | Twist at z = 5 m [mrad] | Tip twist [mrad] |
 |---|---:|---:|
-| Rigid section | 2.89 | 3.46 |
-| 1 distortional mode | 16.44 | 22.37 |
-| 2 modes | 21.23 | 57.36 |
-| 3 modes | 21.24 | 57.39 |
-| 4 modes | 19.83 | 70.33 |
-| 5 modes | 19.83 | 70.34 |
-| 8 modes | 21.80 | 78.47 |
-| All 167 modes | 21.94 | 80.59 |
-| All modes + wall stretching | 22.06 | 86.98 |
-| **Shell** | **22.05** | **85.80** |
+| Rigid section | 2.88 | 3.46 |
+| 1 distortional mode | 16.44 | 22.36 |
+| 2 modes | 21.26 | 57.53 |
+| 3 modes | 21.27 | 57.56 |
+| 4 modes | 19.80 | 70.91 |
+| 5 modes | 19.80 | 70.91 |
+| 8 modes | 21.82 | 79.26 |
+| All 167 modes | 21.98 | 81.22 |
+| All modes + wall stretching | 22.10 | 87.72 |
+| **Shell** | **22.04** | **85.78** |
 
 | Ribs (no tip rib) | Shell, z = 5 m / tip | GBT + wall stretching, z = 5 m / tip |
 |---|---:|---:|
-| none | 22.05 / 85.80 | 22.06 / 86.98 |
-| every 3 m | 20.37 / 83.91 | 20.41 / 85.08 |
-| every 1.5 m | 14.06 / 77.41 | 14.03 / 78.45 |
-| every 0.75 m | 1.62 / 49.26 | 1.52 / 50.00 |
+| none | 22.04 / 85.78 | 22.10 / 87.72 |
+| every 3 m | 20.36 / 83.88 | 20.46 / 85.83 |
+| every 1.5 m | 14.05 / 77.38 | 14.07 / 79.20 |
+| every 0.75 m | 1.62 / 49.25 | 1.52 / 50.66 |
 
 - Put into the skins instead of through a rib, the same torque twists the tip 25
   times more. Almost all of that is the section distorting near the load: the
@@ -125,7 +125,7 @@ sits 8 mm aft of the pitch axis.
   so the antisymmetric skin couple does almost no work on them and they change the twist
   by under 0.05%. Eight modes give the twist 1 m from the load within about 1%. At the loaded section itself, the skins also stretch round the
   contour under the local loads. Adding that (the extensible walls) brings the tip
-  within 1.4% of the shell. Classical inextensible GBT is 6% stiff there.
+  within 2.3% of the shell. Classical inextensible GBT is 5% stiff there.
 - Ribs confine the distortion to the bay that carries the load (middle panel, logarithmic
   above 1 mrad). The twist inboard of the last rib drops to the rigid-section line, but
   the unribbed tip bay still distorts. A rib at the load introduction is what stops it.

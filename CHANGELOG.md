@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Worked example suite.** Four new examples: isotropic sections against the closed forms,
+  thin-wall and solid (08); CAS and CUS composite box beams, thin-wall against the solid
+  section and a shell cantilever (09); coupled torsion, GJ against GJ_free with a shell
+  cantilever with a free and a held tip (10); the solid section against every BECAS and VABS
+  validation case (11). Every example now ends with self-checks against its references
+  (`examples/_shared/checks.py`) and fails if one drifts: `tests/test_examples.py` re-checks
+  the committed results and CI's new `examples` job solves each example from scratch.
+  `run_all.py` takes example numbers and `--reuse`. The index is reorganised as a reading
+  path. Examples 02 and 05 have their numbers refreshed for the coupled-torsion change.
 - **BeamDyn and windIO export.** `BeamDynBlade.from_geometry` sweeps a `BladeGeometry`
   (one `ThinWalledSection.from_geometry` cut per station; laminates can be a function of
   z) and `from_sections` takes sections you have. `write` gives a complete BeamDyn deck,
