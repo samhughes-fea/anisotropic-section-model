@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Worked example suite.** Four new examples: isotropic sections against the closed forms,
+  thin-wall and solid (08); CAS and CUS composite box beams, thin-wall against the solid
+  section and a shell cantilever (09); coupled torsion, GJ against GJ_free with a shell
+  cantilever with a free and a held tip (10); the solid section against every BECAS and VABS
+  validation case (11). Every example now ends with self-checks against its references
+  (`examples/_shared/checks.py`) and fails if one drifts: `tests/test_examples.py` re-checks
+  the committed results and CI's new `examples` job solves each example from scratch.
+  `run_all.py` takes example numbers and `--reuse`. The index is reorganised as a reading
+  path. Examples 02 and 05 have their numbers refreshed for the coupled-torsion change.
 - **BeamDyn and windIO export.** `BeamDynBlade.from_geometry` sweeps a `BladeGeometry`
   (one `ThinWalledSection.from_geometry` cut per station; laminates can be a function of
   z) and `from_sections` takes sections you have. `write` gives a complete BeamDyn deck,
@@ -15,7 +24,28 @@
   Checked against the IEA 15 MW windIO and BeamDyn files (1e-12) and in BeamDyn itself
   (OpenFAST 4.1.2 and 5.0.0) against `TimoshenkoBeam`; example 07. New `windio` extra
   (PyYAML).
-
+- **Same-mesh BECAS benchmark** (`benchmarks/becas_same_mesh`, gated by
+  `tests/test_benchmark_becas_same_mesh.py`). A reader and writer of BECAS's 2D input
+  (`becas_io`) puts ASM and BECAS on identical meshes. On BECAS's own validation meshes ASM
+  matches the full 6 x 6 and both centres of the BECAS and VABS outputs shipped with them to
+  1e-9 or better (S2, S3, C1, C2, C3 at E1/E2 up to 1e5, C4 layered cylinder), and the user
+  guide's three-cell T1 to T3 tables to their printed digits. Adds an MH-104-style two-web
+  section, CAS and CUS box beams and a layered composite cylinder, written to BECAS input; the
+  BECAS runs on them are pending a MATLAB or Octave runtime. Records stale result files and
+  mislabelled tables found in BECAS's examples and guide.
+- **VABS and BECAS benchmark** for the solid section (`benchmarks/vabs_becas`, gated by
+  `tests/test_benchmark_vabs_becas.py`). On the BECAS user guide's own 10 x 10 mesh of its
+  squares (isotropic, two-material, orthotropic at 0, 22.5 and 90 degrees) ASM reproduces
+  every published term to the printed digits, couplings included; converged, it matches the
+  closed forms and sits about 0.85 % below BECAS's coarse-mesh shear and torsion values. The
+  BECAS tube and half tube agree to 0.15 % (centres included), the Chen et al. aluminium tube
+  to 0.02 % (VABS's GJ is 2 % above the exact value, which ASM matches), and the Yu et al.
+  multi-layer composite pipe to 0.2 % on all nine VABS terms, extension-twist and
+  shear-bending couplings included. `RESULTS.md` has the tables.
+- Solid section: a bilinear `Q4` element, to run the BECAS user guide's meshes, and
+  `solid.structured` (`structured_mesh`, `rectangle_patch`, `arc_patch`): conforming mapped
+  meshes of rectangles and annular sectors in `Q4`, `Q8` or `T6`, with plies that follow
+  curved walls.
 - **Torsion from the coupled section analysis.** `ThinWalledSection.omega`, `S_warping`
   and `Ip` now come from `section.analysis` (its torsional warping and Benscoter
   stiffness), like `GJ` and `EGamma` already did; the classical values move to
@@ -28,7 +58,6 @@
   `GJ_free` is 0.44 GJ, and a shell model of the box twists within 3 % of it
   (`tests/test_coupled_torsion.py`); the old `from_section` was about 2.2 times too stiff.
   GBT's classical torsional warping mode follows the coupled `omega`.
-
 - `FormulationWriter` returns warping, shear flow and wall strains at section, wall,
   Gauss and ply levels of a `ThinWalledSectionAnalysis`, and writes one CSV per level
   (`to_csv`). Warping is force-independent; strains, shear flow and ply stresses are

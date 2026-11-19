@@ -44,6 +44,7 @@ except ReferenceBladesUnavailable as exc:  # the blade lives in the private cata
     DATA, build_segment, IEA_MISSING = None, None, str(exc)
 else:
     IEA_MISSING = None
+from _shared.checks import Checks
 from _shared.plotting import DIVERGING, REFERENCE, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import add_rib, box_spar, section_nodes
 from anisotropic_section_model import RestrainedTorsionBeam, ThinWalledSection
@@ -415,6 +416,25 @@ def report(box, rows):
         print(line)
 
 
+def check(box) -> Checks:
+    """The box spar's 6 x 6, 7 x 7 and cantilevers against the shell (the IEA 15 MW part needs the
+    private catalogue, so it is not checked here)."""
+    c = Checks("03 Timoshenko and Vlasov section stiffness")
+    Cs, Ct = np.linalg.inv(np.asarray(box["shell_K6"])), np.linalg.inv(np.asarray(box["thin_K6"]))
+    for i, name, tol in ((0, "GA_x", 0.05), (1, "GA_y", 0.05), (2, "EA", 1e-3), (3, "EI_x", 1e-3), (4, "EI_y", 1e-3),
+                         (5, "GJ", 0.01)):
+        c.close(f"box {name}, thin-wall against shell", 1 / Ct[i, i], 1 / Cs[i, i], tol, "shell model")
+    c.close("box EGamma, thin-wall against shell", box["thin_EGamma"], box["shell_EGamma"], 0.08, "shell model")
+    Ns, Nt = normalised(np.asarray(box["tailored_shell_K6"])), normalised(np.asarray(box["tailored_thin_K6"]))
+    c.close("20-degree box: extension-twist coupling, thin-wall against shell", Nt[2, 5], Ns[2, 5], 0.03, "shell model")
+    d = np.array(box["defl"])
+    Ks = np.linalg.inv(np.asarray(box["shell_K6"]))
+    for L, row in zip(LENGTHS, d):
+        c.close(f"cantilever L = {L:g} m: Timoshenko (shell 6 x 6) tip deflection against shell",
+                beam_tip_displacement(Ks, L, (0, 1, 0, 0, 0, 0))[1], row[1], 0.025, "shell model")
+    return c
+
+
 def with_published(rows):
     """Add the published 6 x 6 (blade input data, read from the catalogue) to each row."""
     by_r = {round(st["r"], 6): st for st in DATA["stations"]}
@@ -442,6 +462,7 @@ def main():
     figure_warping(data["box"])
     if data["iea"]:
         figure_iea(data["iea"])
+    check(data["box"]).report()
 
 
 if __name__ == "__main__":

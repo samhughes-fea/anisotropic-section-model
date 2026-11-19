@@ -29,7 +29,8 @@ src/anisotropic_section_model/
 ├── beam.py         TimoshenkoBeam: exact Timoshenko / Euler-Bernoulli beams from a 6 × 6 or 4 × 4
 └── beamdyn.py      BeamDynBlade: spanwise sweep to OpenFAST BeamDyn and windIO 2.0 files
 tests/              pytest suite, with shell models as references
-examples/           seven worked examples, each with its script, figures and README
+examples/           eleven worked examples, each with its script, figures, README and self-checks
+benchmarks/         the solid section against published VABS and BECAS results (vabs_becas/)
 ```
 
 ## Install
@@ -239,16 +240,24 @@ file to 1e-12, and BeamDyn (OpenFAST 4.1 and 5.0) on a written deck matches
 
 ## Examples
 
-Seven worked examples in [examples/](examples/), each with its script, figures and a
-README on the model and the results: torsion of a box spar and of a three-cell blade
-section, the 6 × 6 and 7 × 7 section stiffness (including six IEA 15 MW stations), the
-bending and axial hierarchy on both sections, sections cut from the implicit
-geometry, and a blade written for BeamDyn and windIO. Each checks itself against closed forms and shell models built with
-shell-fem.
+Eleven worked examples in [examples/](examples/). Each has its script, figures and a
+README on the physics and the results, and each checks itself against its references
+(closed forms, BECAS and VABS, the IEA 15 MW files, shell models built with shell-fem). The
+[index](examples/README.md) suggests a reading order:
+1. **Foundations:** isotropic sections against the closed forms (08), and the solid
+   section against every BECAS and VABS validation case (11).
+2. **Composite couplings:** CAS and CUS box beams (09), and GJ against GJ_free in coupled
+   torsion (10).
+3. **Beyond Saint-Venant:** torsion, bending and axial load on a box spar and a
+   three-cell blade section: restrained warping, shear lag, distortion, and the 6 × 6 and
+   7 × 7 stiffness (01 to 05).
+4. **From geometry to a turbine model:** sections cut from the implicit geometry (06),
+   and a blade written for BeamDyn and windIO (07).
 
 ```bash
-pip install -e ".[examples]"
-python examples/run_all.py
+pip install -e ".[dev]"
+python examples/run_all.py           # solve every example and run its checks
+python examples/run_all.py --reuse   # re-check from the committed results, in seconds
 ```
 
 ## Verification
@@ -272,6 +281,8 @@ python examples/run_all.py
   read back exactly; the IEA 15 MW windIO file reproduces its official BeamDyn blade
   file. With `BEAMDYN_DRIVER` set, BeamDyn on a written deck matches `TimoshenkoBeam`
   under six tip loads and self-weight.
+- Every worked example's checks (`tests/test_examples.py` on the committed results; CI's
+  `examples` job solves them from scratch).
 
 ## Limitations
 

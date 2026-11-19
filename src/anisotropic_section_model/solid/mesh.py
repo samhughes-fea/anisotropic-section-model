@@ -52,7 +52,7 @@ class QuadraturePoint:
 class SectionMesh:
     nodes: npt.NDArray[np.float64]                       # (n_nodes, 2)
     elements: List[npt.NDArray[np.int64]]                # node indices per element
-    kinds: List[str]                                      # "T6" or "Q8" per element
+    kinds: List[str]                                      # "T6", "Q8" or "Q4" per element
     material_ids: List[int]
     theta: List[float]                                    # ply angle per element, degrees
     alpha: List[float]                                    # wall angle per element, degrees

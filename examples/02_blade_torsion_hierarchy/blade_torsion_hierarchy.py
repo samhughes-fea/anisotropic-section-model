@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 
+from _shared.checks import Checks
 from _shared.plotting import DIVERGING, REFERENCE, SEQUENTIAL, SERIES, TEXT_SECONDARY, plt, save
 from _shared.torsion import (add_rib, contour_coordinate, loop_order, section_nodes, shell_bimoment,
                              shell_section_motion)
@@ -181,6 +182,24 @@ def main():
         print(f"Skin force couple, {label}: twist [mrad] at z = 5 m / tip: shell {1e3 * tw[-5]:.3f} / {1e3 * tw[-1]:.3f}; "
               + "; ".join(f"GBT {name(n)} {1e3 * g.mean_twist([zs[-5]])[0]:.3f} / {1e3 * g.mean_twist([LENGTH])[0]:.3f}"
                           for n, g in gbt.items()))
+
+    checks = Checks("02 blade torsion hierarchy")
+    checks.close("GJ, thin-wall against the shell with ribs", sec.GJ, gj["shell, ribs every 0.5 m"], 0.01, "shell model")
+    checks.close("tip twist (tip rib), Benscoter against shell", ben.twist[-1], shell_tw[-1], 0.01, "shell model")
+    checks.close("tip twist (tip rib), GBT + distortion against shell", g_full.mean_twist([LENGTH])[0], shell_tw[-1],
+                 0.005, "shell model")
+    checks.close("bimoment at the first element row, GBT + distortion against shell", g_full.bimoment([zb[0]])[0],
+                 shell_B[0], 0.05, "shell model")
+    for spacing, (tw, gbt, _) in couple.items():
+        label = "no ribs" if spacing is None else f"ribs every {spacing:g} m"
+        checks.close(f"skin couple, {label}: tip twist, GBT + wall stretching against shell",
+                     gbt["ext"].mean_twist([LENGTH])[0], tw[-1], 0.04, "shell model")
+        if spacing != 0.75:  # in the last case the twist at 5 m is small and dominated by the bay at the tip
+            checks.close(f"skin couple, {label}: twist at 5 m, GBT + wall stretching against shell",
+                         gbt["ext"].mean_twist([zs[-5]])[0], tw[-5], 0.02, "shell model")
+    tw0, gbt0, _ = couple[None]
+    checks.true("skin couple, no ribs: the tip twists over 20 x more than the rigid section",
+                tw0[-1] > 20 * gbt0[0].mean_twist([LENGTH])[0], "shell model")
 
     # ================================================================ figure 1: the section
     fig = plt.figure(figsize=(15, 4.6))
@@ -347,6 +366,7 @@ def main():
              fontsize=7.5, color=TEXT_SECONDARY)
     fig.tight_layout()
     save(fig, __file__, "blade_torsion_distortion.png")
+    checks.report()
 
 
 if __name__ == "__main__":

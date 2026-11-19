@@ -7,6 +7,7 @@ or criterion keeps the same colour in every figure.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -66,13 +67,17 @@ def apply_style() -> None:
 
 
 def save(fig, script: str, name: str) -> Path:
-    """Write ``fig`` to ``<folder of script>/figures/<name>``."""
-    folder = Path(script).resolve().parent / "figures"
+    """Write ``fig`` to ``<folder of script>/figures/<name>``, or to
+    ``$ASM_EXAMPLES_FIGURES/<example folder>/<name>`` when that is set (the tests use it so a
+    re-check does not rewrite the committed figures)."""
+    here = Path(script).resolve().parent
+    redirect = os.environ.get("ASM_EXAMPLES_FIGURES")
+    folder = Path(redirect) / here.name if redirect else here / "figures"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / name
     fig.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"wrote {path.relative_to(ROOT)}")
+    print(f"wrote {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path}")
     return path
 
 

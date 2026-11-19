@@ -13,11 +13,12 @@ from anisotropic_section_model.thin_walled.laminate import Ply, PlyMaterial
 
 CFRP = PlyMaterial(E1=135e9, E2=10e9, G12=5e9, nu12=0.3, G13=5e9, G23=3.8e9, rho=1550.0)
 NODES = {"Q8": np.array([[-1, -1], [1, -1], [1, 1], [-1, 1], [0, -1], [1, 0], [0, 1], [-1, 0]], float),
-         "T6": np.array([[0, 0], [1, 0], [0, 1], [0.5, 0], [0.5, 0.5], [0, 0.5]], float)}
+         "T6": np.array([[0, 0], [1, 0], [0, 1], [0.5, 0], [0.5, 0.5], [0, 0.5]], float),
+         "Q4": np.array([[-1, -1], [1, -1], [1, 1], [-1, 1]], float)}
 
 
 # ------------------------------------------------------------------ elements
-@pytest.mark.parametrize("kind", ["Q8", "T6"])
+@pytest.mark.parametrize("kind", ["Q8", "T6", "Q4"])
 def test_shape_functions(kind):
     X = NODES[kind]
     for a, p in enumerate(X):            # interpolating: N_b(node a) = delta_ab
@@ -45,6 +46,14 @@ def test_quadrature_is_exact_to_degree_five(kind, exact):
             val = w @ (pts[:, 0] ** i * pts[:, 1] ** j)
             ref = exact(i, j) if exact else factorial(i) * factorial(j) / factorial(i + j + 2)
             assert val == pytest.approx(ref, abs=1e-12)
+
+
+def test_q4_quadrature_is_exact_to_degree_three():
+    pts, w = quadrature("Q4")
+    for i in range(4):
+        for j in range(4):
+            ref = (1 - (-1) ** (i + 1)) / (i + 1) * (1 - (-1) ** (j + 1)) / (j + 1)
+            assert w @ (pts[:, 0] ** i * pts[:, 1] ** j) == pytest.approx(ref, abs=1e-12)
 
 
 # ------------------------------------------------------------------ material
