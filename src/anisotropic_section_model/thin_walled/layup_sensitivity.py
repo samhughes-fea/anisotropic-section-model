@@ -175,6 +175,12 @@ class SectionDerivative:
     gbt_geometric: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
     #: ``(dW0, dW1)``: the Saint-Venant warping fields (free DOFs, per unit section force)
     warping_fields: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
+    #: ``d axial_points[:, :2]``: how the axial quadrature points move (a ply thickness of a
+    #: section meshed in 2D; ``None`` where they stay put, as on wall mid-lines)
+    axial_positions: Optional[npt.NDArray[np.float64]] = None
+    #: ``d`` of the section's taper coupling (``thin_walled.taper.taper_derivative``), when the
+    #: derivative was taken with its taper; ``element_section_derivative`` adds it
+    taper: Optional[object] = None
 
 
 def _assemble(an, laws: Dict[int, np.ndarray]) -> Dict[str, np.ndarray]:
@@ -206,13 +212,26 @@ def _phi(g, P0, P1, W0, W1) -> np.ndarray:
 
 
 def section_derivative(an, param: LayupParameter, benscoter: bool = False,
-                       geometric: bool = False) -> SectionDerivative:
+                       geometric: bool = False, taper=None) -> SectionDerivative:
     """Exact derivatives of the section stiffness, flexibility and mass for ``param``.
 
     ``an`` is a ``ThinWalledSectionAnalysis``. A parameter of a laminate the section does not
     use gives zeros. ``benscoter=True`` adds the derivatives of the Benscoter stiffness and
-    the warping inertia, ``geometric=True`` that of the second-order terms.
+    the warping inertia, ``geometric=True`` that of the second-order terms, and a
+    ``taper`` (``thin_walled.taper.SectionTaper`` of this section) that of its coupling
+    (``SectionDerivative.taper``).
     """
+    d = _section_derivative(an, param, benscoter, geometric)
+    if taper is None:
+        return d
+    from dataclasses import replace
+
+    from anisotropic_section_model.thin_walled.taper import taper_derivative
+
+    return replace(d, taper=taper_derivative(taper, d))
+
+
+def _section_derivative(an, param: LayupParameter, benscoter: bool, geometric: bool) -> SectionDerivative:
     from anisotropic_section_model.thin_walled.section_analysis import _solve
 
     lam = an.laminates.get(param.laminate_id)
@@ -582,6 +601,30 @@ def gbt_section_derivative(modes, d: SectionDerivative, n_modes: int, n_shear: i
     return 0.5 * (dK + dK.T), 0.5 * (dM + dM.T), (dTX, dTY)
 
 
+def _axial_points_derivative(points, dk, dr=None) -> np.ndarray:
+    """Axial quadrature ``[y, z, k]`` whose sums are the derivatives of the sums of ``points``.
+
+    ``d sum k f(r) = sum dk f(r) + sum k grad f . dr``. The second sum is carried by four
+    points per moving point, at ``r +- e dr`` and ``r +- 2 e dr`` with weights
+    ``k (+-8, -+1) / (12 e)``: the five-point derivative along ``dr``, exact for the
+    polynomials of degree four and less that the axial quadrature integrates
+    (``with_pretwist`` and the fourth-order energy).
+    """
+    P = np.array(points, dtype=np.float64, copy=True)
+    P[:, 2] = dk
+    if dr is None:
+        return P
+    dr = np.asarray(dr, dtype=np.float64)
+    moving = np.flatnonzero(np.any(dr != 0.0, axis=1))
+    if moving.size == 0:
+        return P
+    size = float(np.ptp(P[:, :2], axis=0).max()) or 1.0
+    e = 0.01 * size / float(np.abs(dr[moving]).max())
+    r, k, v = P[moving, :2], np.asarray(points, dtype=np.float64)[moving, 2], dr[moving]
+    extra = [np.column_stack([r + a * e * v, k * c / (12.0 * e)]) for a, c in ((1, 8.0), (-1, -8.0), (2, -1.0), (-2, 1.0))]
+    return np.vstack([P] + extra)
+
+
 def element_section_derivative(sa, d: SectionDerivative):
     """A ``SectionAnalysis`` like ``sa`` whose stiffness and mass matrix are the derivatives ``d``
     (element signs).
@@ -602,7 +645,9 @@ def element_section_derivative(sa, d: SectionDerivative):
 
     kw = {f.name: getattr(sa, f.name) for f in fields(sa) if f.init}
     dK = np.array(d.stiffness, dtype=np.float64, copy=True)
-    if sa.tapered:
+    if sa.tapered and d.taper is not None:
+        dK += d.taper.matrix()
+    elif sa.tapered:
         from anisotropic_section_model.thin_walled.taper import SectionTaper
 
         if sa.taper_parts is None:
@@ -614,9 +659,7 @@ def element_section_derivative(sa, d: SectionDerivative):
     kw["stiffness"] = to_element_voigt(dK)
     kw["tapered"], kw["taper_parts"] = False, None
     if d.axial_weights is not None and sa.axial_points is not None:
-        ap = np.array(sa.axial_points, dtype=np.float64, copy=True)
-        ap[:, 2] = d.axial_weights
-        kw["axial_points"] = ap
+        kw["axial_points"] = _axial_points_derivative(sa.axial_points, d.axial_weights, d.axial_positions)
     if d.benscoter_stiffness is not None:
         S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
         dK8 = np.array(d.benscoter_stiffness, dtype=np.float64, copy=True)
