@@ -40,6 +40,17 @@
 - **Fix:** `SectionMesh.from_thin_walled` merged coincident nodes by rounding them to a grid,
   so a pair either side of a grid line stayed apart (a loose node at a junction). Nodes now
   merge by distance.
+- **Section strength checks.** `SectionStrength` (`section_strength`) recovers the ply
+  stresses of a section under its six section forces, thin-walled (the coupled Saint-Venant
+  wall strains, ply stresses through each laminate, interlaminar stresses from equilibrium)
+  or meshed in 2D (`SolidSectionAnalysis`), and evaluates maximum stress, Tsai-Wu, Hashin and
+  Puck at every point, with the critical wall, ply, position, criterion and mode. It solves
+  six unit force cases once, so each load case is a matrix product. Example 14 checks it on a
+  three-cell blade against a shell model, at cuts whose forces follow from statics: ply
+  stresses within 3 % RMS, exposures within 2.2 % away from the clamp and the tip rib, the
+  same critical part and criterion at every row, and the solid section within 1 % of the
+  thin-walled one away from the web junctions. Running the check along a beam (forces from
+  a beam solve, load-case envelopes) is 1d-fem's.
 - **Scope:** ASM covers one cross-section at a time. Beam solves along the span (tapered
   beams, beam-level sensitivities, modal analysis, spanwise strength) belong to 1d-fem, which
   uses these sections; see `docs/package_boundary.md`.

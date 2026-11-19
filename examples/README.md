@@ -30,6 +30,7 @@ builds up from the simplest case:
 | | 05 | [Blade bending and axial hierarchy](05_blade_bending_axial_hierarchy/) | The same hierarchy on a three-cell blade section: flapwise tip force, shear lag across the spar caps, skin suction and ribs, an axial load fed into the caps | shell | 12 | 2 min |
 | **4 · From geometry to a turbine model** | 06 | [Blade from its implicit geometry](06_blade_from_implicit_geometry/) | Any of the 40 section layouts lofted along a blade, cut anywhere and meshed; the thin-walled section and the shell model from the same cut, against shell-fem's [example 20](https://github.com/samhughes-fea/shell-fem/tree/main/examples/20_blade_beam_properties/) model; a tapered, twisted segment | shell-fem example 20 | 16 | 1 min |
 | | 07 | [BeamDyn and windIO export](07_beamdyn_windio_export/) | A blade swept station by station into an OpenFAST BeamDyn deck and windIO 2.0 elastic properties: the IEA 15 MW windIO file reproduces the official BeamDyn blade file, and BeamDyn matches `TimoshenkoBeam` on a twisted, coupled section | IEA 15 MW files, BeamDyn | 14 | 10 s |
+| **5 · Strength** | 14 | [Strength check of blade sections](14_blade_section_strength/) | Ply stresses in every ply of a section under its six forces, maximum stress, Tsai-Wu, Hashin and Puck exposures and the critical ply, at every cut of a blade; thin-walled and solid sections; the clamp effect a Saint-Venant check misses | shell, solid section | 49 | 1 min |
 
 The main API each one uses:
 
@@ -46,6 +47,7 @@ The main API each one uses:
 | 09 | `ThinWalledSection.timoshenko_stiffness`, `SolidSectionAnalysis`, `TimoshenkoBeam` |
 | 10 | `ThinWalledSection.GJ_free`, `RestrainedTorsionBeam.from_section(other_strains=...)`, `GeneralizedBeam` |
 | 11 | `SolidSectionAnalysis`, `solid.structured` (`arc_patch`, `rectangle_patch`) |
+| 14 | `SectionStrength.from_thin_walled`, `from_solid`, `evaluate`, `critical` |
 
 All examples are linear static analyses.
 
