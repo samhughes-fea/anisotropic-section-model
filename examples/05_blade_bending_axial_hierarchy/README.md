@@ -47,20 +47,19 @@ python examples/05_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.p
 
 | Model | Tip [mm] | / shell |
 |---|---:|---:|
-| Euler-Bernoulli | 3.904 | 0.755 |
-| Timoshenko, thin-wall 6 × 6 | 5.191 | 1.004 |
+| Euler-Bernoulli | 3.907 | 0.756 |
+| Timoshenko, thin-wall 6 × 6 | 5.195 | 1.005 |
 | Timoshenko, shell 6 × 6 | 5.125 | 0.991 |
-| GBT, plane sections | 5.003 | 0.968 |
-| GBT + all shear-lag modes | 5.169 | 1.000 |
-| GBT + distortion | 5.173 | 1.001 |
+| GBT, plane sections | 4.999 | 0.967 |
+| GBT + all shear-lag modes | 5.158 | 0.998 |
+| GBT + distortion | 5.163 | 0.999 |
 | Shell | 5.170 | |
 
 - At L/chord = 3 the shear deflection is a quarter of the total, and Euler-Bernoulli
   misses all of it. Both 6 × 6 matrices land within 1%: thin-wall theory 0.5% soft and
   the shell's own 6 × 6 0.9% stiff (its GA is 5.6% higher, the Poisson effect of
   example 03, but it only changes a quarter of the answer).
-- GBT with plane sections is 3.2% soft and with the shear-lag modes exact to three
-  figures. Distortion adds 0.1%: a tip shear through a rib hardly distorts the
+- GBT with plane sections is 3.3% soft and with the shear-lag modes within 0.2%. Distortion adds 0.1%: a tip shear through a rib hardly distorts the
   section.
 
 **Shear lag across the upper spar cap** at the first Gauss line (z = 0.040 m, N_zz
@@ -68,8 +67,8 @@ python examples/05_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.p
 
 | | Range across the cap |
 |---|---|
-| Plane sections | −220 to −186 (a straight line in x) |
-| GBT + all shear-lag modes | −256 to −195 |
+| Plane sections | −220 to −185 (a straight line in x) |
+| GBT + all shear-lag modes | −255 to −194 |
 | Shell | −214 to −195 |
 
 - Plane sections put the peak at the leading edge of the cap and the minimum at the
@@ -84,10 +83,10 @@ python examples/05_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.p
 
 | Ribs | Shell: skin / webs | GBT, all modes | GBT, rigid section |
 |---|---:|---:|---:|
-| none | 3.816 / 2.281 | 3.828 / 2.392 | 2.807 / 2.807 |
-| every 0.75 m | 2.783 / 2.493 | 2.881 / 2.606 | 2.807 / 2.807 |
+| none | 3.816 / 2.281 | 3.820 / 2.384 | 2.801 / 2.659 |
+| every 0.75 m | 2.783 / 2.493 | 2.877 / 2.601 | 2.801 / 2.659 |
 
-(Timoshenko gives 2.669 mm.)
+(Timoshenko gives 2.671 mm.)
 
 - Unlike the box of example 04, the blade section's beam deflection and its distortion
   are the same order: the skin moves 43% more than the beam does and the webs 15% less,
@@ -96,16 +95,16 @@ python examples/05_blade_bending_axial_hierarchy/blade_bending_axial_hierarchy.p
 - 2 distortional modes already give 89% of the extra skin deflection and 4 give 92%;
   the rest is spread thinly over the remaining modes. The curved skins have no single
   soft mode like the box's racking mode.
-- Ribs every 0.75 m bring the skin and the webs back to within 5% of the Timoshenko
-  deflection. GBT tracks the shell within 4% with ribs and 3% without.
+- Ribs every 0.75 m bring the skin and the webs back to within 7% of the Timoshenko
+  deflection. GBT tracks the shell within 5% with ribs and without.
 
 **An axial load into the caps alone** (50 kN at the tip, mean N_zz in the
 trailing-edge skin, each model scaled by its own far-field value):
 
 | Distance from the load | Shell | Plane sections | + shear lag | + shear lag, extensible |
 |---|---:|---:|---:|---:|
-| 0.28 m | 0.46 | 1.00 | 0.51 | 0.47 |
-| 0.66 m | 0.77 | 1.00 | 0.79 | 0.77 |
+| 0.28 m | 0.46 | 1.00 | 0.52 | 0.47 |
+| 0.66 m | 0.77 | 1.00 | 0.80 | 0.77 |
 | 1.03 m | 0.93 | 1.00 | 0.94 | 0.93 |
 | 1.41 m | 1.01 | 1.00 | 1.01 | 1.01 |
 | 2.91 m | 1.13 | 1.00 | 1.07 | 1.13 |

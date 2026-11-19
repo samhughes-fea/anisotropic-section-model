@@ -1,8 +1,13 @@
 # anisotropic_section_model/solid/elements.py
-"""Quadratic 2D section elements: 6-node triangles (``T6``) and 8-node quadrilaterals (``Q8``).
+"""2D section elements: quadratic 6-node triangles (``T6``) and 8-node quadrilaterals (``Q8``),
+and the bilinear 4-node quadrilateral (``Q4``).
 
 Node order follows Gmsh: corners first (counter-clockwise), then the mid-side nodes, the
 mid-side node ``k`` lying between corners ``k`` and ``k + 1``.
+
+``Q4`` is the element of the BECAS user guide's validation meshes. It is kept so those
+published results can be reproduced on the same mesh (``benchmarks/vabs_becas``); the
+quadratic elements converge much faster and are the ones to use otherwise.
 
 Public API
 ----------
@@ -16,7 +21,7 @@ from typing import Dict, Tuple
 import numpy as np
 import numpy.typing as npt
 
-ELEMENT_TYPES: Dict[str, int] = {"T6": 6, "Q8": 8}
+ELEMENT_TYPES: Dict[str, int] = {"T6": 6, "Q8": 8, "Q4": 4}
 
 
 def n_nodes(kind: str) -> int:
@@ -47,6 +52,12 @@ def shape(kind: str, xi: float, eta: float) -> Tuple[npt.NDArray[np.float64], np
         dN[:, 5] = [0.5 * (1 - eta * eta), -eta * (1 + xi)]
         dN[:, 7] = [-0.5 * (1 - eta * eta), -eta * (1 - xi)]
         return N, dN
+    if kind == "Q4":
+        corners = np.array([[-1, -1], [1, -1], [1, 1], [-1, 1]], dtype=float)
+        N = 0.25 * (1 + corners[:, 0] * xi) * (1 + corners[:, 1] * eta)
+        dN = 0.25 * np.vstack([corners[:, 0] * (1 + corners[:, 1] * eta),
+                               corners[:, 1] * (1 + corners[:, 0] * xi)])
+        return N, dN
     if kind == "T6":
         L1, L2 = xi, eta
         L0 = 1.0 - L1 - L2
@@ -61,9 +72,10 @@ def shape(kind: str, xi: float, eta: float) -> Tuple[npt.NDArray[np.float64], np
 
 
 def quadrature(kind: str) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-    """Points ``(m, 2)`` and weights ``(m,)``: 3 x 3 Gauss on ``Q8``, 7-point (degree 5) on ``T6``."""
-    if kind == "Q8":
-        x, w = np.polynomial.legendre.leggauss(3)
+    """Points ``(m, 2)`` and weights ``(m,)``: 3 x 3 Gauss on ``Q8``, 2 x 2 on ``Q4``, 7-point
+    (degree 5) on ``T6``."""
+    if kind in ("Q8", "Q4"):
+        x, w = np.polynomial.legendre.leggauss(3 if kind == "Q8" else 2)
         pts = np.array([[a, b] for a in x for b in x])
         wts = np.array([wa * wb for wa in w for wb in w])
         return pts, wts

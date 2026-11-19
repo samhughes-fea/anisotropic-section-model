@@ -13,6 +13,9 @@ GBT             GeneralizedBeam and SectionModes (generalized beam theory: warpi
 Beams           TimoshenkoBeam (exact Timoshenko / Euler-Bernoulli beam elements from a
                 6 x 6 or 4 x 4 section stiffness, all couplings), BeamSolution,
                 euler_bernoulli_beam
+Blade export    BeamDynBlade (a spanwise sweep of a BladeGeometry, or sections, into
+                OpenFAST BeamDyn primary and blade files and windIO 2.0 elastic
+                properties; reads both)
 Closed form     rectangle_properties, i_section_properties, channel_properties,
                 section_properties_from_geometry, reduced_section_from_integrals,
                 principal axes of the full section (not only the reduced one)
@@ -50,6 +53,7 @@ from .thin_walled.fields import (
 from .torsion import RestrainedTorsionBeam, TorsionResponse
 from .gbt import GBTSolution, GeneralizedBeam, SectionModes
 from .beam import BeamSolution, TimoshenkoBeam, euler_bernoulli_beam
+from .beamdyn import BeamDynBlade
 from .closed_form import channel_properties, i_section_properties, rectangle_properties
 from .geometry_to_properties import (
     ReducedBeamSection,
@@ -62,6 +66,7 @@ from .geometry_to_properties import (
 __version__ = "0.4.0"
 
 __all__ = [
+    "BeamDynBlade",
     "BeamSolution",
     "FORMULATION_CSV_SCHEMA",
     "FormulationWriter",
