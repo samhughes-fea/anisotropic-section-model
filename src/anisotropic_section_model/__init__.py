@@ -63,7 +63,7 @@ from .geometry_to_properties import (
     section_properties_from_geometry,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "BeamDynBlade",

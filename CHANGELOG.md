@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-11-19
 
 - **Worked example suite.** Four new examples: isotropic sections against the closed forms,
   thin-wall and solid (08); CAS and CUS composite box beams, thin-wall against the solid
