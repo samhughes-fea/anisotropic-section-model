@@ -1,5 +1,10 @@
 # anisotropic_section_model/closed_form.py
-"""Closed-form section properties: rectangle, I-section, channel (A, I_y, I_z, J_t, kappa, y_sc, z_sc)."""
+"""Closed-form section properties: rectangle, I-section, channel (A, I_y, I_z, J_t, kappa, y_sc, z_sc).
+
+These are 1d-fem's classical section inputs, so they are in the engine frame (``axes``):
+beam axis x, section axes (y, z). In the public frame the engine's y and z are x and y,
+so ``I_y`` (= int z^2) is the public ``I_xx`` and ``I_z`` (= int y^2) the public ``I_yy``.
+"""
 
 from typing import Dict, Any
 

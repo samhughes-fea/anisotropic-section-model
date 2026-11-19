@@ -20,8 +20,13 @@ Closed form     rectangle_properties, i_section_properties, channel_properties,
                 section_properties_from_geometry, reduced_section_from_integrals,
                 principal axes of the full section (not only the reduced one)
 
-Subpackages moved from 1d-fem's ``section_integration`` (step 6 of the split; they are
-folded into the API above in a later step):
+Axes            ``axes``: the one public frame (beam axis z, x to the trailing edge, y to
+                the suction side, BeamDyn's strain order, right-handed twist) and every
+                conversion out of it; SolidSection (2D finite-element sections in it)
+
+Engine subpackages, moved from 1d-fem's ``section_integration``. They work in the engine
+frame (beam axis x, section axes (y, z); ``axes.from_engine`` converts), and the classes
+above give their results in the public frame:
 
 - ``anisotropic_section_model.thin_walled``: wall laminates, condensed wall laws and the
   thin-walled section analysis (Saint-Venant, Benscoter warping, GBT modes, ply stress
@@ -54,6 +59,8 @@ from .torsion import RestrainedTorsionBeam, TorsionResponse
 from .gbt import GBTSolution, GeneralizedBeam, SectionModes
 from .beam import BeamSolution, TimoshenkoBeam, euler_bernoulli_beam
 from .beamdyn import BeamDynBlade
+from .solid_section import SolidSection
+from . import axes
 from .closed_form import channel_properties, i_section_properties, rectangle_properties
 from .geometry_to_properties import (
     ReducedBeamSection,
@@ -66,6 +73,7 @@ from .geometry_to_properties import (
 __version__ = "0.4.0"
 
 __all__ = [
+    "axes",
     "BeamDynBlade",
     "BeamSolution",
     "FORMULATION_CSV_SCHEMA",
@@ -77,6 +85,7 @@ __all__ = [
     "RestrainedTorsionBeam",
     "SectionField",
     "SectionModes",
+    "SolidSection",
     "ThinWalledSection",
     "TimoshenkoBeam",
     "TorsionResponse",

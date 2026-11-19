@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from anisotropic_section_model import BeamDynBlade, ThinWalledSection, TimoshenkoBeam
+from anisotropic_section_model.axes import twist_from_kernel
 from anisotropic_section_model.beamdyn import MIRROR, rotation6, to_beamdyn_frame
 from implicit_geometry_kernel import Airfoil, BladeGeometry, Station
 from shell_fem import Laminate, create_default_library
@@ -110,7 +111,7 @@ def test_twisted_cut_gives_the_untwisted_local_matrices(laminates):
     scale = np.abs(flat.stiffness).max()
     assert np.allclose(twisted.stiffness, flat.stiffness, atol=1e-7 * scale)
     assert np.allclose(twisted.mass, flat.mass, atol=1e-9 * np.abs(flat.mass).max())
-    assert np.allclose(twisted.twist, -15.0)  # BeamDyn's twist moves the leading edge to the pressure side
+    assert np.allclose(twisted.twist, -15.0)  # public (and BeamDyn) twist = -kernel twist
     assert np.allclose(twisted.key_points[:, :2], 0.0)  # a constant offset is the root's: a straight axis
     K = flat.stiffness[1]
     assert np.abs(K[2, 5]) > 0.1 * np.sqrt(K[2, 2] * K[5, 5])  # the same 20° plies in both caps: extension-twist
@@ -131,6 +132,30 @@ def test_beamdyn_frame_reproduces_the_section_beam(laminates):
     K_blade = R @ blade.stiffness[1] @ R.T
     u_bd = TimoshenkoBeam(K_blade, LENGTH, 2).clamp(0.0).add_force(LENGTH, MIRROR @ f).solve()
     assert np.allclose(u_bd.node_displacement(LENGTH), MIRROR @ u_sec.node_displacement(LENGTH))
+
+
+def test_kernel_twist_is_the_negative_of_the_public_twist(laminates):
+    """A kernel cut twisted by t is the untwisted section turned by rotation6(-t): the
+    public twist (right-handed about z, BeamDyn's and windIO's) is -t."""
+    flat = ThinWalledSection.from_geometry(_geometry(0.0).section_at(10.0), laminates)
+    cut = _geometry(20.0).section_at(10.0)
+    sec = ThinWalledSection.from_geometry(cut, laminates)
+    t = float(twist_from_kernel(cut.twist))
+    assert t == pytest.approx(-20.0)
+    R = rotation6(t)
+    K0, K1 = flat.timoshenko_stiffness(), sec.timoshenko_stiffness()
+    assert np.allclose(R @ K0 @ R.T, K1, atol=1e-9 * np.abs(K0).max())
+
+
+def test_from_sections_takes_the_public_twist(laminates):
+    geo = _geometry(15.0, offset=(0.04, -0.02))
+    z = [0.0, 10.0, LENGTH]
+    swept = BeamDynBlade.from_geometry(geo, laminates, z=z)
+    cuts = [geo.section_at(v) for v in z]
+    sections = [ThinWalledSection.from_geometry(c, laminates) for c in cuts]
+    built = BeamDynBlade.from_sections(sections, z, twist=-15.0, offset=[c.offset for c in cuts])
+    assert np.allclose(built.twist, swept.twist) and np.allclose(built.twist, -15.0)
+    assert np.allclose(built.stiffness, swept.stiffness)
 
 
 # ---------------------------------------------------------------- sweep
