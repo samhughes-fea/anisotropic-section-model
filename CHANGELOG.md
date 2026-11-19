@@ -1,20 +1,29 @@
 # Changelog
 
-## 0.4.0 - 2026-11-19
+## Unreleased
 
-- **One axis convention.** New `axes` module defines the public frame (beam axis z, x to
-  the trailing edge, y to the suction side, BeamDyn's strain order, right-handed twist)
-  and holds every conversion out of it: engine (1d-fem) order, the 1d-fem element sign,
-  BeamDyn's mirror and the geometry kernel's twist sign. New `SolidSection`, the 2D
-  finite-element section in the public frame (`timoshenko_stiffness(reference)`,
-  `mass_matrix`, centres, `GJ_free`, `strain_response`), and
-  `FormulationWriter.from_section`, which takes forces in the public order. Section
-  coordinates are the same numbers in both frames.
-  **Breaking:** `BeamDynBlade.from_sections(twist=...)` now takes the public twist
-  (right-handed about z, the same number as BeamDyn's and windIO's), not the kernel's
-  `SectionCut.twist` (its negative). `from_geometry` converts the kernel's twist, and
-  written files are unchanged. `MIRROR`, `rotation6` and `to_beamdyn_frame` now live in `axes`
-  (and are still importable from `beamdyn`); `to_beamdyn_frame` takes the public twist.
+### Breaking
+
+- `BeamDynBlade.from_sections(twist=...)` now takes the public twist: right-handed about
+  z, the same number as BeamDyn's `initial_twist` and windIO's `outer_shape.twist`. In
+  0.4.0 it took the kernel's `SectionCut.twist`, which is its negative, so negate any
+  twist you passed (`axes.twist_from_kernel`). `from_geometry` converts the kernel's twist
+  itself, so the files it writes are unchanged. `to_beamdyn_frame(matrix, twist)` also
+  takes the public twist now.
+
+### Added
+
+- **One axis convention.** A new `axes` module defines the public frame (beam axis z, x to
+  the trailing edge, y to the suction side, BeamDyn's strain order, right-handed twist).
+  It holds every conversion out of it: the engine (1d-fem) order, the 1d-fem element sign,
+  BeamDyn's mirror and the geometry kernel's twist sign. `MIRROR`, `rotation6` and
+  `to_beamdyn_frame` now live there and can still be imported from `beamdyn`. New
+  `SolidSection`, the 2D finite-element section in the public frame
+  (`timoshenko_stiffness(reference)`, `mass_matrix`, centres, `GJ_free`,
+  `strain_response`). New `FormulationWriter.from_section`, which takes forces in the
+  public order. Section coordinates are the same numbers in both frames.
+
+## 0.4.0 - 2026-11-19
 
 - **Worked example suite.** Four new examples: isotropic sections against the closed forms,
   thin-wall and solid (08); CAS and CUS composite box beams, thin-wall against the solid
