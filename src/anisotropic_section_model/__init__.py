@@ -13,6 +13,10 @@ GBT             GeneralizedBeam and SectionModes (generalized beam theory: warpi
 Beams           TimoshenkoBeam (exact Timoshenko / Euler-Bernoulli beam elements from a
                 6 x 6 or 4 x 4 section stiffness, all couplings), BeamSolution,
                 euler_bernoulli_beam
+Strength        SectionStrength (ply stresses and maximum-stress, Tsai-Wu, Hashin and Puck
+                exposures over a thin-walled or 2D-meshed section, critical ply and point),
+                SpanwiseStrength (the same at stations along a beam, forces from a
+                BeamSolution), SectionStrengthResult, SpanwiseStrengthResult, CriticalPoint
 Blade export    BeamDynBlade (a spanwise sweep of a BladeGeometry, or sections, into
                 OpenFAST BeamDyn primary and blade files and windIO 2.0 elastic
                 properties; reads both)
@@ -54,6 +58,8 @@ from .torsion import RestrainedTorsionBeam, TorsionResponse
 from .gbt import GBTSolution, GeneralizedBeam, SectionModes
 from .beam import BeamSolution, TimoshenkoBeam, euler_bernoulli_beam
 from .beamdyn import BeamDynBlade
+from .section_strength import CriticalPoint, SectionStrength, SectionStrengthResult
+from .spanwise_strength import SpanwiseStrength, SpanwiseStrengthResult
 from .closed_form import channel_properties, i_section_properties, rectangle_properties
 from .geometry_to_properties import (
     ReducedBeamSection,
@@ -68,6 +74,7 @@ __version__ = "0.3.0"
 __all__ = [
     "BeamDynBlade",
     "BeamSolution",
+    "CriticalPoint",
     "FORMULATION_CSV_SCHEMA",
     "FormulationWriter",
     "GBTSolution",
@@ -77,6 +84,10 @@ __all__ = [
     "RestrainedTorsionBeam",
     "SectionField",
     "SectionModes",
+    "SectionStrength",
+    "SectionStrengthResult",
+    "SpanwiseStrength",
+    "SpanwiseStrengthResult",
     "ThinWalledSection",
     "TimoshenkoBeam",
     "TorsionResponse",

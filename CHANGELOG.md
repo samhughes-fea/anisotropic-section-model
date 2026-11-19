@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Spanwise strength checks.** `SectionStrength` (`section_strength`) recovers the ply
+  stresses of a section under its six section forces, thin-walled (the coupled Saint-Venant
+  wall strains, ply stresses through each laminate, interlaminar stresses from equilibrium)
+  or meshed in 2D (`SolidSectionAnalysis`), and evaluates maximum stress, Tsai-Wu, Hashin and
+  Puck at every point, with the critical wall, ply, position, criterion and mode. It solves
+  six unit force cases once, so each load case is a matrix product. `SpanwiseStrength`
+  (`spanwise_strength`) runs it at stations along a beam with forces from a `TimoshenkoBeam`
+  solution, a callable or a table, and gives the envelope over load cases. The two stay
+  separate: the section check knows nothing about the span. Example 14 checks a three-cell
+  blade against a shell model: ply stresses within 3 % RMS, exposures along the span within
+  2.2 % away from the clamp and the tip rib, the same critical part and criterion at every
+  row, and the solid section within 1 % of the thin-walled one away from the web junctions.
+
 - **Worked example suite.** Four new examples: isotropic sections against the closed forms,
   thin-wall and solid (08); CAS and CUS composite box beams, thin-wall against the solid
   section and a shell cantilever (09); coupled torsion, GJ against GJ_free with a shell
