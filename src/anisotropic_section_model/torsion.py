@@ -1,5 +1,13 @@
 """Non-uniform torsion of thin-walled beams: Saint-Venant twist plus restrained warping.
 
+Reference beam (frozen)
+-----------------------
+This is one of the package's three reference beams (``beam.TimoshenkoBeam``,
+``torsion.RestrainedTorsionBeam``, ``gbt.GeneralizedBeam``). They stay as quick, exact
+checks of a section in the examples and tests, and get no new features: solving along
+the span (tapered beams, dynamics, buckling, sensitivities, load cases) is 1d-fem's,
+which uses this package's sections (``docs/package_boundary.md``).
+
 Saint-Venant torsion assumes the section warps freely: the twist rate is T / GJ
 everywhere. Where warping is stopped (a clamped root, a stiff rib, a change of
 section) axial warping stresses build up, described by the bimoment, and the torque

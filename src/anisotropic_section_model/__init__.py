@@ -64,6 +64,7 @@ from .beam import BeamSolution, TimoshenkoBeam, euler_bernoulli_beam
 from .beamdyn import BeamDynBlade
 from .solid_section import SolidSection
 from . import axes
+from .section_analysis import SECTION_API_VERSION
 from .section_strength import CriticalPoint, SectionStrength, SectionStrengthResult
 from .closed_form import channel_properties, i_section_properties, rectangle_properties
 from .geometry_to_properties import (
@@ -74,7 +75,7 @@ from .geometry_to_properties import (
     section_properties_from_geometry,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "axes",
@@ -91,6 +92,7 @@ __all__ = [
     "SectionField",
     "SectionModes",
     "SolidSection",
+    "SECTION_API_VERSION",
     "SectionStrength",
     "SectionStrengthResult",
     "ThinWalledSection",

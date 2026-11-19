@@ -10,8 +10,11 @@ eigenmodes ordered by eigenvalue with a sign convention. Between two close secti
 basis can come out rotated within its span, two modes can swap places, or a mode can
 change sign.
 
-``align_gbt_sections`` turns every section's bases to those of a neighbouring section
-already aligned, walking the beam from its first element. Within each block (warping
+``align_gbt_pair`` turns one section's bases to those of a reference section (a
+neighbour along the beam). Which section is whose neighbour is the beam code's business:
+1d-fem walks its elements and calls the pair function. ``align_gbt_sections`` is that walk
+over an element connectivity, kept for contract v1 and to be removed in v2
+(``docs/package_boundary.md``). Within each block (warping
 modes, distortional modes) the turn is the orthogonal matrix ``R`` that best maps the
 section's signature onto the neighbour's: ``R = polar(S_ref S^T)`` (orthogonal
 Procrustes). A signature row holds the moments of one basis field over its section
@@ -27,7 +30,7 @@ the element mesh should be refined or the number of modes changed.
 
 Public API
 ----------
-align_gbt_sections, gbt_signature, mass_transform, rotate_gbt_basis
+align_gbt_pair, align_gbt_sections, gbt_signature, mass_transform, rotate_gbt_basis
 """
 
 from __future__ import annotations
@@ -139,9 +142,37 @@ def rotate_gbt_basis(sa, Rw: np.ndarray, Rm: np.ndarray):
                                gbt_moments=W, gbt_brazier=Bz)
 
 
+def align_gbt_pair(reference, section, signatures=None) -> Tuple[object, dict]:
+    """``section`` with its GBT bases turned to continue those of ``reference``.
+
+    Both are ``SectionAnalysis`` objects with GBT matrices of the same sizes. Returns the
+    turned section (``section`` itself when no turn is needed) and ``{"Rw", "Rm", "match"}``:
+    the warping and mode rotations and the worst cosine between the turned and the
+    reference signatures. A match below ``MIN_MATCH`` is logged. ``signatures`` may pass
+    ``(gbt_signature(reference), gbt_signature(section))`` already computed.
+    """
+    if _blocks(reference) != _blocks(section):
+        raise ValueError("the two sections carry different numbers of GBT warping or distortional modes")
+    (Sw_r, Sm_r), (Sw, Sm) = signatures if signatures is not None else (gbt_signature(reference),
+                                                                        gbt_signature(section))
+    Rw, cw = _procrustes(Sw_r, Sw)
+    Rm, cm = _procrustes(Sm_r, Sm)
+    match = min(cw, cm)
+    if match < MIN_MATCH:
+        log.warning("GBT bases do not continue those of the reference section (match %.2f): "
+                    "refine the elements or change the number of modes", match)
+    out = section
+    if not (np.allclose(Rw, np.eye(Rw.shape[0]), atol=1e-12) and np.allclose(Rm, np.eye(Rm.shape[0]), atol=1e-12)):
+        out = rotate_gbt_basis(section, Rw, Rm)
+    return out, {"Rw": Rw, "Rm": Rm, "match": match}
+
+
 def align_gbt_sections(per_element: Sequence, connectivity: npt.ArrayLike,
                        gbt_elements: Optional[Sequence[bool]] = None) -> Tuple[tuple, Dict[int, dict]]:
     """Turn the GBT bases of each element's section to its neighbour's (module docstring).
+
+    Contract v1 only: walking the elements is the beam code's, which calls
+    ``align_gbt_pair``; this function goes in contract v2.
 
     ``per_element`` holds each element's ``SectionAnalysis`` (or ``None``), ``connectivity``
     its two nodes. Elements are visited in order; each is aligned to an earlier visited
@@ -173,19 +204,13 @@ def align_gbt_sections(per_element: Sequence, connectivity: npt.ArrayLike,
                 if same in info:
                     info[e] = dict(info[same])
             elif ref is not None and _blocks(out[ref]) == _blocks(out[e]):
-                Sw_r, Sm_r = sig(ref)
-                Sw, Sm = sig(e)
-                Rw, cw = _procrustes(Sw_r, Sw)
-                Rm, cm = _procrustes(Sm_r, Sm)
-                match = min(cw, cm)
-                if match < MIN_MATCH:
-                    log.warning("GBT bases of element %d do not continue those of element %d (match %.2f): "
-                                "refine the elements or change the number of modes", e, ref, match)
-                if not (np.allclose(Rw, np.eye(Rw.shape[0]), atol=1e-12)
-                        and np.allclose(Rm, np.eye(Rm.shape[0]), atol=1e-12)):
-                    out[e] = rotate_gbt_basis(out[e], Rw, Rm)
+                turned, pair = align_gbt_pair(out[ref], out[e], (sig(ref), sig(e)))
+                if pair["match"] < MIN_MATCH:
+                    log.warning("element %d against element %d", e, ref)
+                if turned is not out[e]:
+                    out[e] = turned
                     sig_cache.pop(e, None)
-                info[e] = {"Rw": Rw, "Rm": Rm, "match": match, "reference": ref}
+                info[e] = {**pair, "reference": ref}
         for nd in conn[e]:
             at_node.setdefault(int(nd), []).append(e)
     return tuple(out), info

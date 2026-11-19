@@ -1,5 +1,13 @@
 """Timoshenko and Euler-Bernoulli beams from a section stiffness matrix.
 
+Reference beam (frozen)
+-----------------------
+This is one of the package's three reference beams (``beam.TimoshenkoBeam``,
+``torsion.RestrainedTorsionBeam``, ``gbt.GeneralizedBeam``). They stay as quick, exact
+checks of a section in the examples and tests, and get no new features: solving along
+the span (tapered beams, dynamics, buckling, sensitivities, load cases) is 1d-fem's,
+which uses this package's sections (``docs/package_boundary.md``).
+
 ``TimoshenkoBeam`` is a straight, prismatic beam along z whose section is described by
 a 6 x 6 Timoshenko stiffness (BeamDyn / windIO order: [Fx, Fy, N, Mx, My, Mz] against
 [gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z], with gamma_x = u_x' - theta_y and

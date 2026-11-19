@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - Unreleased
 
 ### Breaking
 
@@ -51,6 +51,18 @@
   same critical part and criterion at every row, and the solid section within 1 % of the
   thin-walled one away from the web junctions. Running the check along a beam (forces from
   a beam solve, load-case envelopes) is 1d-fem's.
+- **Section-provider contract v1.** `SECTION_API_VERSION = (1, 0)` versions what a beam code
+  (1d-fem) takes from `SectionAnalysis`; `docs/package_boundary.md` spells it out, and
+  `tests/test_package_boundary.py` keeps span-wise solvers out of the package.
+- **Sections from 6 x 6 tables.** `SectionAnalysis.from_matrices(stiffness, mass, frame=)`
+  takes a section given only as its stiffness and rigid-section mass, in the engine, public
+  or BeamDyn frame, and finds the shear and tension centres the stiffness implies. On a
+  coupled, off-centre composite box it reproduces the thin-walled `SectionAnalysis`.
+- **`gbt_alignment.align_gbt_pair`** turns one section's GBT bases to a reference section's;
+  `align_gbt_sections`, the walk over a beam's elements, is kept for contract v1 and goes in
+  v2 (the walk is the beam code's).
+- **Reference beams frozen.** `TimoshenkoBeam`, `RestrainedTorsionBeam` and
+  `GeneralizedBeam` stay as exact checks of a section and get no new features.
 - **Scope:** ASM covers one cross-section at a time. Beam solves along the span (tapered
   beams, beam-level sensitivities, modal analysis, spanwise strength) belong to 1d-fem, which
   uses these sections; see `docs/package_boundary.md`.

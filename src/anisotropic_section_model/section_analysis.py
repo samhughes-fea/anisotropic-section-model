@@ -27,9 +27,17 @@ strains of ``thin_walled.section_analysis`` and ``S = diag(1, -1, 1, 1, 1, 1)``.
 The element stiffness is ``S @ K_rh @ S`` (``S`` is its own inverse). For an
 isotropic section with no couplings the two are identical.
 
+Section-provider contract
+-------------------------
+``SectionAnalysis`` is what this package hands a beam code (1d-fem by default) for one
+section at one station: no nodes, shape functions or mesh. ``SECTION_API_VERSION`` is the
+version of that contract (``docs/package_boundary.md``): a beam code checks the major
+number matches and the minor is at least the one it needs. Adding an optional field is a
+minor change; renaming, re-signing or reshaping one is a major change.
+
 Public API
 ----------
-ELEMENT_SIGN, SectionAnalysis, to_element_voigt.
+ELEMENT_SIGN, SECTION_API_VERSION, SectionAnalysis, to_element_voigt.
 """
 
 from __future__ import annotations
@@ -40,6 +48,9 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
+
+#: version of the section-provider contract (``docs/package_boundary.md``): (major, minor)
+SECTION_API_VERSION: Tuple[int, int] = (1, 0)
 
 ELEMENT_SIGN = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0])
 CLASSICAL_INDEX = (0, 1, 2, 5)  # [eps_x, kappa_y, kappa_z, phi_x]
@@ -224,6 +235,92 @@ class SectionAnalysis:
                    third_order_stiffness=D8, third_order_rate=np.zeros((2, 6)),
                    geometric_terms=H @ ELEMENT_SIGN, third_order_geometric_terms=np.zeros((7, 2)),
                    axial_points=_rectangle_points(E, A, I_y, I_z))
+
+    @classmethod
+    def from_matrices(
+        cls,
+        stiffness: npt.ArrayLike,
+        mass: Optional[npt.ArrayLike] = None,
+        *,
+        frame: str = "engine",
+        section_id: Optional[int] = None,
+        shear_centre: Optional[Tuple[float, float]] = None,
+        tension_centre: Optional[Tuple[float, float]] = None,
+        rtol: float = 1e-8,
+    ) -> "SectionAnalysis":
+        """A section given only as its 6 x 6 stiffness and 6 x 6 mass per length.
+
+        For section tables from elsewhere: a BeamDyn blade file, windIO 2.0 elastic
+        properties, VABS or BECAS output. Both matrices are about the beam reference axis
+        (the section origin). ``frame`` says how they are written:
+
+        - ``"engine"``: beam axis x, right-handed strains
+          ``[eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi]`` (the order of ``thin_walled``
+          and ``solid``), mass on ``[u_x, u_y, u_z, theta_x, theta_y, theta_z]`` in the form of
+          ``mass_matrix``;
+        - ``"public"``: this package's public frame (``axes``): beam axis z, BeamDyn's order
+          ``[gamma_x, gamma_y, eps, kappa_x, kappa_y, kappa_z]``, mass in the form of
+          ``axes.mass_matrix``;
+        - ``"beamdyn"``: BeamDyn's own (mirrored) blade frame, as a BeamDyn blade file or
+          ``BeamDynBlade`` writes it, untwisted (the station's twist is the beam's, not
+          the section's).
+
+        The stiffness may carry every coupling. The mass must be a rigid-section mass (a mass
+        per length, its centre and the second moments; the polar moment may differ from
+        ``I_yy + I_zz``); anything else raises ``ValueError``. ``mass=None`` gives a
+        massless section (static analyses only).
+
+        The centres default to the ones the stiffness implies: the tension centre is where an
+        axial force bends nothing (classical compliance), the shear centre where a shear force
+        twists nothing (Timoshenko compliance). The section carries no second-order, warping,
+        third-order or GBT data, so beam elements that need them refuse it.
+        """
+        from anisotropic_section_model import axes
+
+        K = np.asarray(stiffness, dtype=np.float64)
+        if K.shape != (6, 6):
+            raise ValueError(f"stiffness must be 6 x 6, got {K.shape}")
+        if not np.allclose(K, K.T, rtol=rtol, atol=rtol * np.abs(K).max()):
+            raise ValueError("stiffness must be symmetric")
+        K = 0.5 * (K + K.T)
+        M = None if mass is None else np.asarray(mass, dtype=np.float64)
+        if M is not None and M.shape != (6, 6):
+            raise ValueError(f"mass must be 6 x 6, got {M.shape}")
+        if frame == "beamdyn":
+            K = axes.MIRROR.T @ K @ axes.MIRROR
+            M = None if M is None else axes.MIRROR.T @ M @ axes.MIRROR
+            frame = "public"
+        if frame == "public":
+            K_rh = axes.to_engine(K)
+            props = None if M is None else _mass_from_public(M, rtol)
+        elif frame == "engine":
+            K_rh = K
+            props = None if M is None else _mass_from_engine(M, rtol)
+        else:
+            raise ValueError(f"frame must be 'engine', 'public' or 'beamdyn', got {frame!r}")
+        F = np.linalg.inv(K_rh)
+        idx = np.array(CLASSICAL_INDEX)
+        C_rh = np.linalg.inv(F[np.ix_(idx, idx)])
+        C_rh = 0.5 * (C_rh + C_rh.T)
+        if tension_centre is None:
+            Fc = np.linalg.inv(C_rh)
+            # an axial force N at (y, z) has M_y = N z, M_z = -N y: no curvature there
+            A = np.array([[-Fc[1, 2], Fc[1, 1]], [-Fc[2, 2], Fc[2, 1]]])
+            tension_centre = tuple(float(v) for v in np.linalg.solve(A, -Fc[1:3, 0]))
+        if shear_centre is None:
+            # a shear force V at (y, z) has the torque T = y V_z - z V_y: no twist there
+            shear_centre = (float(-F[5, 4] / F[5, 5]), float(F[5, 3] / F[5, 5]))
+        S4 = np.diag([1.0, -1.0, 1.0, 1.0])
+        return cls(
+            to_element_voigt(K_rh),
+            S4 @ C_rh @ S4,
+            0.0,
+            (float(shear_centre[0]), float(shear_centre[1])),
+            (float(tension_centre[0]), float(tension_centre[1])),
+            {} if props is None else props,
+            "matrix",
+            None if section_id is None else int(section_id),
+        )
 
     @classmethod
     def from_thin_walled(
@@ -564,3 +661,38 @@ class SectionAnalysis:
     def stress_resultants(self, strain: npt.ArrayLike) -> npt.NDArray[np.float64]:
         """``S = stiffness @ strain`` in element Voigt order."""
         return self.stiffness @ np.asarray(strain, dtype=np.float64)
+
+
+def _rigid_check(M: np.ndarray, rebuilt: np.ndarray, rtol: float, where: str) -> None:
+    scale = max(float(np.abs(M).max()), 1e-300)
+    if not np.allclose(M, M.T, rtol=0.0, atol=rtol * scale):
+        raise ValueError("mass must be symmetric")
+    if not np.allclose(M, rebuilt, rtol=0.0, atol=rtol * scale):
+        raise ValueError(f"mass is not a rigid-section mass matrix in the {where} form "
+                         f"(largest misfit {np.abs(M - rebuilt).max():.3g}); see SectionAnalysis.mass_matrix")
+
+
+def _mass_from_engine(M: np.ndarray, rtol: float) -> Dict[str, float]:
+    """``mass_properties`` from an engine 6 x 6 in the form of ``SectionAnalysis.mass_matrix``."""
+    m = float(M[0, 0])
+    if m <= 0:
+        raise ValueError("mass per length must be positive")
+    props = {"m": m, "y_m": float(-M[0, 5] / m), "z_m": float(M[0, 4] / m), "I_yy": float(M[4, 4]),
+             "I_zz": float(M[5, 5]), "I_yz": float(-M[4, 5]), "I_p": float(M[3, 3])}
+    _rigid_check(M, SectionAnalysis(np.eye(6), np.eye(4), mass=props).mass_matrix(), rtol, "engine")
+    return props
+
+
+def _mass_from_public(M: np.ndarray, rtol: float) -> Dict[str, float]:
+    """``mass_properties`` from a public (BeamDyn-order) 6 x 6 about the origin (``axes.mass_matrix``)."""
+    from anisotropic_section_model import axes
+
+    m = float(M[0, 0])
+    if m <= 0:
+        raise ValueError("mass per length must be positive")
+    props = {"m": m, "y_m": float(M[1, 5] / m), "z_m": float(-M[0, 5] / m), "I_yy": float(M[3, 3]),
+             "I_zz": float(M[4, 4]), "I_yz": float(-M[3, 4]), "I_p": float(M[5, 5])}
+    rebuilt = axes.mass_matrix(props)
+    rebuilt[5, 5] = props["I_p"]
+    _rigid_check(M, rebuilt, rtol, "public")
+    return props
