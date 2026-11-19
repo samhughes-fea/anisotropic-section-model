@@ -13,3 +13,4 @@ benchmarks/becas_same_mesh/_work/
 
 # Public reference files example 07 downloads (IEA-15-240-RWT, Apache-2.0)
 examples/07_beamdyn_windio_export/data/reference/
+examples/13_beam_modal_analysis/data/reference/

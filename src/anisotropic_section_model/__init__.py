@@ -13,6 +13,9 @@ GBT             GeneralizedBeam and SectionModes (generalized beam theory: warpi
 Beams           TimoshenkoBeam (exact Timoshenko / Euler-Bernoulli beam elements from a
                 6 x 6 or 4 x 4 section stiffness, all couplings), BeamSolution,
                 euler_bernoulli_beam
+Modes           ModalBeam (natural frequencies and mode shapes from 6 x 6 stiffness and
+                mass along the span, all couplings, twist and a curved axis), ModalResult,
+                prismatic_frequencies (exact, for a prismatic beam)
 Blade export    BeamDynBlade (a spanwise sweep of a BladeGeometry, or sections, into
                 OpenFAST BeamDyn primary and blade files and windIO 2.0 elastic
                 properties; reads both)
@@ -54,6 +57,7 @@ from .torsion import RestrainedTorsionBeam, TorsionResponse
 from .gbt import GBTSolution, GeneralizedBeam, SectionModes
 from .beam import BeamSolution, TimoshenkoBeam, euler_bernoulli_beam
 from .beamdyn import BeamDynBlade
+from .modal import ModalBeam, ModalResult, prismatic_frequencies
 from .closed_form import channel_properties, i_section_properties, rectangle_properties
 from .geometry_to_properties import (
     ReducedBeamSection,
@@ -73,6 +77,8 @@ __all__ = [
     "GBTSolution",
     "GaussField",
     "GeneralizedBeam",
+    "ModalBeam",
+    "ModalResult",
     "PlyField",
     "RestrainedTorsionBeam",
     "SectionField",
@@ -90,6 +96,7 @@ __all__ = [
     "rectangle_properties",
     "principal_axes_from_mass",
     "principal_axes_from_moments",
+    "prismatic_frequencies",
     "reduced_section_from_integrals",
     "section_properties_from_geometry",
 ]

@@ -30,6 +30,7 @@ builds up from the simplest case:
 | | 05 | [Blade bending and axial hierarchy](05_blade_bending_axial_hierarchy/) | The same hierarchy on a three-cell blade section: flapwise tip force, shear lag across the spar caps, skin suction and ribs, an axial load fed into the caps | shell | 12 | 2 min |
 | **4 · From geometry to a turbine model** | 06 | [Blade from its implicit geometry](06_blade_from_implicit_geometry/) | Any of the 40 section layouts lofted along a blade, cut anywhere and meshed; the thin-walled section and the shell model from the same cut, against shell-fem's [example 20](https://github.com/samhughes-fea/shell-fem/tree/main/examples/20_blade_beam_properties/) model; a tapered, twisted segment | shell-fem example 20 | 16 | 1 min |
 | | 07 | [BeamDyn and windIO export](07_beamdyn_windio_export/) | A blade swept station by station into an OpenFAST BeamDyn deck and windIO 2.0 elastic properties: the IEA 15 MW windIO file reproduces the official BeamDyn blade file, and BeamDyn matches `TimoshenkoBeam` on a twisted, coupled section | IEA 15 MW files, BeamDyn | 14 | 10 s |
+| | 13 | [Beam and blade modal analysis](13_beam_modal_analysis/) | Natural frequencies and mode shapes from the 6 × 6 stiffness and mass with every coupling: a bend-twist coupled box against the exact solution and a shell model, and the prebent IEA 15 MW blade against BeamDyn | exact solution, closed forms, shell, BeamDyn | 61 | 30 s |
 
 The main API each one uses:
 
@@ -42,12 +43,13 @@ The main API each one uses:
 | 05 | `TimoshenkoBeam`, `GeneralizedBeam`, `beam_section_properties` |
 | 06 | `BladeGeometry.section_at`, `ThinWalledSection.from_geometry`, `BladeBuilder.from_geometry` |
 | 07 | `BeamDynBlade.from_geometry`, `write`, `write_windio`, `from_windio` |
+| 13 | `ModalBeam`, `ModalBeam.from_beamdyn`, `prismatic_frequencies` |
 | 08 | `ThinWalledSection.from_segments`, `SolidSectionAnalysis`, `solid.structured` |
 | 09 | `ThinWalledSection.timoshenko_stiffness`, `SolidSectionAnalysis`, `TimoshenkoBeam` |
 | 10 | `ThinWalledSection.GJ_free`, `RestrainedTorsionBeam.from_section(other_strains=...)`, `GeneralizedBeam` |
 | 11 | `SolidSectionAnalysis`, `solid.structured` (`arc_patch`, `rectangle_patch`) |
 
-All examples are linear static analyses.
+All examples are linear static analyses, except 13, which is linear free vibration.
 
 ## Running
 

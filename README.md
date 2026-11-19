@@ -17,6 +17,8 @@ sections whose walls are composite laminates. Linear static.
   Poisson end effects.
 - **Exact beams** (`TimoshenkoBeam`): Timoshenko and Euler-Bernoulli beam elements from
   any 6 × 6 or 4 × 4 section stiffness, all couplings kept.
+- **Modal analysis** (`ModalBeam`): natural frequencies and mode shapes from the 6 × 6
+  stiffness and mass along a beam or blade, all couplings, twist and a curved axis.
 - **Blade export** (`BeamDynBlade`): a section at every station of a blade, written as
   an OpenFAST BeamDyn deck (6 × 6 stiffness and mass, reference axis, twist) and as
   windIO 2.0 elastic properties, and read back from both.
@@ -27,9 +29,10 @@ src/anisotropic_section_model/
 ├── torsion.py      RestrainedTorsionBeam: Benscoter / Vlasov torsion, bimoment
 ├── gbt.py          GeneralizedBeam, SectionModes: GBT warping and distortion, ribs
 ├── beam.py         TimoshenkoBeam: exact Timoshenko / Euler-Bernoulli beams from a 6 × 6 or 4 × 4
-└── beamdyn.py      BeamDynBlade: spanwise sweep to OpenFAST BeamDyn and windIO 2.0 files
+├── beamdyn.py      BeamDynBlade: spanwise sweep to OpenFAST BeamDyn and windIO 2.0 files
+└── modal.py        ModalBeam: natural frequencies and mode shapes from 6 × 6 stiffness and mass
 tests/              pytest suite, with shell models as references
-examples/           eleven worked examples, each with its script, figures, README and self-checks
+examples/           twelve worked examples, each with its script, figures, README and self-checks
 benchmarks/         the solid section against published VABS and BECAS results (vabs_becas/)
 ```
 
@@ -238,9 +241,35 @@ side. The IEA 15 MW windIO file written this way reproduces the official BeamDyn
 file to 1e-12, and BeamDyn (OpenFAST 4.1 and 5.0) on a written deck matches
 `TimoshenkoBeam` on the section ([example 07](examples/07_beamdyn_windio_export/)).
 
+## Modal analysis
+
+`ModalBeam` finds natural frequencies and mode shapes from the sections' 6 × 6
+Timoshenko stiffness and 6 × 6 mass (BeamDyn's order), with every coupling:
+
+```python
+from anisotropic_section_model import ModalBeam, prismatic_frequencies
+
+modes = ModalBeam.prismatic(K6, M6, length=12.0).clamp(0.0).modes(10)
+modes.frequencies, modes.labels(), modes.shape(0, z), modes.energy_fractions()
+
+blade = ModalBeam.from_beamdyn(BeamDynBlade.read("IEA-15-240-RWT_BeamDyn.dat"))   # root clamped
+blade.modes(10).table()           # 1st flap 0.507 Hz, 1st edge 0.693 Hz, ...
+ModalBeam(s, K_stations, M_stations, frame_angle=-twist, axis=key_points).clamp(0.0).add_mass(s_tip, 50.0)
+
+prismatic_frequencies(K6, M6, 12.0, f_max=50.0, ends=("clamped", "free"))   # exact, prismatic
+```
+
+It is the linearised geometrically exact beam (BeamDyn's) on high-order spectral
+elements: properties interpolated between stations, each station's frame turned by its
+twist, a curved axis from key points. On the IEA 15 MW blade it matches BeamDyn's own
+free vibration within 0.1 % over the first ten modes, and on a bend-twist coupled box it
+matches a shell model's frequencies and coupled mode shapes
+([example 13](examples/13_beam_modal_analysis/)). Undamped and non-rotating: no
+centrifugal stiffening yet.
+
 ## Examples
 
-Eleven worked examples in [examples/](examples/). Each has its script, figures and a
+Twelve worked examples in [examples/](examples/). Each has its script, figures and a
 README on the physics and the results, and each checks itself against its references
 (closed forms, BECAS and VABS, the IEA 15 MW files, shell models built with shell-fem). The
 [index](examples/README.md) suggests a reading order:
@@ -252,7 +281,8 @@ README on the physics and the results, and each checks itself against its refere
    three-cell blade section: restrained warping, shear lag, distortion, and the 6 × 6 and
    7 × 7 stiffness (01 to 05).
 4. **From geometry to a turbine model:** sections cut from the implicit geometry (06),
-   and a blade written for BeamDyn and windIO (07).
+   a blade written for BeamDyn and windIO (07), and the modes of a coupled box and the
+   IEA 15 MW blade (13).
 
 ```bash
 pip install -e ".[dev]"
@@ -281,6 +311,10 @@ python examples/run_all.py --reuse   # re-check from the committed results, in s
   read back exactly; the IEA 15 MW windIO file reproduces its official BeamDyn blade
   file. With `BEAMDYN_DRIVER` set, BeamDyn on a written deck matches `TimoshenkoBeam`
   under six tip loads and self-weight.
+- `ModalBeam` (`tests/test_modal.py`, example 13) against the exact prismatic solution on
+  a fully coupled section with every pair of end conditions (1e-7), free-free rigid
+  modes, the Euler-Bernoulli, torsion and axial closed forms, a shell model of a CAS box
+  and BeamDyn on the IEA 15 MW blade.
 - Every worked example's checks (`tests/test_examples.py` on the committed results; CI's
   `examples` job solves them from scratch).
 

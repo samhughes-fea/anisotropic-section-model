@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- **Modal analysis** (`ModalBeam`, `modal.py`). Natural frequencies and mass-normalised
+  mode shapes of a beam or blade from the 6 × 6 Timoshenko stiffness and 6 × 6 mass of
+  its sections, every coupling kept: properties that change along the span, each
+  station's frame turned by its twist, and a curved (prebent, swept) reference axis.
+  The linearised geometrically exact beam that BeamDyn uses, on high-order spectral
+  elements; clamps, pins, any fixed DOFs, point masses and springs. `from_beamdyn`
+  takes a `BeamDynBlade` and names the modes flap, edge, torsion and axial.
+  `prismatic_frequencies` is the exact answer for a prismatic beam (the same 12
+  equations integrated by a matrix exponential), which the elements match to 1e-8 on
+  fully coupled sections with any end conditions. Example 13: a bend-twist coupled
+  (CAS) box against a shell model (bending within 1.2 %, its twist per flap deflection
+  within 0.5 %), and the IEA 15 MW blade against BeamDyn free-vibration runs (first ten
+  modes within 0.1 %; straightening the prebent axis moves the 2nd edge and 1st torsion
+  modes by about 3 %). Kept apart from `TimoshenkoBeam`, so it can move to 1d-fem.
+
 ## 0.4.0 - 2026-11-19
 
 - **Worked example suite.** Four new examples: isotropic sections against the closed forms,
