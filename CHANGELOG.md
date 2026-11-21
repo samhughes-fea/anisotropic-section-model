@@ -2,6 +2,11 @@
 
 ## 0.5.0 - Unreleased
 
+### Changed
+
+- CI and the README install implicit-geometry-kernel `v0.9.3` instead of the
+  non-release tag `K9`.
+
 ### Breaking
 
 - `BeamDynBlade.from_sections(twist=...)` now takes the public twist: right-handed about
