@@ -4,6 +4,8 @@
 
 ### Changed
 
+- CI and the README install implicit-geometry-kernel `v0.9.5` (was `v0.9.3`;
+  `v0.9.4` carries 0.9.3 code).
 - CI and the README install implicit-geometry-kernel `v0.9.3` instead of the
   non-release tag `K9`.
 
