@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 - Unreleased
 
 ### Added
 
@@ -9,23 +9,25 @@
   a thin-walled tube give the same diagonal stiffness and mass as the given constants; an
   equal-leg angle keeps its bending coupling, its shear centre at the corner and its
   principal moments `a^3 t / 3`, `a^3 t / 12`. 1D-FEM now takes every isotropic
-  `section.txt` section from `from_isotropic`. No API or contract change (still 1.0).
+  `section.txt` section from `from_isotropic`. No API or contract change (still 1.0) (#32).
 
 ### Changed
 
 - The `from_isotropic` docstring defines `J_t` (Saint-Venant torsion constant, giving the
   torsional stiffness `G J_t`) and `I_x` (polar second moment `I_p` about the centroid,
   giving the rotary inertia `rho I_p`) as separate geometric constants, with units and
-  reference axis. It no longer says elements keep their own shear-centre handling.
-
-## 0.5.0 - Unreleased
-
-### Changed
-
+  reference axis. It no longer says elements keep their own shear-centre handling (#32).
 - CI and the README install implicit-geometry-kernel `v0.9.5` (was `v0.9.3`;
-  `v0.9.4` carries 0.9.3 code).
+  `v0.9.4` carries 0.9.3 code) (#34).
 - CI and the README install implicit-geometry-kernel `v0.9.3` instead of the
-  non-release tag `K9`.
+  non-release tag `K9` (#31).
+- **Releases are made by the `release` workflow.** Merging a release PR titled
+  `chore(release): prepare X.Y.Z` creates the annotated `vX.Y.Z` tag and the
+  GitHub release; nobody pushes a tag by hand. A hand run can backfill a tag on an
+  older commit, which is how `v0.4.0` is made. Rules: `docs/RELEASING.md`.
+  `__version__` on `main` is now the next release (0.5.1).
+
+## 0.5.0 - 2026-11-19
 
 ### Breaking
 
