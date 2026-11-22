@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `tests/test_isotropic_sections.py`: isotropic sections built from geometry agree with
+  `SectionAnalysis.from_isotropic` and the closed forms. A solid rectangle (2D builder) and
+  a thin-walled tube give the same diagonal stiffness and mass as the given constants; an
+  equal-leg angle keeps its bending coupling, its shear centre at the corner and its
+  principal moments `a^3 t / 3`, `a^3 t / 12`. 1D-FEM now takes every isotropic
+  `section.txt` section from `from_isotropic`. No API or contract change (still 1.0).
+
+### Changed
+
+- The `from_isotropic` docstring defines `J_t` (Saint-Venant torsion constant, giving the
+  torsional stiffness `G J_t`) and `I_x` (polar second moment `I_p` about the centroid,
+  giving the rotary inertia `rho I_p`) as separate geometric constants, with units and
+  reference axis. It no longer says elements keep their own shear-centre handling.
+
 ## 0.5.0 - Unreleased
 
 ### Changed
