@@ -210,8 +210,23 @@ class SectionAnalysis:
     ) -> "SectionAnalysis":
         """Uncoupled section from classical inputs: ``diag(EA, EI_y, EI_z, kGA, kGA, GJ)``.
 
+        The inputs are geometric constants of the section about its centroid, which is the
+        section origin here; ``E``, ``G`` and ``rho`` turn them into the stiffness and the
+        mass per length. Two torsion constants [m^4] mean different things:
+
+        - ``J_t``, the Saint-Venant torsion constant (independent of the reference axis),
+          gives only the torsional stiffness ``stiffness[5, 5] = G J_t`` [N m^2].
+        - ``I_x``, the polar second moment of area ``I_p = int (y^2 + z^2) dA`` about the
+          centroid, gives the twist rotary inertia ``mass["I_p"] = rho I_p`` [kg m]
+          (``mass_matrix()[3, 3]``, about the origin) and the Wagner term ``I_p / A``.
+          ``None`` takes ``I_y + I_z``.
+
+        They are equal only for a circular section (solid or tube); otherwise ``J_t < I_p``.
+        The mass holds ``m = rho A`` [kg/m] and the bending rotary inertias
+        ``I_yy = rho I_y``, ``I_zz = rho I_z`` [kg m], all about the origin.
+
         ``y_sc``, ``z_sc`` are recorded as the shear centre only; the stiffness
-        stays diagonal (each element keeps its own legacy shear-centre handling).
+        stays diagonal and the mass takes no shear-centre offset.
         The third-order shear terms assume a solid rectangle (Reddy's cubic shear
         warping): ``EI_z / 84`` for ``chi_y`` and ``EI_y / 84`` for ``chi_z``. The
         second-order terms take the centroid at the origin and a doubly symmetric
