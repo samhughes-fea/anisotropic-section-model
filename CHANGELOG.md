@@ -1,11 +1,18 @@
 # Changelog
 
-## 0.5.0 - Unreleased
+## 0.5.1 - Unreleased
 
 ### Changed
 
 - CI and the README install implicit-geometry-kernel `v0.9.3` instead of the
-  non-release tag `K9`.
+  non-release tag `K9` (#31).
+- **Releases are made by the `release` workflow.** Merging a release PR titled
+  `chore(release): prepare X.Y.Z` creates the annotated `vX.Y.Z` tag and the
+  GitHub release; nobody pushes a tag by hand. A hand run can backfill a tag on an
+  older commit, which is how `v0.4.0` is made. Rules: `docs/RELEASING.md`.
+  `__version__` on `main` is now the next release (0.5.1).
+
+## 0.5.0 - 2026-11-19
 
 ### Breaking
 
