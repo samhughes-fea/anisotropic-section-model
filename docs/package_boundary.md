@@ -74,10 +74,15 @@ two are equal only for a circular section. `from_isotropic` takes them as `J_t=`
 `element_section_derivative` (a derivative dressed as an element-signed section) and
 `align_gbt_sections` (the walk over elements). All four are gone in v2.
 
-### Planned: v2.1
+### v2.1 (ASM 0.7.0)
 
-Optional 2D ply-thickness data: node velocities and tie points in `section_mesh_2d.txt`,
-then velocities of meshes from blade cuts (`section_mesh_from_cut`).
+Optional 2D ply-thickness data in `section_mesh_2d.txt`: `[Section_Node_Velocity]`
+(`[section_id] [node_id] [laminate_id] [ply] [dy] [dz]`, `SectionMesh.velocities`) and
+`[Section_Tie_Point]` (`[section_id] [node_id] [element_id] [xi] [eta]`,
+`SectionMesh.tie_points`). `write_section_mesh_2d` writes them and `parse_section_mesh_2d`
+reads them, so a mesh from `SectionMesh.from_thin_walled` keeps its ply-thickness
+sensitivities through the file. Planned next: velocities of meshes from blade cuts
+(`section_mesh_from_cut`).
 
 ## Reference beams
 

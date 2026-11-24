@@ -565,12 +565,22 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
     An optional ``[Section_Element_Ply]`` block, ``[section_id] [element_id] [laminate_id]
     [ply]`` (``ply`` from 1 at the bottom, as in ``laminate.txt``), tags elements with the
     laminate ply they belong to (``SectionMesh.plies``, for ply-angle sensitivities).
+
+    Two optional blocks carry what ply-thickness sensitivities need (contract 2.1):
+    ``[Section_Node_Velocity]``, ``[section_id] [node_id] [laminate_id] [ply] [dy] [dz]``, how
+    a node moves per unit thickness of that ply (``SectionMesh.velocities``; nodes and plies
+    without a row do not move), and ``[Section_Tie_Point]``, ``[section_id] [node_id]
+    [element_id] [xi] [eta]``, where each tied node sits in the element it was tied to, in
+    tying order (``SectionMesh.tie_points``). A section with a velocity row gets
+    ``velocities``; one with a tie-point row gets ``tie_points``.
     """
     nodes: Dict[int, Dict[int, Tuple[float, float]]] = {}
     elems: Dict[int, List[Tuple[str, List[int], int, float, float]]] = {}
     tie_rows: Dict[int, Dict[int, List[Tuple[int, float]]]] = {}
     ply_rows: Dict[int, Dict[int, Tuple[int, int]]] = {}
     elem_ids: Dict[int, List[int]] = {}
+    vel_rows: Dict[int, Dict[Tuple[int, int], List[Tuple[int, float, float]]]] = {}
+    tp_rows: Dict[int, List[Tuple[int, int, float, float]]] = {}
     mats = dict(materials)
     section = None
     with open(path, encoding="utf-8") as fh:
@@ -580,7 +590,7 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
                 continue
             low = line.lower()
             if low in ("[section_node]", "[section_element]", "[solid_material]", "[section_tie]",
-                       "[section_element_ply]"):
+                       "[section_element_ply]", "[section_node_velocity]", "[section_tie_point]"):
                 section = low
                 continue
             if line.startswith("["):
@@ -602,6 +612,13 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
                 if int(v[3]) < 1:
                     raise ValueError(f"{path}: plies count from 1: {line!r}")
                 ply_rows.setdefault(int(v[0]), {})[int(v[1])] = (int(v[2]), int(v[3]) - 1)
+            elif section == "[section_node_velocity]":
+                if int(v[3]) < 1:
+                    raise ValueError(f"{path}: plies count from 1: {line!r}")
+                vel_rows.setdefault(int(v[0]), {}).setdefault((int(v[2]), int(v[3]) - 1), []).append(
+                    (int(v[1]), float(v[4]), float(v[5])))
+            elif section == "[section_tie_point]":
+                tp_rows.setdefault(int(v[0]), []).append((int(v[1]), int(v[2]), float(v[3]), float(v[4])))
             elif section == "[solid_material]":
                 f = [float(x) for x in v[1:]]
                 mats[int(v[0])] = SolidMaterial(*f[:9], rho=f[9] if len(f) > 9 else 0.0)
@@ -625,10 +642,28 @@ def parse_section_mesh_2d(path: str, materials: Mapping[int, SolidMaterial]) -> 
             if unknown:
                 raise ValueError(f"{path}: section {sid} [Section_Element_Ply] names unknown elements {unknown}")
             plies = [ply_rows[sid].get(e) for e in elem_ids[sid]]
+        velocities = None
+        if sid in vel_rows:
+            velocities = {}
+            for key, rows_v in vel_rows[sid].items():
+                V = np.zeros((len(ids), 2))
+                for n, dy, dz in rows_v:
+                    if n not in index:
+                        raise ValueError(f"{path}: section {sid} [Section_Node_Velocity] names unknown node {n}")
+                    V[index[n]] = (dy, dz)
+                velocities[key] = V
+        tie_points = None
+        if sid in tp_rows:
+            e_index = {e: k for k, e in enumerate(elem_ids[sid])}
+            try:
+                tie_points = [(index[n], e_index[e], xi, eta) for n, e, xi, eta in tp_rows[sid]]
+            except KeyError as exc:
+                raise ValueError(f"{path}: section {sid} [Section_Tie_Point] names unknown node or element "
+                                 f"{exc}") from None
         out[sid] = SectionMesh(np.array([nodes[sid][n] for n in ids]), conn, [r[0] for r in rows],
                                [r[2] for r in rows], [r[3] for r in rows], [r[4] for r in rows],
                                {m: mats[m] for m in {r[2] for r in rows} if m in mats}, sid, ties=ties,
-                               plies=plies)
+                               plies=plies, velocities=velocities, tie_points=tie_points)
     return out
 
 
