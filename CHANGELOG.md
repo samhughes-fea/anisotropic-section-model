@@ -1,5 +1,6 @@
 # Changelog
 
+<<<<<<< HEAD
 ## 0.6.0 - Unreleased
 
 ### Breaking: section-provider contract 2.0
@@ -43,6 +44,9 @@
 - `tests/test_section_contract_v2.py`.
 
 ## 0.5.1 - not released (folded into 0.6.0)
+=======
+## Unreleased
+>>>>>>> origin/claude/project-thread-n13mek
 
 ### Added
 
@@ -51,7 +55,20 @@
   a thin-walled tube give the same diagonal stiffness and mass as the given constants; an
   equal-leg angle keeps its bending coupling, its shear centre at the corner and its
   principal moments `a^3 t / 3`, `a^3 t / 12`. 1D-FEM now takes every isotropic
+<<<<<<< HEAD
   `section.txt` section from `from_isotropic`. No API or contract change (still 1.0) (#32).
+=======
+  `section.txt` section from `from_isotropic`. No API or contract change (still 1.0).
+
+### Changed
+
+- The `from_isotropic` docstring defines `J_t` (Saint-Venant torsion constant, giving the
+  torsional stiffness `G J_t`) and `I_x` (polar second moment `I_p` about the centroid,
+  giving the rotary inertia `rho I_p`) as separate geometric constants, with units and
+  reference axis. It no longer says elements keep their own shear-centre handling.
+
+## 0.5.0 - Unreleased
+>>>>>>> origin/claude/project-thread-n13mek
 
 ### Changed
 

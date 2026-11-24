@@ -232,6 +232,7 @@ class SectionAnalysis:
         """Section from classical inputs: ``diag(EA, EI_y, EI_z, kGA, kGA, GJ_t)``, shear and twist about the shear centre.
 
         The inputs are geometric constants of the section about its centroid, which is the
+<<<<<<< HEAD
         section origin here; ``E``, ``G`` [Pa] and ``rho`` [kg/m^3] turn them into the
         stiffness and the mass per length. They are kept as ``section_constants``. Two
         torsion constants [m^4] mean different things:
@@ -260,6 +261,24 @@ class SectionAnalysis:
         same centre) and the torsional stiffness about the shear centre is still ``G J_t``.
         Axial and bending stay uncoupled. The shear-rigid ``classical_stiffness`` keeps
         ``G J_t`` (the coupling condenses out), and the mass takes no shear-centre offset.
+=======
+        section origin here; ``E``, ``G`` and ``rho`` turn them into the stiffness and the
+        mass per length. Two torsion constants [m^4] mean different things:
+
+        - ``J_t``, the Saint-Venant torsion constant (independent of the reference axis),
+          gives only the torsional stiffness ``stiffness[5, 5] = G J_t`` [N m^2].
+        - ``I_x``, the polar second moment of area ``I_p = int (y^2 + z^2) dA`` about the
+          centroid, gives the twist rotary inertia ``mass["I_p"] = rho I_p`` [kg m]
+          (``mass_matrix()[3, 3]``, about the origin) and the Wagner term ``I_p / A``.
+          ``None`` takes ``I_y + I_z``.
+
+        They are equal only for a circular section (solid or tube); otherwise ``J_t < I_p``.
+        The mass holds ``m = rho A`` [kg/m] and the bending rotary inertias
+        ``I_yy = rho I_y``, ``I_zz = rho I_z`` [kg m], all about the origin.
+
+        ``y_sc``, ``z_sc`` are recorded as the shear centre only; the stiffness
+        stays diagonal and the mass takes no shear-centre offset.
+>>>>>>> origin/claude/project-thread-n13mek
         The third-order shear terms assume a solid rectangle (Reddy's cubic shear
         warping): ``EI_z / 84`` for ``chi_y`` and ``EI_y / 84`` for ``chi_z``. The
         second-order terms take the centroid at the origin and a doubly symmetric
