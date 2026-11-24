@@ -28,8 +28,6 @@ ALLOWED = {
     "anisotropic_section_model.beam.euler_bernoulli_beam": "frozen reference beam",
     "anisotropic_section_model.torsion.RestrainedTorsionBeam": "frozen reference beam",
     "anisotropic_section_model.gbt.GeneralizedBeam": "frozen reference beam",
-    # contract v1: the GBT walk over elements moves to 1d-fem in v2 (align_gbt_pair stays)
-    "anisotropic_section_model.gbt_alignment.align_gbt_sections": "contract v1, removed in v2",
     # section-level, despite the name: a wall's own length
     "anisotropic_section_model.thin_walled.fields.WallField": "length of a wall, not a span",
 }
@@ -87,13 +85,14 @@ def test_section_contract_v1():
 
     from anisotropic_section_model.section_analysis import SECTION_API_VERSION, SectionAnalysis
 
-    assert SECTION_API_VERSION[0] == 1
+    assert SECTION_API_VERSION[0] == 2
     builders = [
         SectionAnalysis.from_isotropic(E=70e9, G=26e9, A=0.01, I_y=2e-5, I_z=5e-6, J_t=1e-5, rho=2700.0),
         SectionAnalysis.from_matrices(np.diag([7e8, 1.4e6, 3.5e5, 2e8, 2e8, 2.6e5]),
                                       np.diag([27.0, 27.0, 27.0, 0.07, 0.054, 0.0135])),
     ]
     for sa in builders:
+        assert sa.frame == "engine"
         assert sa.stiffness.shape == (6, 6) and np.allclose(sa.stiffness, sa.stiffness.T)
         assert sa.classical_stiffness.shape == (4, 4)
         assert len(sa.shear_centre) == 2 and len(sa.tension_centre) == 2

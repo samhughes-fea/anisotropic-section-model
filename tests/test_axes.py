@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 from anisotropic_section_model import axes
-from anisotropic_section_model.section_analysis import to_element_voigt
 from anisotropic_section_model.thin_wall import BEAMDYN_FROM_ONEDFEM
 
 
@@ -47,9 +46,13 @@ def test_legacy_permutation_is_the_same():
     assert list(axes.FROM_ENGINE) == BEAMDYN_FROM_ONEDFEM
 
 
-def test_to_element_matches_section_analysis():
+def test_section_analysis_from_public_tables_is_in_the_engine_frame():
+    from anisotropic_section_model.section_analysis import SectionAnalysis
+
     K = _spd(6, 3)
-    np.testing.assert_allclose(axes.to_element(K), to_element_voigt(axes.to_engine(K)))
+    sa = SectionAnalysis.from_matrices(K, frame="public")
+    assert sa.frame == "engine"
+    np.testing.assert_allclose(sa.stiffness, axes.to_engine(K), rtol=1e-12)
 
 
 def test_mirror_is_an_involution_and_kernel_twist_flips():

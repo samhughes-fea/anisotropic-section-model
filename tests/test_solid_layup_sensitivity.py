@@ -8,6 +8,8 @@ topology), and against the thin-walled derivatives and closed forms.
 
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -18,7 +20,7 @@ from anisotropic_section_model.solid.mesh import SectionMesh, _closest_natural, 
 from anisotropic_section_model.solid.section_analysis import SolidSectionAnalysis
 from anisotropic_section_model.thin_walled import ThinWalledSection, Wall, WallLaminate
 from anisotropic_section_model.thin_walled.laminate import Ply, PlyMaterial
-from anisotropic_section_model.thin_walled.layup_sensitivity import (LayupParameter, element_section_derivative,
+from anisotropic_section_model.thin_walled.layup_sensitivity import (LayupParameter, section_analysis_derivative,
                                                                      section_derivative)
 from anisotropic_section_model.thin_walled.section_analysis import ThinWalledSectionAnalysis
 
@@ -209,8 +211,8 @@ def test_thickness_needs_node_velocities():
         solid_section_derivative(SolidSectionAnalysis(m), LayupParameter(1, 0, "thickness"))
 
 
-def test_element_derivative_carries_the_moving_axial_points():
-    """``with_pretwist`` of the derivative section is the derivative of ``with_pretwist``:
+def test_section_derivative_carries_the_moving_axial_points():
+    """``with_pretwist`` on the derivative's axial points is the derivative of ``with_pretwist``:
     the axial points' motion is carried by a five-point stencil, exact for its quartics."""
     sec, lams = _box()
     k = 0.3                                                 # pretwist rate, rad/m
@@ -221,8 +223,10 @@ def test_element_derivative_carries_the_moving_axial_points():
 
     sa = element(lams)
     an = SolidSectionAnalysis(SectionMesh.from_thin_walled(sec, lams, elements_along=3))
-    dsa = element_section_derivative(sa, solid_section_derivative(an, p))
-    exact = dsa.with_pretwist(k).stiffness - dsa.stiffness
+    dsa = section_analysis_derivative(sa, solid_section_derivative(an, p))
+    dsec = dataclasses.replace(sa, stiffness=dsa.stiffness, classical_stiffness=dsa.classical_stiffness,
+                               axial_points=dsa.axial_points, benscoter_stiffness=None)
+    exact = dsec.with_pretwist(k).stiffness - dsec.stiffness
     h = 1e-6
     fd = [(element(_changed(lams, 1, 0, d_thickness=s)).with_pretwist(k).stiffness
            - element(_changed(lams, 1, 0, d_thickness=s)).stiffness) for s in (h, -h)]

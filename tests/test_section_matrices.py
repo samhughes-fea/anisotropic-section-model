@@ -38,7 +38,7 @@ def _same(a: SectionAnalysis, b: SectionAnalysis):
 def test_api_version_is_exported():
     import anisotropic_section_model as asm
 
-    assert SECTION_API_VERSION == (1, 0)
+    assert SECTION_API_VERSION == (2, 0)
     assert asm.SECTION_API_VERSION == SECTION_API_VERSION
 
 

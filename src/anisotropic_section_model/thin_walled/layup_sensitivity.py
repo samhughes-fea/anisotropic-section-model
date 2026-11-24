@@ -40,7 +40,8 @@ differentiated exactly, with no finite differences:
 Public API
 ----------
 LayupParameter, laminate_derivative, wall_law_derivative, SectionDerivative,
-section_derivative, gbt_section_derivative, element_section_derivative.
+section_derivative, gbt_section_derivative, SectionAnalysisDerivative,
+section_analysis_derivative.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ from anisotropic_section_model.thin_walled.laminate import WallLaminate
 from anisotropic_section_model.thin_walled.wall_stiffness import WALL_RESULTANTS, WALL_STRAINS  # noqa: F401
 
 __all__ = ["LayupParameter", "laminate_derivative", "wall_law_derivative", "SectionDerivative", "section_derivative",
-           "gbt_section_derivative", "element_section_derivative"]
+           "gbt_section_derivative", "SectionAnalysisDerivative", "section_analysis_derivative"]
 
 KINDS = ("angle", "thickness")
 
@@ -179,7 +180,7 @@ class SectionDerivative:
     #: section meshed in 2D; ``None`` where they stay put, as on wall mid-lines)
     axial_positions: Optional[npt.NDArray[np.float64]] = None
     #: ``d`` of the section's taper coupling (``thin_walled.taper.taper_derivative``), when the
-    #: derivative was taken with its taper; ``element_section_derivative`` adds it
+    #: derivative was taken with its taper; ``section_analysis_derivative`` adds it
     taper: Optional[object] = None
 
 
@@ -625,26 +626,50 @@ def _axial_points_derivative(points, dk, dr=None) -> np.ndarray:
     return np.vstack([P] + extra)
 
 
-def element_section_derivative(sa, d: SectionDerivative):
-    """A ``SectionAnalysis`` like ``sa`` whose stiffness and mass matrix are the derivatives ``d``
-    (element signs).
+@dataclass(frozen=True)
+class SectionAnalysisDerivative:
+    """Derivative of a station's ``SectionAnalysis`` for one ``LayupParameter``: plain arrays.
 
-    Elements whose stiffness and mass are linear in the section's 6 x 6 stiffness and mass
-    matrix (the Timoshenko family) form their own derivatives from it.
+    Field for field with ``SectionAnalysis``, in the engine frame (right-handed, about the
+    origin), per unit change of the parameter (rad for an angle, m for a thickness). A field
+    is ``None`` where the section has no such data or the derivative was not asked for.
+
+    ``stiffness`` includes the derivative of the section's taper coupling. ``mass_matrix``
+    is the derivative of ``SectionAnalysis.mass_matrix()``. ``axial_points`` is a
+    quadrature whose sums are the derivatives of the section's ``axial_points`` sums
+    (``with_pretwist`` and the fourth-order energy are linear in them).
     """
-    from dataclasses import fields
 
-    from anisotropic_section_model.section_analysis import SectionAnalysis, to_element_voigt
+    parameter: LayupParameter
+    stiffness: npt.NDArray[np.float64]
+    classical_stiffness: npt.NDArray[np.float64]
+    mass_matrix: npt.NDArray[np.float64]
+    benscoter_stiffness: Optional[npt.NDArray[np.float64]] = None
+    warping_inertia: float = 0.0
+    geometric_terms: Optional[npt.NDArray[np.float64]] = None
+    axial_points: Optional[npt.NDArray[np.float64]] = None
+    gbt_stiffness: Optional[npt.NDArray[np.float64]] = None
+    gbt_mass: Optional[npt.NDArray[np.float64]] = None
+    gbt_geometric: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
 
-    dM = d.mass_matrix.copy()
 
-    class _Derivative(SectionAnalysis):
-        # a closure, so copies made by dataclasses.replace (with_pretwist) keep it
-        def mass_matrix(self):
-            return dM.copy()
+def section_analysis_derivative(sa, d: SectionDerivative) -> SectionAnalysisDerivative:
+    """The derivative of the station's section ``sa`` (a ``SectionAnalysis`` in the engine
+    frame, with its taper if it has one) from ``d``, the ``section_derivative`` or
+    ``solid_section_derivative`` of the analysis it was built from.
 
-    kw = {f.name: getattr(sa, f.name) for f in fields(sa) if f.init}
-    dK = np.array(d.stiffness, dtype=np.float64, copy=True)
+    The classical stiffness is ``C = inv(F_c)`` with ``F_c`` the classical rows of the
+    flexibility, so ``dC = -C dF_c C``. A tapered section adds ``d.taper`` when the
+    derivative was taken with its taper, else the laminate's share of the taper
+    (``taper_parts``) scaled by ``d.wall_axial``.
+    """
+    from anisotropic_section_model.section_analysis import CLASSICAL_INDEX, ENGINE_FRAME
+
+    if getattr(sa, "frame", ENGINE_FRAME) != ENGINE_FRAME:
+        raise ValueError(f"section_analysis_derivative takes a section in the engine frame, not {sa.frame!r}")
+    dM = np.array(d.mass_matrix, dtype=np.float64, copy=True)
+    dK0 = np.array(d.stiffness, dtype=np.float64, copy=True)
+    dK = dK0.copy()
     if sa.tapered and d.taper is not None:
         dK += d.taper.matrix()
     elif sa.tapered:
@@ -656,26 +681,25 @@ def element_section_derivative(sa, d: SectionDerivative):
         row = sa.taper_parts.get(d.parameter.laminate_id)
         if row is not None:
             dK += d.wall_axial * SectionTaper.from_row(row).matrix()
-    kw["stiffness"] = to_element_voigt(dK)
-    kw["tapered"], kw["taper_parts"] = False, None
+    idx = np.array(CLASSICAL_INDEX)
+    C = np.asarray(sa.classical_stiffness, dtype=np.float64)
+    dC = -C @ np.asarray(d.flexibility, dtype=np.float64)[np.ix_(idx, idx)] @ C
+    kw = {"parameter": d.parameter, "stiffness": dK, "classical_stiffness": 0.5 * (dC + dC.T),
+          "mass_matrix": dM}
     if d.axial_weights is not None and sa.axial_points is not None:
         kw["axial_points"] = _axial_points_derivative(sa.axial_points, d.axial_weights, d.axial_positions)
     if d.benscoter_stiffness is not None:
-        S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
         dK8 = np.array(d.benscoter_stiffness, dtype=np.float64, copy=True)
         dK8[:6, :6] = dK
-        kw["benscoter_stiffness"] = S8 @ dK8 @ S8
-        kw["warping_inertia"] = d.warping_inertia
-    else:
-        kw["warping_inertia"] = 0.0
+        kw["benscoter_stiffness"] = dK8
+        kw["warping_inertia"] = float(d.warping_inertia)
+    if d.geometric_terms is not None:
+        kw["geometric_terms"] = np.array(d.geometric_terms, dtype=np.float64, copy=True)
     if d.gbt_stiffness is not None:
-        Sg = np.ones(d.gbt_stiffness.shape[0])
-        Sg[1] = -1.0  # element sign of kappa_y
-        Kg = Sg[:, None] * d.gbt_stiffness * Sg[None, :]
-        if sa.tapered:
-            Kg[:6, :6] += kw["stiffness"] - to_element_voigt(d.stiffness)
+        Kg = np.array(d.gbt_stiffness, dtype=np.float64, copy=True)
+        Kg[:6, :6] += dK - dK0
         Mg = np.array(d.gbt_mass, dtype=np.float64, copy=True)
         Mg[:6, :6] = dM
         kw["gbt_stiffness"], kw["gbt_mass"] = Kg, Mg
-        kw["gbt_geometric"] = tuple(T * Sg for T in d.gbt_geometric)
-    return _Derivative(**kw)
+        kw["gbt_geometric"] = tuple(np.array(T, dtype=np.float64, copy=True) for T in d.gbt_geometric)
+    return SectionAnalysisDerivative(**kw)

@@ -12,9 +12,9 @@ change sign.
 
 ``align_gbt_pair`` turns one section's bases to those of a reference section (a
 neighbour along the beam). Which section is whose neighbour is the beam code's business:
-1d-fem walks its elements and calls the pair function. ``align_gbt_sections`` is that walk
-over an element connectivity, kept for contract v1 and to be removed in v2
-(``docs/package_boundary.md``). Within each block (warping
+1d-fem walks its elements and calls the pair function (contract v2,
+``docs/package_boundary.md``). Both sections must be in the same frame (ASM's engine frame
+as built). Within each block (warping
 modes, distortional modes) the turn is the orthogonal matrix ``R`` that best maps the
 section's signature onto the neighbour's: ``R = polar(S_ref S^T)`` (orthogonal
 Procrustes). A signature row holds the moments of one basis field over its section
@@ -30,18 +30,18 @@ the element mesh should be refined or the number of modes changed.
 
 Public API
 ----------
-align_gbt_pair, align_gbt_sections, gbt_signature, mass_transform, rotate_gbt_basis
+align_gbt_pair, gbt_signature, mass_transform, rotate_gbt_basis
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Tuple
 
 import numpy as np
 import numpy.typing as npt
 
-__all__ = ["MIN_MATCH", "align_gbt_sections", "gbt_signature", "mass_transform", "rotate_gbt_basis"]
+__all__ = ["MIN_MATCH", "align_gbt_pair", "gbt_signature", "mass_transform", "rotate_gbt_basis"]
 
 log = logging.getLogger(__name__)
 
@@ -165,52 +165,3 @@ def align_gbt_pair(reference, section, signatures=None) -> Tuple[object, dict]:
     if not (np.allclose(Rw, np.eye(Rw.shape[0]), atol=1e-12) and np.allclose(Rm, np.eye(Rm.shape[0]), atol=1e-12)):
         out = rotate_gbt_basis(section, Rw, Rm)
     return out, {"Rw": Rw, "Rm": Rm, "match": match}
-
-
-def align_gbt_sections(per_element: Sequence, connectivity: npt.ArrayLike,
-                       gbt_elements: Optional[Sequence[bool]] = None) -> Tuple[tuple, Dict[int, dict]]:
-    """Turn the GBT bases of each element's section to its neighbour's (module docstring).
-
-    Contract v1 only: walking the elements is the beam code's, which calls
-    ``align_gbt_pair``; this function goes in contract v2.
-
-    ``per_element`` holds each element's ``SectionAnalysis`` (or ``None``), ``connectivity``
-    its two nodes. Elements are visited in order; each is aligned to an earlier visited
-    element sharing a node whose section differs, or kept as it is. Returns the aligned
-    sections and, per element whose bases were turned, ``{"Rw", "Rm", "match"}``.
-    """
-    conn = np.asarray(connectivity, dtype=np.int64).reshape(-1, 2)
-    n = len(per_element)
-    use = [sa is not None and getattr(sa, "gbt_stiffness", None) is not None for sa in per_element]
-    if gbt_elements is not None:
-        use = [u and bool(g) for u, g in zip(use, gbt_elements)]
-    out: List = list(per_element)
-    info: Dict[int, dict] = {}
-    at_node: Dict[int, List[int]] = {}
-    sig_cache: Dict[int, Tuple[np.ndarray, np.ndarray]] = {}
-
-    def sig(i):
-        if i not in sig_cache:
-            sig_cache[i] = gbt_signature(out[i])
-        return sig_cache[i]
-
-    for e in range(n):
-        if use[e]:
-            nb = [f for nd in conn[e] for f in at_node.get(int(nd), []) if use[f]]
-            same = next((f for f in nb if per_element[f] is per_element[e]), None)
-            ref = next((f for f in nb if per_element[f] is not per_element[e]), None)
-            if same is not None:                     # the same section: the same (turned) basis
-                out[e] = out[same]
-                if same in info:
-                    info[e] = dict(info[same])
-            elif ref is not None and _blocks(out[ref]) == _blocks(out[e]):
-                turned, pair = align_gbt_pair(out[ref], out[e], (sig(ref), sig(e)))
-                if pair["match"] < MIN_MATCH:
-                    log.warning("element %d against element %d", e, ref)
-                if turned is not out[e]:
-                    out[e] = turned
-                    sig_cache.pop(e, None)
-                info[e] = {**pair, "reference": ref}
-        for nd in conn[e]:
-            at_node.setdefault(int(nd), []).append(e)
-    return tuple(out), info
