@@ -229,7 +229,7 @@ class SectionAnalysis:
         z_sc: float = 0.0,
         I_x: Optional[float] = None,
     ) -> "SectionAnalysis":
-        """Uncoupled section from classical inputs: ``diag(EA, EI_y, EI_z, kGA, kGA, GJ_t)``.
+        """Section from classical inputs: ``diag(EA, EI_y, EI_z, kGA, kGA, GJ_t)``, shear and twist about the shear centre.
 
         The inputs are geometric constants of the section about its centroid, which is the
         section origin here; ``E``, ``G`` [Pa] and ``rho`` [kg/m^3] turn them into the
@@ -248,8 +248,18 @@ class SectionAnalysis:
         ``I_yy = rho I_y``, ``I_zz = rho I_z`` [kg m], all about the origin. ``I_x`` is the
         contract-v1 name of ``I_p``, kept for one release (``DeprecationWarning``).
 
-        ``y_sc``, ``z_sc`` are recorded as the shear centre only; the stiffness
-        stays diagonal and the mass takes no shear-centre offset.
+        ``y_sc``, ``z_sc`` [m] place the shear centre relative to the centroid. Shear and
+        twist are uncoupled about the shear centre, so its shear strains are
+        ``gamma_xy - z_sc phi`` and ``gamma_xz + y_sc phi`` (``phi`` the twist rate), and
+        about the centroid the shear-torsion block becomes::
+
+            stiffness[3, 5] = -z_sc kappa G A        stiffness[4, 5] = y_sc kappa G A
+            stiffness[5, 5] = G J_t + kappa G A (y_sc^2 + z_sc^2)
+
+        so a shear force through the shear centre twists nothing (``from_matrices`` finds the
+        same centre) and the torsional stiffness about the shear centre is still ``G J_t``.
+        Axial and bending stay uncoupled. The shear-rigid ``classical_stiffness`` keeps
+        ``G J_t`` (the coupling condenses out), and the mass takes no shear-centre offset.
         The third-order shear terms assume a solid rectangle (Reddy's cubic shear
         warping): ``EI_z / 84`` for ``chi_y`` and ``EI_y / 84`` for ``chi_z``. The
         second-order terms take the centroid at the origin and a doubly symmetric
@@ -266,6 +276,12 @@ class SectionAnalysis:
         if I_p is None or I_p <= 0:
             I_p = I_y + I_z
         D = np.diag([E * A, E * I_y, E * I_z, kappa * G * A, kappa * G * A, G * J_t])
+        y_sc, z_sc = float(y_sc), float(z_sc)
+        if y_sc or z_sc:
+            # D = T^T D_s T with gamma_s = gamma - z_sc phi (y), gamma + y_sc phi (z)
+            T = np.eye(6)
+            T[3, 5], T[4, 5] = -z_sc, y_sc
+            D = T.T @ D @ T
         C = np.diag([E * A, E * I_y, E * I_z, G * J_t])
         mass = {"m": rho * A, "y_m": 0.0, "z_m": 0.0, "I_yy": rho * I_y,
                 "I_zz": rho * I_z, "I_yz": 0.0, "I_p": rho * I_p}
@@ -280,7 +296,7 @@ class SectionAnalysis:
         H[2, 1] = 1.0                  # S_z = int sigma z = M_y
         H[3, 0] = I_p / A if A > 0 else 0.0
         H[4, 3] = H[5, 4] = 1.0        # V_y, V_z
-        return cls(D, C, E * Gamma, (float(y_sc), float(z_sc)), (0.0, 0.0), mass, "isotropic", None,
+        return cls(D, C, E * Gamma, (y_sc, z_sc), (0.0, 0.0), mass, "isotropic", None,
                    third_order_stiffness=D8, third_order_rate=np.zeros((2, 6)),
                    geometric_terms=H, third_order_geometric_terms=np.zeros((7, 2)),
                    axial_points=_rectangle_points(E, A, I_y, I_z), section_constants=constants)

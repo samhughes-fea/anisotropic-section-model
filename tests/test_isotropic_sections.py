@@ -100,3 +100,58 @@ def test_thin_walled_angle_keeps_its_couplings_and_principal_axes():
     iso = SectionAnalysis.from_isotropic(E=E, G=G, A=2 * a * t, I_y=a**3 * t / 3, I_z=a**3 * t / 12,
                                          J_t=2 * a * t**3 / 3, rho=RHO)
     assert sorted([I_1, I_2]) == pytest.approx(sorted([iso.mass["I_yy"], iso.mass["I_zz"]]), rel=1e-3)
+
+
+# ------------------------------------------------------------------ shear-centre offset
+def _channel(t=2e-3, b=0.05, h=0.1):
+    """A channel (web along z at the left, flanges to +y) with its centroid at the origin."""
+    yc = (2 * b * t * (b / 2)) / (t * (h + 2 * b))
+    pts = {1: (b - yc, -h / 2), 2: (-yc, -h / 2), 3: (-yc, h / 2), 4: (b - yc, h / 2)}
+    return _thin_walled(pts, [Wall(1, 1, 2, 1), Wall(2, 2, 3, 1), Wall(3, 3, 4, 1)], t), (t, b, h)
+
+
+def test_offset_shear_centre_couples_shear_and_twist():
+    y_s, z_s, kappa = 0.03, -0.02, 0.8
+    c = dict(E=E, G=G, A=1e-3, I_y=2e-6, I_z=1e-6, J_t=1e-8, kappa=kappa, rho=RHO)
+    se = SectionAnalysis.from_isotropic(y_sc=y_s, z_sc=z_s, **c)
+    ref = SectionAnalysis.from_isotropic(**c)
+    D, kGA, GJ = se.stiffness, kappa * G * c["A"], G * c["J_t"]
+    assert D[3, 5] == pytest.approx(-z_s * kGA) and D[5, 3] == D[3, 5]
+    assert D[4, 5] == pytest.approx(y_s * kGA) and D[5, 4] == D[4, 5]
+    assert D[5, 5] == pytest.approx(GJ + kGA * (y_s**2 + z_s**2))
+    # axial, bending and the shear diagonal are unchanged; nothing else couples
+    keep = np.ones((6, 6), bool)
+    keep[[3, 4, 5], 5] = keep[5, [3, 4]] = False
+    np.testing.assert_array_equal(D[keep], ref.stiffness[keep])
+    # shear-rigid: the coupling condenses out, G J_t again
+    np.testing.assert_array_equal(se.classical_stiffness, ref.classical_stiffness)
+    # a shear force through (y_s, z_s) twists nothing: from_matrices finds the same centre
+    found = SectionAnalysis.from_matrices(D, se.mass_matrix())
+    assert found.shear_centre == pytest.approx((y_s, z_s), rel=1e-10)
+    assert se.shear_centre == (y_s, z_s)
+    # twisting about the shear centre (no shear strain there) stores only G J_t phi^2 / 2
+    phi = 0.7
+    eps = np.array([0, 0, 0, z_s * phi, -y_s * phi, phi])
+    assert eps @ D @ eps == pytest.approx(GJ * phi**2, rel=1e-12)
+    # third-order stiffness carries the same 6 x 6 block
+    np.testing.assert_array_equal(se.third_order_stiffness[:6, :6], D)
+
+
+def test_offset_shear_centre_matches_a_thin_walled_channel():
+    """A channel's shear-torsion block from the thin-walled model and from from_isotropic with
+    the same shear centre, kappa G A and G J_t agree."""
+    tw, (t, b, h) = _channel()
+    y_s, z_s = tw.shear_centre
+    assert z_s == pytest.approx(0.0, abs=1e-12) and y_s < 0      # behind the web
+    # thin-walled closed form: e = 3 b^2 / (h + 6 b) behind the web mid-line
+    yc = (2 * b * t * (b / 2)) / (t * (h + 2 * b))
+    assert -yc - y_s == pytest.approx(3 * b**2 / (h + 6 * b), rel=1e-3)
+    A = t * (h + 2 * b)
+    D = tw.stiffness
+    J_t = (D[5, 5] - D[4, 5] ** 2 / D[4, 4]) / G             # G J_t about the shear centre
+    assert J_t == pytest.approx((h + 2 * b) * t**3 / 3, rel=1e-2)
+    iso = SectionAnalysis.from_isotropic(E=E, G=G, A=A, I_y=D[1, 1] / E, I_z=D[2, 2] / E, J_t=J_t,
+                                         kappa=D[4, 4] / (G * A), y_sc=y_s, z_sc=z_s)
+    for i, j in ((4, 4), (4, 5), (5, 5)):
+        assert iso.stiffness[i, j] == pytest.approx(D[i, j], rel=1e-9)
+    assert iso.stiffness[3, 5] == pytest.approx(0.0, abs=1e-6 * D[5, 5])
