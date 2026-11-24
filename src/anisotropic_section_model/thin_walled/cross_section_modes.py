@@ -346,7 +346,7 @@ class CrossSectionModes:
                 mu_x, Yx = eigh(X.T @ E @ X, X.T @ A @ X)
                 X = X @ Yx
         else:
-            X, mu_x = np.zeros((an.n_dof, 0)), np.zeros(0)
+            X = np.zeros((an.n_dof, 0))
         Om = np.hstack([Wsv, X])
         Om = Om / np.abs(Om).max(axis=0)
         Om = Om * np.sign(Om[np.argmax(np.abs(Om), axis=0), np.arange(Om.shape[1])])

@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- CI lints with a pinned ruff (`requirements/lint.txt`, syntax errors and pyflakes):
+  unused imports and four unused locals removed, and the VABS/BECAS benchmark cases
+  import the `SectionMesh` they annotate. Results are unchanged. (#45)
+- Follows the shared development standard 0.1.1: the bug form asks for the system
+  libraries the package loads (GEOS) and where they came from. (#45)
+
 ## [0.8.0] - 2026-11-24
 
 ### Added

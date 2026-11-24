@@ -13,6 +13,7 @@ import math
 from typing import Callable, Dict
 
 from anisotropic_section_model.solid import SolidMaterial
+from anisotropic_section_model.solid.mesh import SectionMesh
 from anisotropic_section_model.solid.structured import arc_patch, rectangle_patch, structured_mesh
 
 from reference import MATERIALS

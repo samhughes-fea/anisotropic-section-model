@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from scipy.integrate import quad
 
 from anisotropic_section_model.section_analysis import SectionAnalysis
 from anisotropic_section_model.solid.layup_sensitivity import solid_section_derivative
@@ -17,7 +16,7 @@ from anisotropic_section_model.thin_walled.laminate import Ply, PlyMaterial
 from anisotropic_section_model.thin_walled.layup_sensitivity import (LayupParameter, section_analysis_derivative,
                                                                      section_derivative)
 from anisotropic_section_model.thin_walled.section_analysis import ThinWalledSectionAnalysis
-from anisotropic_section_model.thin_walled.taper import section_taper, taper_derivative
+from anisotropic_section_model.thin_walled.taper import section_taper
 
 CFRP = PlyMaterial(E1=135e9, E2=10e9, G12=5e9, nu12=0.3, G13=5e9, G23=3.8e9, rho=1550.0)
 WIDTH, H0, H1, LENGTH = 0.2, 0.12, 0.06, 2.0

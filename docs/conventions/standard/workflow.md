@@ -1,4 +1,4 @@
-<!-- Synced from the shared development standard 0.1.0. Edit it there, not here. -->
+<!-- Synced from the shared development standard 0.1.1. Edit it there, not here. -->
 # Workflow: from issue to release
 
 Every change can be traced from the release that shipped it back to the reason it

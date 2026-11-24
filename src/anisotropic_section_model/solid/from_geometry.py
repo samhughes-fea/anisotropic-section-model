@@ -38,7 +38,7 @@ from the skin, a web stays centred on its mid-line and its feet slide along the 
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -593,7 +593,6 @@ def section_mesh_from_cut(
             for k in range(nq + 1):
                 col.append(face_node(2 * f[k]))
                 if k < nq:
-                    I_lo = 2 * min(f[k], f[k + 1])
                     if abs(f[k + 1] - f[k]) != 1 and not (min(f[k], f[k + 1]) == 0 and max(f[k], f[k + 1]) == M - 1):
                         raise ValueError("internal: web rows are not adjacent stations")
                     I_mid = (2 * f[k] + 1) if (f[k + 1] - f[k]) % M == 1 else (2 * f[k + 1] + 1)

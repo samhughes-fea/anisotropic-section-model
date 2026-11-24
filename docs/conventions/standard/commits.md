@@ -1,4 +1,4 @@
-<!-- Synced from the shared development standard 0.1.0. Edit it there, not here. -->
+<!-- Synced from the shared development standard 0.1.1. Edit it there, not here. -->
 # Commit messages
 
 Every commit on `main` follows [Conventional Commits 1.0](https://www.conventionalcommits.org/en/v1.0.0/).

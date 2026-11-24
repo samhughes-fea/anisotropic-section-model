@@ -19,10 +19,9 @@ Patch, structured_mesh.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Sequence, Tuple
 
 import numpy as np
-import numpy.typing as npt
 
 from anisotropic_section_model.solid.material import SolidMaterial
 from anisotropic_section_model.solid.mesh import SectionMesh, _merge_nodes

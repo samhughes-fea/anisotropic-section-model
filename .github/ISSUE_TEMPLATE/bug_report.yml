@@ -1,4 +1,4 @@
-# Synced from the shared development standard 0.1.0. Edit it there, not here.
+# Synced from the shared development standard 0.1.1. Edit it there, not here.
 name: Bug report
 description: Wrong results, a crash, or a failed check
 labels: [bug]
@@ -34,3 +34,14 @@ body:
     attributes:
       label: Python and OS
       placeholder: "3.12, Ubuntu 24.04"
+  - type: textarea
+    id: system-libraries
+    attributes:
+      label: System libraries
+      description: >-
+        Native libraries the package loads and their versions, for example GEOS
+        (`python -c "import shapely; print(shapely.geos_version_string)"`), Gmsh or
+        CalculiX, and whether they came from apt, brew, conda or a wheel.
+      placeholder: "GEOS 3.12.1 (apt libgeos-dev)"
+    validations:
+      required: false

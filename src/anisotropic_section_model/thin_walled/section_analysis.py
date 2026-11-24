@@ -95,7 +95,6 @@ from anisotropic_section_model.stage_log import stage
 from anisotropic_section_model.thin_walled.laminate import WallLaminate
 from anisotropic_section_model.thin_walled.thin_walled_geometry import (
     ThinWalledSection,
-    Wall,
 )
 from anisotropic_section_model.thin_walled.wall_stiffness import (
     condensed_wall_stiffness,

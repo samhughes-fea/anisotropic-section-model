@@ -1,4 +1,4 @@
-<!-- Synced from the shared development standard 0.1.0. Edit it there, not here. -->
+<!-- Synced from the shared development standard 0.1.1. Edit it there, not here. -->
 # Documentation
 
 Each repository has **one documentation home**: its Sphinx site on GitHub Pages,

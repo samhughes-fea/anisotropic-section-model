@@ -1,4 +1,4 @@
-# Synced from the shared development standard 0.1.0. Edit it there, not here.
+# Synced from the shared development standard 0.1.1. Edit it there, not here.
 name: Gap in a lower package
 description: Something a consumer has to compute, convert or refuse on top of this package
 labels: [enhancement]
