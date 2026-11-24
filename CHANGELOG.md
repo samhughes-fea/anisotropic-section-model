@@ -19,6 +19,17 @@
   `thin_walled.layup_sensitivity.element_section_derivative` and
   `gbt_alignment.align_gbt_sections`.
 
+### Fixed
+
+- `SectionAnalysis.from_isotropic(y_sc=, z_sc=)` now couples shear and twist about the
+  given shear centre, where it only recorded it. With the shear strains at the shear
+  centre `gamma_xy - z_sc phi`, `gamma_xz + y_sc phi`, the centroid stiffness gets
+  `D[3,5] = -z_sc kGA`, `D[4,5] = y_sc kGA` and `D[5,5] = GJ_t + kGA (y_sc^2 + z_sc^2)`.
+  A shear force through the shear centre then twists nothing (`from_matrices` recovers
+  the centre) and the torsional stiffness about it is still `G J_t`. On a thin-walled
+  channel the block matches the thin-walled model's to 1e-9. `classical_stiffness`, the
+  mass and the second-order terms do not change; a zero offset gives the old section.
+
 ### Added
 
 - `thin_walled.layup_sensitivity.section_analysis_derivative(sa, d)` and
