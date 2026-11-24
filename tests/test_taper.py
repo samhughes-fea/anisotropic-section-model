@@ -14,7 +14,7 @@ from anisotropic_section_model.solid.section_analysis import SolidSectionAnalysi
 from anisotropic_section_model.solid.taper import solid_section_taper
 from anisotropic_section_model.thin_walled import ThinWalledSection, Wall, WallLaminate
 from anisotropic_section_model.thin_walled.laminate import Ply, PlyMaterial
-from anisotropic_section_model.thin_walled.layup_sensitivity import (LayupParameter, element_section_derivative,
+from anisotropic_section_model.thin_walled.layup_sensitivity import (LayupParameter, section_analysis_derivative,
                                                                      section_derivative)
 from anisotropic_section_model.thin_walled.section_analysis import ThinWalledSectionAnalysis
 from anisotropic_section_model.thin_walled.taper import section_taper, taper_derivative
@@ -122,7 +122,7 @@ def test_element_derivative_of_a_tapered_section_adds_the_taper_derivative():
     sa = element(lams)
     d = section_derivative(ThinWalledSectionAnalysis(_box(_depth(x)), lams), p,
                            taper=section_taper(*_cuts(x, dx, lams), lams, dx))
-    exact = element_section_derivative(sa, d).stiffness
+    exact = section_analysis_derivative(sa, d).stiffness
     h = 1e-6
     fd = (element(_lams((1, 0), d_thickness=h)).stiffness - element(_lams((1, 0), d_thickness=-h)).stiffness) / (2 * h)
     np.testing.assert_allclose(exact, fd, rtol=1e-6, atol=1e-7 * np.abs(fd).max())

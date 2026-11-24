@@ -1,6 +1,37 @@
 # Changelog
 
-## 0.5.1 - Unreleased
+## 0.6.0 - Unreleased
+
+### Breaking: section-provider contract 2.0
+
+- `SECTION_API_VERSION` is `(2, 0)`. 1d-fem 1.x with contract 1.0 refuses this release;
+  use a 1d-fem that needs 2.0 (`docs/package_boundary.md`).
+- `SectionAnalysis` is in the engine frame: every matrix (6 x 6, classical, Benscoter,
+  third-order and its rate, second-order terms, GBT stiffness, geometric and Brazier
+  tensors) is right-handed, as `ThinWalledSectionAnalysis` and `SolidSectionAnalysis`
+  compute it. The kappa_y row and column are no longer negated; a beam code applies its
+  own element signs. New field `frame` (always `"engine"`); `with_pretwist` and
+  `with_taper` refuse a section with another frame.
+- `with_pretwist` uses the right-handed fibre strain `eps + z kappa_y - y kappa_z`, so its
+  kappa_y coupling is `+k int E z r^2 dA` (the same physics as before, re-signed).
+- Removed: `section_analysis.ELEMENT_SIGN`, `section_analysis.to_element_voigt`,
+  `axes.ELEMENT_SIGN`, `axes.to_element`,
+  `thin_walled.layup_sensitivity.element_section_derivative` and
+  `gbt_alignment.align_gbt_sections`.
+
+### Added
+
+- `thin_walled.layup_sensitivity.section_analysis_derivative(sa, d)` and
+  `SectionAnalysisDerivative`: the derivative of a station's section as plain engine-frame
+  arrays, with its taper and, new, the classical stiffness (`dC = -C dF_c C`).
+- `SectionAnalysis.section_constants` (`SECTION_CONSTANTS`): `A`, `I_y`, `I_z`, `I_p`,
+  `J_t`, `Gamma` of an isotropic section, with units; `None` for composite sections.
+- `from_isotropic(I_p=...)` names the polar moment; `I_x=` still works with a
+  `DeprecationWarning`. `I_p <= 0` now also means `I_y + I_z`.
+- `gbt_alignment.align_gbt_pair` is in `__all__`.
+- `tests/test_section_contract_v2.py`.
+
+## 0.5.1 - not released (folded into 0.6.0)
 
 ### Added
 

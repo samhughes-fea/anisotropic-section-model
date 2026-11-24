@@ -31,9 +31,8 @@ the conversion to each, so nothing else spells them out.
   the public frame, engine ``(x, y, z)`` = public ``(z, x, y)``, so section coordinates
   are the same numbers, no sign changes, and 6 x 6 matrices are a reordering
   (``from_engine``, ``to_engine``).
-- **1d-fem element order** (``section_analysis.SectionAnalysis``): the engine order with
-  the sign of ``kappa_y`` flipped, as 1d-fem's beam elements' ``B`` matrices have it
-  (``to_element``).
+- ``section_analysis.SectionAnalysis`` is in the engine frame too (contract v2). A beam
+  code whose elements sign ``kappa_y`` differently (1d-fem) re-signs it itself.
 - **BeamDyn and windIO** (``BeamDynBlade``): BeamDyn's blade frame has ``X`` towards the
   suction side and ``Y`` towards the trailing edge, a mirror image of the public frame.
   Going there swaps ``x`` and ``y`` and flips the sign of moments and rotations
@@ -48,7 +47,7 @@ the conversion to each, so nothing else spells them out.
 Public API
 ----------
 STRAINS, FORCES, DISPLACEMENTS, ENGINE_STRAINS, ENGINE_FORCES, FROM_ENGINE, TO_ENGINE,
-from_engine, to_engine, to_element, stiffness_about, mass_matrix, MIRROR, rotation6, to_beamdyn_frame,
+from_engine, to_engine, stiffness_about, mass_matrix, MIRROR, rotation6, to_beamdyn_frame,
 twist_from_kernel, twist_to_kernel.
 """
 
@@ -75,9 +74,6 @@ ENGINE_FORCES: Tuple[str, ...] = ("N", "M_y", "M_z", "V_y", "V_z", "T")
 FROM_ENGINE: Tuple[int, ...] = (3, 4, 0, 1, 2, 5)
 #: engine entry ``i`` is public entry ``TO_ENGINE[i]``
 TO_ENGINE: Tuple[int, ...] = tuple(int(i) for i in np.argsort(FROM_ENGINE))
-
-#: 1d-fem's element sign on the engine order (``kappa_y = -theta_y'``)
-ELEMENT_SIGN = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0])
 
 _SWAP = np.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
 #: public displacement-rotation (or force-moment) vector to BeamDyn's axes: x and y swap,
@@ -110,15 +106,6 @@ def from_engine(a: npt.ArrayLike) -> npt.NDArray[np.float64]:
 def to_engine(a: npt.ArrayLike) -> npt.NDArray[np.float64]:
     """Inverse of ``from_engine``: public order to the engine order."""
     return _permute(a, TO_ENGINE)
-
-
-def to_element(K_public: npt.ArrayLike) -> npt.NDArray[np.float64]:
-    """A public 6 x 6 stiffness in 1d-fem's element order and signs
-    (``section_analysis.SectionAnalysis.stiffness``)."""
-    K = to_engine(K_public)
-    if K.shape != (6, 6):
-        raise ValueError(f"expected a (6, 6) stiffness, got {K.shape}")
-    return ELEMENT_SIGN @ K @ ELEMENT_SIGN
 
 
 def rotation6(angle_deg: float) -> npt.NDArray[np.float64]:
@@ -193,7 +180,6 @@ def stiffness_about(K_engine: npt.ArrayLike, reference=(0.0, 0.0)) -> npt.NDArra
 
 __all__ = [
     "DISPLACEMENTS",
-    "ELEMENT_SIGN",
     "ENGINE_FORCES",
     "ENGINE_STRAINS",
     "FORCES",
@@ -206,7 +192,6 @@ __all__ = [
     "rotation6",
     "stiffness_about",
     "to_beamdyn_frame",
-    "to_element",
     "to_engine",
     "twist_from_kernel",
     "twist_to_kernel",

@@ -7,7 +7,6 @@ import pytest
 
 from anisotropic_section_model.gbt_alignment import (
     align_gbt_pair,
-    align_gbt_sections,
     gbt_signature,
     rotate_gbt_basis,
 )
@@ -58,35 +57,39 @@ def test_alignment_undoes_a_turn_swap_and_sign_flip(channel):
     Rm = np.eye(4)[[1, 0, 2, 3]]
     Rm[2] *= -1.0                                       # modes 1 and 2 swapped, mode 3 flipped
     turned = rotate_gbt_basis(channel, _orthogonal(p, 3), Rm)
-    out, info = align_gbt_sections([channel, turned], [[0, 1], [1, 2]])
-    assert out[0] is channel
-    np.testing.assert_allclose(out[1].gbt_stiffness, channel.gbt_stiffness, atol=1e-6 * np.abs(channel.gbt_stiffness).max())
-    np.testing.assert_allclose(out[1].gbt_mass, channel.gbt_mass, atol=1e-6 * np.abs(channel.gbt_mass).max())
-    assert info[1]["match"] > 0.999
-    Sw, Sm = gbt_signature(out[1])
+    out, info = align_gbt_pair(channel, turned)
+    np.testing.assert_allclose(out.gbt_stiffness, channel.gbt_stiffness, atol=1e-6 * np.abs(channel.gbt_stiffness).max())
+    np.testing.assert_allclose(out.gbt_mass, channel.gbt_mass, atol=1e-6 * np.abs(channel.gbt_mass).max())
+    assert info["match"] > 0.999
+    Sw, Sm = gbt_signature(out)
     Sw0, Sm0 = gbt_signature(channel)
     np.testing.assert_allclose(Sm, Sm0, atol=1e-6)
 
 
-def test_pair_alignment_is_what_the_walk_does(channel):
-    p = channel.gbt_sv_modes
-    turned = rotate_gbt_basis(channel, _orthogonal(p, 5), _orthogonal(4, 6))
-    pair, info = align_gbt_pair(channel, turned)
-    walk, winfo = align_gbt_sections([channel, turned], [[0, 1], [1, 2]])
-    np.testing.assert_allclose(pair.gbt_stiffness, walk[1].gbt_stiffness, rtol=0, atol=1e-12 * np.abs(walk[1].gbt_stiffness).max())
-    np.testing.assert_allclose(info["Rm"], winfo[1]["Rm"])
-    assert info["match"] == pytest.approx(winfo[1]["match"])
+def test_pair_alignment_of_a_section_with_itself_and_of_unlike_sections(channel):
     same, info = align_gbt_pair(channel, channel)
     assert same is channel and info["match"] > 0.999999
     with pytest.raises(ValueError, match="different numbers"):
         align_gbt_pair(channel, SectionAnalysis.from_thin_walled(box(), gbt_modes=2))
 
 
-def test_elements_of_one_section_share_its_bases(channel):
-    other = rotate_gbt_basis(channel, np.eye(channel.gbt_sv_modes), -np.eye(4))
-    out, _ = align_gbt_sections([channel, other, other], [[0, 1], [1, 2], [2, 3]])
-    assert out[1] is out[2]
-    np.testing.assert_allclose(out[1].gbt_stiffness, channel.gbt_stiffness, atol=1e-6 * np.abs(channel.gbt_stiffness).max())
+def test_alignment_is_the_same_in_any_consistent_sign_convention(channel):
+    """Re-signing kappa_y on both sections (as a beam code does for its elements) gives the same turn."""
+    import dataclasses
+
+    p = channel.gbt_sv_modes
+    turned = rotate_gbt_basis(channel, _orthogonal(p, 5), _orthogonal(4, 6))
+
+    def flip(sa):
+        s = np.ones(sa.gbt_stiffness.shape[0])
+        s[1] = -1.0
+        return dataclasses.replace(sa, gbt_stiffness=s[:, None] * sa.gbt_stiffness * s[None, :], gbt_moments=None)
+
+    _, info = align_gbt_pair(dataclasses.replace(channel, gbt_moments=None),
+                             dataclasses.replace(turned, gbt_moments=None))
+    _, info_f = align_gbt_pair(flip(channel), flip(turned))
+    np.testing.assert_allclose(info_f["Rm"], info["Rm"], atol=1e-10)
+    np.testing.assert_allclose(info_f["Rw"], info["Rw"], atol=1e-10)
 
 
 def test_taper_and_pretwist_reach_the_gbt_stiffness(channel):
@@ -100,5 +103,5 @@ def test_taper_and_pretwist_reach_the_gbt_stiffness(channel):
 
 def test_prismatic_beam_needs_no_turn():
     sa = SectionAnalysis.from_thin_walled(box(0.3, 0.2, 2e-3, n_sub=2), gbt_modes=2)
-    out, info = align_gbt_sections([sa, sa], [[0, 1], [1, 2]])
-    assert out[0] is sa and out[1] is sa and not info
+    out, info = align_gbt_pair(sa, sa)
+    assert out is sa and np.allclose(info["Rm"], np.eye(2))

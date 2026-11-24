@@ -107,8 +107,7 @@ so nothing else spells them out:
 
 | Frame | Where | Conversion |
 | --- | --- | --- |
-| Engine: beam axis x, section (y, z), `[eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi]` | the solvers in `thin_walled` and `solid` (from 1d-fem), `closed_form` | `axes.from_engine` / `to_engine`: a reordering, no signs. Engine (x, y, z) = public (z, x, y), so section coordinates are the same numbers |
-| 1d-fem element order: the engine order with the sign of kappa_y flipped | `section_analysis.SectionAnalysis` | `axes.to_element` |
+| Engine: beam axis x, section (y, z), `[eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi]` | the solvers in `thin_walled` and `solid` (from 1d-fem), `closed_form`, and `section_analysis.SectionAnalysis` (contract v2) | `axes.from_engine` / `to_engine`: a reordering, no signs. Engine (x, y, z) = public (z, x, y), so section coordinates are the same numbers |
 | BeamDyn and windIO: X to suction, Y to the trailing edge (a mirror image) | `BeamDynBlade` arrays and files | `axes.MIRROR`, `axes.to_beamdyn_frame`. Twist needs no conversion |
 | Geometry kernel twist: `SectionCut.twist`, `Station(twist=...)`, left-handed about z | kernel inputs | `axes.twist_from_kernel` / `twist_to_kernel` (a sign flip). `BeamDynBlade.from_geometry` applies it |
 

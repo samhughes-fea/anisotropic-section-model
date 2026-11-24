@@ -73,7 +73,7 @@ def test_thin_walled_tube_matches_from_isotropic():
     walls = [Wall(i + 1, i + 1, (i + 1) % n + 1, 1) for i in range(n)]
     se = _thin_walled(pts, walls, t)
     A, I, J = 2 * np.pi * R * t, np.pi * R**3 * t, 2 * np.pi * R**3 * t
-    iso = SectionAnalysis.from_isotropic(E=E, G=G, A=A, I_y=I, I_z=I, J_t=J, I_x=J, kappa=0.5, rho=RHO)
+    iso = SectionAnalysis.from_isotropic(E=E, G=G, A=A, I_y=I, I_z=I, J_t=J, I_p=J, kappa=0.5, rho=RHO)
     # a 128-sided polygon: perimeter and moments within 0.1 % of the circle
     _assert_matches_isotropic(se, iso, rtol=1e-3)
 

@@ -8,24 +8,19 @@ section analysis (``laminate.txt``, ``section_geometry.txt`` and
 ``element_section.txt``) or from a 2D section mesh (``section_mesh_2d.txt``
 and ``element_section.txt``, ``solid/section_analysis.py``).
 
-Element Voigt order and signs
------------------------------
-``stiffness`` is in the element Voigt order
-``[eps_x, kappa_y, kappa_z, gamma_xy, gamma_xz, phi_x]`` with the signs the
-element ``B`` matrices use. Probing the linear Euler-Bernoulli and Timoshenko
-``B`` operators with right-hand-rule nodal rotations shows::
+Frame and order
+---------------
+Every matrix of a ``SectionAnalysis`` is in this package's engine frame (``axes``): beam
+axis ``x``, section axes ``(y, z)``, right-handed strains
+``[eps_x, kappa_y, kappa_z, gamma_xy, gamma_xz, phi_x]`` and forces
+``[N, M_y, M_z, V_y, V_z, T]`` with ``M_y = int sigma z dA`` and ``M_z = -int sigma y dA``.
+That is the frame ``thin_walled.section_analysis`` and ``solid.section_analysis`` compute
+in, so the builders here copy their matrices unchanged. ``frame`` is always ``"engine"``.
 
-    eps_x    = u_x'
-    kappa_y  = -theta_y'        (= u_z'' for Euler-Bernoulli)
-    kappa_z  = theta_z'         (= u_y'')
-    gamma_xy = u_y' - theta_z
-    gamma_xz = u_z' + theta_y
-    phi_x    = theta_x'
-
-so the element strains are ``S @ psi`` with ``psi`` the right-handed
-strains of ``thin_walled.section_analysis`` and ``S = diag(1, -1, 1, 1, 1, 1)``.
-The element stiffness is ``S @ K_rh @ S`` (``S`` is its own inverse). For an
-isotropic section with no couplings the two are identical.
+A beam code whose elements use other signs (1d-fem's ``B`` matrices have
+``kappa_y = -theta_y'``) applies them itself, after the station modifiers
+(``with_pretwist``, ``with_taper``); those refuse a section whose ``frame`` is not
+``"engine"``, so a section is never re-signed twice.
 
 Section-provider contract
 -------------------------
@@ -35,9 +30,18 @@ version of that contract (``docs/package_boundary.md``): a beam code checks the 
 number matches and the minor is at least the one it needs. Adding an optional field is a
 minor change; renaming, re-signing or reshaping one is a major change.
 
+Torsion and polar constants
+---------------------------
+Two section constants in m^4 are easily confused. The Saint-Venant torsion constant
+``J_t`` enters only the stiffness (``G J_t``, N m^2); the polar second moment of area
+``I_p = int (y^2 + z^2) dA`` enters only the mass (``rho I_p``, kg m, the twist rotary
+inertia ``mass["I_p"] = mass_matrix()[3, 3]``) and the Wagner term ``I_p / A``. They are
+equal only for a circle or a circular tube. ``section_constants`` holds the geometric
+values (isotropic sections only); every mass moment is about the section origin.
+
 Public API
 ----------
-ELEMENT_SIGN, SECTION_API_VERSION, SectionAnalysis, to_element_voigt.
+SECTION_API_VERSION, SectionAnalysis.
 """
 
 from __future__ import annotations
@@ -50,18 +54,15 @@ import numpy as np
 import numpy.typing as npt
 
 #: version of the section-provider contract (``docs/package_boundary.md``): (major, minor)
-SECTION_API_VERSION: Tuple[int, int] = (1, 0)
+SECTION_API_VERSION: Tuple[int, int] = (2, 0)
 
-ELEMENT_SIGN = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0])
+#: the only frame this package builds sections in
+ENGINE_FRAME = "engine"
+
 CLASSICAL_INDEX = (0, 1, 2, 5)  # [eps_x, kappa_y, kappa_z, phi_x]
 
-
-def to_element_voigt(K_rh: npt.ArrayLike) -> npt.NDArray[np.float64]:
-    """Map a right-handed 6 x 6 section stiffness to the element sign convention."""
-    K = np.asarray(K_rh, dtype=np.float64)
-    if K.shape != (6, 6):
-        raise ValueError(f"expected a (6, 6) stiffness, got {K.shape}")
-    return ELEMENT_SIGN @ K @ ELEMENT_SIGN
+#: keys of ``SectionAnalysis.section_constants`` and their units
+SECTION_CONSTANTS = {"A": "m^2", "I_y": "m^4", "I_z": "m^4", "I_p": "m^4", "J_t": "m^4", "Gamma": "m^6"}
 
 
 def _rectangle_points(E: float, A: float, I_y: float, I_z: float) -> Optional[npt.NDArray[np.float64]]:
@@ -76,12 +77,16 @@ def _rectangle_points(E: float, A: float, I_y: float, I_z: float) -> Optional[np
 
 @dataclass(frozen=True)
 class SectionAnalysis:
-    """Section stiffness and properties in the element convention.
+    """Section stiffness and properties at one station, in the engine frame (module docstring).
+
+    Every quantity is per unit length and about the section origin (the beam reference
+    axis) unless its entry says otherwise.
 
     Attributes
     ----------
     stiffness : ndarray (6, 6)
-        Timoshenko section stiffness, element Voigt order and signs.
+        Timoshenko section stiffness on the right-handed strains
+        ``[eps_x, kappa_y, kappa_z, gamma_xy, gamma_xz, phi_x]``.
     classical_stiffness : ndarray (4, 4)
         Shear-rigid stiffness for ``[eps_x, kappa_y, kappa_z, phi_x]``
         (inverse of the force-flexibility block, not a sub-block of ``stiffness``).
@@ -90,7 +95,11 @@ class SectionAnalysis:
     shear_centre, tension_centre : (float, float)
         In section coordinates ``(y, z)`` about the beam reference axis.
     mass : dict
-        ``m``, ``y_m``, ``z_m``, ``I_yy``, ``I_zz``, ``I_yz``, ``I_p`` per length.
+        Mass per length and its moments about the origin: ``m`` [kg/m]; the mass centre
+        ``y_m``, ``z_m`` [m]; the mass moments ``I_yy = int rho z^2 dA``,
+        ``I_zz = int rho y^2 dA``, ``I_yz = int rho y z dA`` and the twist rotary inertia
+        ``I_p = int rho (y^2 + z^2) dA`` [kg m] (``rho I_p`` of an isotropic section, never
+        ``rho J_t``).
         Principal axes of those moments about the mass centre are ``principal_angle``
         and ``principal_moments``.
     source : str
@@ -98,7 +107,7 @@ class SectionAnalysis:
     section_id : int or None
         Section id, when ``source`` is ``"thin_walled"`` or ``"solid"``.
     benscoter_stiffness : ndarray (8, 8) or None
-        Element-signed Benscoter stiffness for ``[eps_x, kappa_y, kappa_z, gamma_xy,
+        Benscoter stiffness for ``[eps_x, kappa_y, kappa_z, gamma_xy,
         gamma_xz, phi_x, d, psi']`` with ``d = psi - phi_x`` (thin-walled sections only).
     warping_inertia : float
         ``int rho_A omega^2 ds`` for the warping amplitude DOF.
@@ -110,16 +119,16 @@ class SectionAnalysis:
         Warping modes spanning the Saint-Venant warping, ``n_sv`` (always carried by a GBT
         section; 0 without GBT matrices).
     third_order_stiffness : ndarray (8, 8) or None
-        Element-signed third-order shear stiffness (Reddy, Levinson) for
+        Third-order shear stiffness (Reddy, Levinson) for
         ``[eps_x, kappa_y, kappa_z, gamma_xy, gamma_xz, phi_x, chi_y, chi_z]``, where
         ``chi = gamma' - third_order_rate @ psi6`` stretches the walls through the slaved
         shear warping. Its leading 6 x 6 block is ``stiffness``.
     third_order_rate : ndarray (2, 6) or None
-        Element-signed ``R``: the shear-strain rate ``gamma'`` of the Saint-Venant solution
+        ``R``: the shear-strain rate ``gamma'`` of the Saint-Venant solution
         is ``R @ psi6`` (zero for an uncoupled section).
     geometric_terms : ndarray (7, 6) or None
         Second-order section terms ``[N, S_y, S_z, W, V_y, V_z, Q_r]`` (``GEOMETRIC_TERMS``)
-        per unit element-signed section force: ``geometric_terms @ F``. The terms are
+        per unit section force: ``geometric_terms @ F``. The terms are
         integrals over the section in its own right-handed ``(y, z)`` and feed the
         geometric stiffness (``docs/element_library/second_order.md``).
     benscoter_geometric_terms : ndarray (7, 2) or None
@@ -129,7 +138,7 @@ class SectionAnalysis:
     axial_points : ndarray (m, 3) or None
         Section quadrature ``[y, z, k]`` with ``sum k f = int E f dA`` (fourth-order energy).
     gbt_stiffness : ndarray or None
-        Element-signed GBT stiffness, square of size ``6 + 2(n_sv + P) + 3M``, for
+        GBT stiffness, square of size ``6 + 2(n_sv + P) + 3M``, for
         ``[psi6, b'(n_sv + P), b(n_sv + P), a''(M), a'(M), a(M)]``.
     gbt_mass : ndarray or None
         Section mass, square of size ``6 + (n_sv + P) + 2M``, for
@@ -137,10 +146,10 @@ class SectionAnalysis:
     gbt_geometric : (ndarray, ndarray) or None
         GBT second-order terms ``(X, Y)``, each ``(3 + M, 3 + M, n_gbt)``: the in-plane
         motion ``q = [v, w, theta_x, a(M)]`` does the work ``1/2 q'^T X q' + q'^T Y q``
-        per length against the stresses of the element-signed GBT strains (``X @ E``).
+        per length against the stresses of the GBT strains (``X @ E``).
         See ``gbt_geometric_terms``.
     gbt_brazier : (ndarray, ndarray) or None
-        Element-signed Brazier terms ``(T, Q)`` of the modes (``CrossSectionModes.brazier_tensor``):
+        Brazier terms ``(T, Q)`` of the modes (``CrossSectionModes.brazier_tensor``):
         ``T`` (M, 2, n_gbt) and ``Q`` (M, M, 2, 2) on ``kappa = (kappa_y, kappa_z)``. See
         ``gbt_brazier_terms``.
     gbt_moments : ndarray or None
@@ -151,6 +160,15 @@ class SectionAnalysis:
         The section carries a taper coupling (``with_taper``).
     taper_parts : dict or None
         The taper's split by laminate (``SectionTaper.parts``), when it has one.
+    frame : str
+        ``"engine"`` (module docstring). A beam code that re-signs a copy for its elements
+        marks the copy with its own name; ASM's station modifiers then refuse it.
+    section_constants : dict or None
+        Geometric constants of an isotropic section about its centroid (the origin), keys
+        and units in ``SECTION_CONSTANTS``: ``A``, ``I_y``, ``I_z``, the polar moment
+        ``I_p``, the Saint-Venant torsion constant ``J_t`` and the warping constant
+        ``Gamma``. ``None`` for composite sections, which have stiffness-weighted
+        constants only.
     """
 
     stiffness: npt.NDArray[np.float64]
@@ -179,6 +197,8 @@ class SectionAnalysis:
     tapered: bool = False
     taper_parts: Optional[Dict[int, npt.NDArray[np.float64]]] = None
     gbt_brazier: Optional[Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]] = None
+    frame: str = ENGINE_FRAME
+    section_constants: Optional[Dict[str, float]] = None
 
     def __post_init__(self) -> None:
         K = np.asarray(self.stiffness, dtype=np.float64)
@@ -204,26 +224,29 @@ class SectionAnalysis:
         kappa: float = 5.0 / 6.0,
         Gamma: float = 0.0,
         rho: float = 0.0,
-        I_x: Optional[float] = None,
+        I_p: Optional[float] = None,
         y_sc: float = 0.0,
         z_sc: float = 0.0,
+        I_x: Optional[float] = None,
     ) -> "SectionAnalysis":
-        """Uncoupled section from classical inputs: ``diag(EA, EI_y, EI_z, kGA, kGA, GJ)``.
+        """Uncoupled section from classical inputs: ``diag(EA, EI_y, EI_z, kGA, kGA, GJ_t)``.
 
         The inputs are geometric constants of the section about its centroid, which is the
-        section origin here; ``E``, ``G`` and ``rho`` turn them into the stiffness and the
-        mass per length. Two torsion constants [m^4] mean different things:
+        section origin here; ``E``, ``G`` [Pa] and ``rho`` [kg/m^3] turn them into the
+        stiffness and the mass per length. They are kept as ``section_constants``. Two
+        torsion constants [m^4] mean different things:
 
         - ``J_t``, the Saint-Venant torsion constant (independent of the reference axis),
           gives only the torsional stiffness ``stiffness[5, 5] = G J_t`` [N m^2].
-        - ``I_x``, the polar second moment of area ``I_p = int (y^2 + z^2) dA`` about the
-          centroid, gives the twist rotary inertia ``mass["I_p"] = rho I_p`` [kg m]
+        - ``I_p``, the polar second moment of area ``int (y^2 + z^2) dA`` about the
+          centroid, gives only the twist rotary inertia ``mass["I_p"] = rho I_p`` [kg m]
           (``mass_matrix()[3, 3]``, about the origin) and the Wagner term ``I_p / A``.
-          ``None`` takes ``I_y + I_z``.
+          ``None`` (or ``<= 0``) takes ``I_y + I_z``.
 
         They are equal only for a circular section (solid or tube); otherwise ``J_t < I_p``.
         The mass holds ``m = rho A`` [kg/m] and the bending rotary inertias
-        ``I_yy = rho I_y``, ``I_zz = rho I_z`` [kg m], all about the origin.
+        ``I_yy = rho I_y``, ``I_zz = rho I_z`` [kg m], all about the origin. ``I_x`` is the
+        contract-v1 name of ``I_p``, kept for one release (``DeprecationWarning``).
 
         ``y_sc``, ``z_sc`` are recorded as the shear centre only; the stiffness
         stays diagonal and the mass takes no shear-centre offset.
@@ -232,11 +255,22 @@ class SectionAnalysis:
         second-order terms take the centroid at the origin and a doubly symmetric
         section (Wagner term ``W = N I_p / A``); the cubic shear warping adds none.
         """
+        if I_x is not None:
+            import warnings
+
+            if I_p is not None:
+                raise TypeError("give the polar moment as I_p only (I_x is its old name)")
+            warnings.warn("SectionAnalysis.from_isotropic(I_x=...) is now I_p=...", DeprecationWarning,
+                          stacklevel=2)
+            I_p = I_x
+        if I_p is None or I_p <= 0:
+            I_p = I_y + I_z
         D = np.diag([E * A, E * I_y, E * I_z, kappa * G * A, kappa * G * A, G * J_t])
         C = np.diag([E * A, E * I_y, E * I_z, G * J_t])
-        I_p = I_x if I_x is not None else I_y + I_z
         mass = {"m": rho * A, "y_m": 0.0, "z_m": 0.0, "I_yy": rho * I_y,
                 "I_zz": rho * I_z, "I_yz": 0.0, "I_p": rho * I_p}
+        constants = {"A": float(A), "I_y": float(I_y), "I_z": float(I_z), "I_p": float(I_p),
+                     "J_t": float(J_t), "Gamma": float(Gamma)}
         D8 = np.zeros((8, 8))
         D8[:6, :6] = D
         D8[6, 6], D8[7, 7] = E * I_z / 84.0, E * I_y / 84.0
@@ -248,8 +282,8 @@ class SectionAnalysis:
         H[4, 3] = H[5, 4] = 1.0        # V_y, V_z
         return cls(D, C, E * Gamma, (float(y_sc), float(z_sc)), (0.0, 0.0), mass, "isotropic", None,
                    third_order_stiffness=D8, third_order_rate=np.zeros((2, 6)),
-                   geometric_terms=H @ ELEMENT_SIGN, third_order_geometric_terms=np.zeros((7, 2)),
-                   axial_points=_rectangle_points(E, A, I_y, I_z))
+                   geometric_terms=H, third_order_geometric_terms=np.zeros((7, 2)),
+                   axial_points=_rectangle_points(E, A, I_y, I_z), section_constants=constants)
 
     @classmethod
     def from_matrices(
@@ -325,10 +359,9 @@ class SectionAnalysis:
         if shear_centre is None:
             # a shear force V at (y, z) has the torque T = y V_z - z V_y: no twist there
             shear_centre = (float(-F[5, 4] / F[5, 5]), float(F[5, 3] / F[5, 5]))
-        S4 = np.diag([1.0, -1.0, 1.0, 1.0])
         return cls(
-            to_element_voigt(K_rh),
-            S4 @ C_rh @ S4,
+            K_rh,
+            C_rh,
             0.0,
             (float(shear_centre[0]), float(shear_centre[1])),
             (float(tension_centre[0]), float(tension_centre[1])),
@@ -346,7 +379,7 @@ class SectionAnalysis:
         gbt_shear_modes: int = 0,
         gbt: bool = False,
     ) -> "SectionAnalysis":
-        """From a ``ThinWalledSectionAnalysis`` (right-handed results mapped to element signs).
+        """From a ``ThinWalledSectionAnalysis`` (its right-handed matrices, unchanged).
 
         ``gbt=True`` (implied by ``gbt_modes`` or ``gbt_shear_modes`` > 0) also builds the
         GBT matrices with that many distortional and extra shear-lag modes
@@ -359,19 +392,16 @@ class SectionAnalysis:
 
             analysis = ThinWalledSectionAnalysis(analysis.section, analysis.laminates, hoop="restrained",
                                                  n_sub=analysis.n_sub)
-        K = to_element_voigt(analysis.stiffness)
-        C_rh = analysis.classical_stiffness
-        S4 = np.diag([1.0, -1.0, 1.0, 1.0])
-        C = S4 @ C_rh @ S4
+        K = np.array(analysis.stiffness, dtype=np.float64)
+        C = np.array(analysis.classical_stiffness, dtype=np.float64)
         try:
-            S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-            KB = S8 @ analysis.benscoter_stiffness @ S8
+            KB = np.array(analysis.benscoter_stiffness, dtype=np.float64)
             w_inertia = float(analysis.warping_inertia)
-            K3 = S8 @ analysis.third_order_stiffness @ S8
-            R3 = analysis.third_order_rate @ ELEMENT_SIGN
+            K3 = np.array(analysis.third_order_stiffness, dtype=np.float64)
+            R3 = np.array(analysis.third_order_rate, dtype=np.float64)
         except ValueError:
             KB, w_inertia, K3, R3 = None, 0.0, None, None
-        H = analysis.geometric_terms @ ELEMENT_SIGN
+        H = np.array(analysis.geometric_terms, dtype=np.float64)
         try:
             XB, X3 = analysis.benscoter_geometric_terms, analysis.third_order_geometric_terms
         except ValueError:
@@ -383,16 +413,11 @@ class SectionAnalysis:
 
             modes = CrossSectionModes(analysis)
             n_sv = modes.n_sv_warping
-            K_r = modes.stiffness(gbt_modes, gbt_shear_modes)
-            Sg = np.ones(K_r.shape[0])
-            Sg[1] = -1.0  # element sign of kappa_y
-            K_gbt = Sg[:, None] * K_r * Sg[None, :]
+            K_gbt = modes.stiffness(gbt_modes, gbt_shear_modes)
             M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
             mom = modes.shape_moments(gbt_modes, gbt_shear_modes)
-            G_gbt = tuple(T * Sg for T in modes.geometric_tensor(gbt_modes, gbt_shear_modes))
-            Tb, Qb = modes.brazier_tensor(gbt_modes, gbt_shear_modes)
-            sk = np.array([-1.0, 1.0])  # element signs of (kappa_y, kappa_z)
-            brazier = (Tb * sk[None, :, None] * Sg[None, None, :], Qb * np.outer(sk, sk)[None, None])
+            G_gbt = tuple(modes.geometric_tensor(gbt_modes, gbt_shear_modes))
+            brazier = tuple(modes.brazier_tensor(gbt_modes, gbt_shear_modes))
         out = cls(
             K,
             C,
@@ -427,8 +452,8 @@ class SectionAnalysis:
     @classmethod
     def from_solid(cls, analysis, section_id: Optional[int] = None, gbt_modes: int = 0,
                    gbt_shear_modes: int = 0, gbt: bool = False) -> "SectionAnalysis":
-        """From a ``SolidSectionAnalysis`` (a section meshed in 2D; right-handed results mapped
-        to element signs). Carries the 6 x 6, classical stiffness, centres, ``E Gamma``, mass,
+        """From a ``SolidSectionAnalysis`` (a section meshed in 2D; its right-handed matrices,
+        unchanged). Carries the 6 x 6, classical stiffness, centres, ``E Gamma``, mass,
         second-order terms, axial quadrature and the Benscoter (restrained warping) data; no
         third-order data.
 
@@ -436,8 +461,6 @@ class SectionAnalysis:
         section with that many distortional modes (``solid.cross_section_modes``). 2D
         sections have no extra shear-lag modes, so ``gbt_shear_modes`` must be 0.
         """
-        S4 = np.diag([1.0, -1.0, 1.0, 1.0])
-        S8 = np.diag([1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
         K_gbt = M_gbt = G_gbt = mom = brazier = None
         n_sv = 0
         if gbt or gbt_modes or gbt_shear_modes:
@@ -445,28 +468,23 @@ class SectionAnalysis:
 
             modes = SolidCrossSectionModes(analysis, max_modes=max(int(gbt_modes), 1))
             n_sv = modes.n_sv_warping
-            K_r = modes.stiffness(gbt_modes, gbt_shear_modes)
-            Sg = np.ones(K_r.shape[0])
-            Sg[1] = -1.0  # element sign of kappa_y
-            K_gbt = Sg[:, None] * K_r * Sg[None, :]
+            K_gbt = modes.stiffness(gbt_modes, gbt_shear_modes)
             M_gbt = modes.mass(gbt_modes, gbt_shear_modes)
             mom = modes.shape_moments(gbt_modes, gbt_shear_modes)
-            G_gbt = tuple(T * Sg for T in modes.geometric_tensor(gbt_modes, gbt_shear_modes))
-            Tb, Qb = modes.brazier_tensor(gbt_modes, gbt_shear_modes)
-            sk = np.array([-1.0, 1.0])  # element signs of (kappa_y, kappa_z)
-            brazier = (Tb * sk[None, :, None] * Sg[None, None, :], Qb * np.outer(sk, sk)[None, None])
+            G_gbt = tuple(modes.geometric_tensor(gbt_modes, gbt_shear_modes))
+            brazier = tuple(modes.brazier_tensor(gbt_modes, gbt_shear_modes))
         out = cls(
-            to_element_voigt(analysis.stiffness),
-            S4 @ analysis.classical_stiffness @ S4,
+            np.array(analysis.stiffness, dtype=np.float64),
+            np.array(analysis.classical_stiffness, dtype=np.float64),
             float(analysis.warping_constant),
             tuple(analysis.shear_centre),
             tuple(analysis.tension_centre),
             dict(analysis.mass_properties),
             "solid",
             None if section_id is None else int(section_id),
-            benscoter_stiffness=S8 @ analysis.benscoter_stiffness @ S8,
+            benscoter_stiffness=np.array(analysis.benscoter_stiffness, dtype=np.float64),
             warping_inertia=float(analysis.warping_inertia),
-            geometric_terms=analysis.geometric_terms @ ELEMENT_SIGN,
+            geometric_terms=np.array(analysis.geometric_terms, dtype=np.float64),
             benscoter_geometric_terms=analysis.benscoter_geometric_terms,
             axial_points=analysis.axial_points,
             gbt_modes=int(gbt_modes),
@@ -542,10 +560,10 @@ class SectionAnalysis:
 
         A fibre at ``(y, z)`` of a beam twisted by ``k`` per length lies on a helix, and a
         change ``phi_x`` of the twist rate stretches it by ``k r^2 phi_x``
-        (``r^2 = y^2 + z^2`` about the beam axis). With the element-signed fibre strain
-        ``eps_x - z kappa_y - y kappa_z`` that adds::
+        (``r^2 = y^2 + z^2`` about the beam axis). With the right-handed fibre strain
+        ``eps_x + z kappa_y - y kappa_z`` that adds::
 
-            D[j, 5] += k int E a_j r^2 dA,   a = (1, -z, -y) for rows (eps_x, kappa_y, kappa_z)
+            D[j, 5] += k int E a_j r^2 dA,   a = (1, z, -y) for rows (eps_x, kappa_y, kappa_z)
             D[5, 5] += k^2 int E r^4 dA
 
         to every stiffness carrying ``phi_x`` (the 6 x 6, classical, Benscoter, third-order and
@@ -559,11 +577,12 @@ class SectionAnalysis:
 
         if not rate:
             return self
+        self._require_engine("with_pretwist")
         if self.axial_points is None:
             raise ValueError("pretwist needs the section's axial_points (a section with area and inertias)")
         y, z, wE = np.asarray(self.axial_points, dtype=np.float64).T
         r2 = y * y + z * z
-        c = rate * np.array([wE @ r2, -(wE @ (z * r2)), -(wE @ (y * r2))])   # rows eps_x, kappa_y, kappa_z
+        c = rate * np.array([wE @ r2, wE @ (z * r2), -(wE @ (y * r2))])   # rows eps_x, kappa_y, kappa_z
         d = rate * rate * (wE @ (r2 * r2))
 
         def add(K, rows, twist):
@@ -596,9 +615,10 @@ class SectionAnalysis:
         """
         import dataclasses
 
-        dK = to_element_voigt(taper.matrix())
+        dK = np.asarray(taper.matrix(), dtype=np.float64)
         if not np.any(dK):
             return self
+        self._require_engine("with_taper")
 
         def add(K):
             if K is None:
@@ -616,6 +636,11 @@ class SectionAnalysis:
             tapered=True,
             taper_parts=getattr(taper, "parts", None),
         )
+
+    def _require_engine(self, what: str) -> None:
+        if self.frame != ENGINE_FRAME:
+            raise ValueError(f"{what} takes a section in the engine frame; this one is in frame {self.frame!r} "
+                             f"(re-sign it back first)")
 
     def euler_bernoulli_D(self) -> npt.NDArray[np.float64]:
         """6 x 6 ``D`` for shear-rigid elements: ``classical_stiffness`` on rows ``[0, 1, 2, 5]``, zero shear rows."""
@@ -674,7 +699,7 @@ class SectionAnalysis:
         return M
 
     def stress_resultants(self, strain: npt.ArrayLike) -> npt.NDArray[np.float64]:
-        """``S = stiffness @ strain`` in element Voigt order."""
+        """``S = stiffness @ strain`` (right-handed strains and forces)."""
         return self.stiffness @ np.asarray(strain, dtype=np.float64)
 
 

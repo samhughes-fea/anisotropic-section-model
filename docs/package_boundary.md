@@ -23,19 +23,61 @@ couplings alike. ASM never imports 1d-fem.
 
 1d-fem reads sections through `onedfem.sections` (the *section provider*). What it takes
 from each `section_analysis.SectionAnalysis` is the contract, versioned as
-`SECTION_API_VERSION = (major, minor)`:
+`SECTION_API_VERSION = (major, minor)`. A new optional field is a minor bump; renaming,
+re-signing or reshaping one is a major bump. 1d-fem refuses a provider whose major version
+differs.
 
-- **v1.0** (now): 1d-fem's frame (beam axis x, section `(y, z)`, strains
-  `[eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi]`) with 1d-fem's element sign on
-  `kappa_y` already applied (`ELEMENT_SIGN`). Required: `stiffness`, `classical_stiffness`,
-  `shear_centre`, `tension_centre`, `mass` / `mass_matrix()`. Optional, by element type:
-  second-order terms, axial points, Benscoter, third-order and GBT data, taper.
-- **v2.0** (planned): right-handed engine matrices, with the element sign applied by
-  1d-fem; section derivatives returned as plain `dD`, `dM` arrays; `align_gbt_sections`
-  (the walk over elements) removed in favour of `align_gbt_pair`.
+### v2.0 (ASM 0.6.0)
 
-A new optional field is a minor bump; renaming, re-signing or reshaping one is a major
-bump. 1d-fem refuses a provider whose major version differs.
+Every quantity is per unit length, in ASM's **engine frame** and about the section origin
+(the beam reference axis) unless stated: beam axis x, section `(y, z)`, right-handed strains
+`[eps, kappa_y, kappa_z, gamma_xy, gamma_xz, phi]` and forces `[N, M_y, M_z, V_y, V_z, T]`
+with `M_y = int sigma z dA`, `M_z = -int sigma y dA`. ASM applies no beam code's element
+signs. 1d-fem, whose `B` matrices have `kappa_y = -theta_y'`, re-signs each section once,
+after the station modifiers and GBT alignment.
+
+| Field | Shape, units | Required |
+| --- | --- | --- |
+| `frame` | `"engine"`; station modifiers refuse any other | yes |
+| `stiffness` | 6 x 6 Timoshenko, N, N m, N m^2 | yes |
+| `classical_stiffness` | 4 x 4 on `[eps, kappa_y, kappa_z, phi]` | yes |
+| `shear_centre`, `tension_centre` | `(y, z)`, m | yes |
+| `mass`, `mass_matrix()` | `m` kg/m; `y_m`, `z_m` m; `I_yy`, `I_zz`, `I_yz`, `I_p` kg m about the origin | for dynamics |
+| `section_constants` | `A` m^2; `I_y`, `I_z`, `I_p`, `J_t` m^4; `Gamma` m^6 (isotropic only) | optional |
+| `warping_stiffness` | `E Gamma`, N m^4, about the shear centre | optional |
+| `benscoter_stiffness`, `warping_inertia` | 8 x 8; kg m^3 | optional |
+| `third_order_stiffness`, `third_order_rate` | 8 x 8; 2 x 6 | optional |
+| `geometric_terms`, `benscoter_geometric_terms`, `third_order_geometric_terms` | 7 x 6, 7 x 2, 7 x 2 | optional |
+| `axial_points` | m x 3, `[y, z, E dA]` | optional |
+| `gbt_*` | GBT stiffness, mass, geometric, Brazier, moments | optional |
+| `tapered`, `taper_parts` | flag; per-laminate taper | optional |
+
+Functions in the contract: `SectionAnalysis.from_isotropic`, `from_matrices`,
+`from_thin_walled`, `from_solid`, `with_pretwist`, `with_taper`;
+`thin_walled.layup_sensitivity.section_analysis_derivative` (the station's derivative as a
+`SectionAnalysisDerivative` of plain engine-frame arrays: `stiffness` with its taper,
+`classical_stiffness`, `mass_matrix`, Benscoter, second-order, axial points, GBT);
+`gbt_alignment.align_gbt_pair` and `mass_transform` (1d-fem walks its elements).
+
+**Torsion and polar constants.** `J_t` (Saint-Venant torsion constant, m^4) enters only the
+stiffness: `stiffness[5, 5] = G J_t` [N m^2] for an uncoupled section. For a coupled one
+the torsional stiffness is `1 / F[5, 5]` (twist under a pure torque, shear forces free),
+which does not depend on the reference axis. `I_p = int (y^2 + z^2) dA` (polar second
+moment, m^4, about the origin) enters only the mass, as the twist rotary inertia
+`mass["I_p"] = rho I_p = mass_matrix()[3, 3]` [kg m], and the Wagner term `I_p / A`. The
+two are equal only for a circular section. `from_isotropic` takes them as `J_t=` and
+`I_p=` (`I_x=` is the v1 name, deprecated).
+
+### v1.0 (ASM 0.5.x)
+
+1d-fem's element sign on `kappa_y` already applied (`ELEMENT_SIGN`, `to_element_voigt`),
+`element_section_derivative` (a derivative dressed as an element-signed section) and
+`align_gbt_sections` (the walk over elements). All four are gone in v2.
+
+### Planned: v2.1
+
+Optional 2D ply-thickness data: node velocities and tie points in `section_mesh_2d.txt`,
+then velocities of meshes from blade cuts (`section_mesh_from_cut`).
 
 ## Reference beams
 
