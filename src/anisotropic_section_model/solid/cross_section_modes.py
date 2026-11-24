@@ -224,7 +224,7 @@ class SolidCrossSectionModes:
         om[0::3] = (an._solution["W0"] @ an.stiffness)[0::3, 5]
         rot, om = self._free(rot), self._free(om)
         T = an.T
-        rf, of, Df, Uf = T @ rot, T @ om, T @ D, T @ U
+        of, Df, Uf = T @ om, T @ D, T @ U
         num = np.zeros(D.shape[1])
         den = 0.0
         for p in an._points:

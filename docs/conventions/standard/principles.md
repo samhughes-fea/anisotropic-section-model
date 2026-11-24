@@ -1,4 +1,4 @@
-<!-- Synced from the shared development standard 0.1.0. Edit it there, not here. -->
+<!-- Synced from the shared development standard 0.1.1. Edit it there, not here. -->
 # Principles
 
 The tools are run like a professional software team's: every change is

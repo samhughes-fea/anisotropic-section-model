@@ -1,4 +1,4 @@
-<!-- Synced from the shared development standard 0.1.0. Edit it there, not here. -->
+<!-- Synced from the shared development standard 0.1.1. Edit it there, not here. -->
 # Planning
 
 GitHub Issues is the live record of work. A user-level GitHub Project ties the

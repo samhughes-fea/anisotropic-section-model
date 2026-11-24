@@ -13,6 +13,8 @@ are installed from their tags, as pinned in `tests.yml`.
 
 ```bash
 pip install -e ".[dev]"
+pip install -r requirements/lint.txt
+ruff check .                            # lint (pinned ruff)
 pytest -q                               # the test suite
 MPLBACKEND=Agg python examples/run_all.py 01   # one example; CI runs each
 python -m build                         # sdist and wheel

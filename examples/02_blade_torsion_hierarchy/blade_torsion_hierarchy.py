@@ -31,7 +31,7 @@ import numpy as np
 
 from _shared.checks import Checks
 from _shared.plotting import DIVERGING, REFERENCE, SEQUENTIAL, SERIES, TEXT_SECONDARY, plt, save
-from _shared.torsion import (add_rib, contour_coordinate, loop_order, section_nodes, shell_bimoment,
+from _shared.torsion import (add_rib, contour_coordinate, loop_order, shell_bimoment,
                              shell_section_motion)
 from anisotropic_section_model import GeneralizedBeam, RestrainedTorsionBeam, ThinWalledSection
 from shell_fem import (Airfoil, BladeBuilder, BoundaryConditions, FSDTModel,

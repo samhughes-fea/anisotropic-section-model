@@ -1,4 +1,4 @@
-# Synced from the shared development standard 0.1.0. Edit it there, not here.
+# Synced from the shared development standard 0.1.1. Edit it there, not here.
 name: release
 
 # Makes a release: the vX.Y.Z tag, the GitHub release with the sdist and wheel

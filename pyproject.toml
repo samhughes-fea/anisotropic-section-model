@@ -44,5 +44,17 @@ version = { attr = "anisotropic_section_model.__version__" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# syntax errors and pyflakes; the public API is re-exported from __init__.py
+select = ["E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"tests/**" = ["F841"]
+"examples/**" = ["F841", "E402"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

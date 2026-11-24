@@ -1,4 +1,4 @@
-<!-- guidelines:start (shared development standard 0.1.0; edit it there, not here) -->
+<!-- guidelines:start (shared development standard 0.1.1; edit it there, not here) -->
 <!-- Title: a Conventional Commit, e.g. "fix(scope): ...". It becomes the squash commit. -->
 
 ## What and why

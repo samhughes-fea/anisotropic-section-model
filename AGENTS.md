@@ -1,4 +1,4 @@
-<!-- guidelines:start (shared development standard 0.1.0; edit it there, not here) -->
+<!-- guidelines:start (shared development standard 0.1.1; edit it there, not here) -->
 ## Shared rules
 
 These rules hold in every tool repository; the full standard is in

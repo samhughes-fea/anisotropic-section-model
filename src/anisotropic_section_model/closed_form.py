@@ -6,7 +6,7 @@ beam axis x, section axes (y, z). In the public frame the engine's y and z are x
 so ``I_y`` (= int z^2) is the public ``I_xx`` and ``I_z`` (= int y^2) the public ``I_yy``.
 """
 
-from typing import Dict, Any
+from typing import Dict
 
 
 def rectangle_properties(

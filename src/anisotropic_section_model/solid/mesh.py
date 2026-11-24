@@ -207,7 +207,6 @@ class SectionMesh:
             bounds = np.concatenate([[-0.5 * h], -0.5 * h + np.cumsum([p.thickness for p in lam.plies])])
             rows = _rows(bounds, rows_per_ply)
             ply_of_row = np.repeat(np.arange(len(lam.plies)), rows_per_ply)
-            L = float(np.linalg.norm(b - a))
 
             # normals of the walls before and after, where the corner is mitred
             n0 = normal_of[corners[w.start][0]] if w.start in corners else None

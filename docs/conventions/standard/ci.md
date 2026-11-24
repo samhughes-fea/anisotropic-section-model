@@ -1,4 +1,4 @@
-<!-- Synced from the shared development standard 0.1.0. Edit it there, not here. -->
+<!-- Synced from the shared development standard 0.1.1. Edit it there, not here. -->
 # Continuous integration
 
 CI runs the same checks as `CONTRIBUTING.md`, so a contributor can predict the
