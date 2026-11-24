@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 - Unreleased
+
+### Added
+
+- Section-provider contract 2.1 (`SECTION_API_VERSION = (2, 1)`): `section_mesh_2d.txt`
+  takes optional `[Section_Node_Velocity]` and `[Section_Tie_Point]` blocks, which
+  `write_section_mesh_2d` writes and `parse_section_mesh_2d` reads into
+  `SectionMesh.velocities` and `tie_points`. A meshed section written to file keeps its
+  ply-thickness derivatives (`solid_section_derivative`) to 1e-12
+  (`tests/test_section_mesh_2d_velocities.py`).
+
 ## 0.6.0 - 2026-11-24
 
 ### Breaking: section-provider contract 2.0
