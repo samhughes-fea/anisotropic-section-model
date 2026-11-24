@@ -81,8 +81,10 @@ Optional 2D ply-thickness data in `section_mesh_2d.txt`: `[Section_Node_Velocity
 `[Section_Tie_Point]` (`[section_id] [node_id] [element_id] [xi] [eta]`,
 `SectionMesh.tie_points`). `write_section_mesh_2d` writes them and `parse_section_mesh_2d`
 reads them, so a mesh from `SectionMesh.from_thin_walled` keeps its ply-thickness
-sensitivities through the file. Planned next: velocities of meshes from blade cuts
-(`section_mesh_from_cut`).
+sensitivities through the file. Since ASM 0.8.0 meshes of blade cuts
+(`section_mesh_from_cut`) carry them too, with no change to the contract: ply tags,
+velocities and an empty `tie_points` (the cut mesh conforms, so it has no ties). Planned
+next: tapered 2D ply-thickness sensitivities in 1d-fem.
 
 ## Reference beams
 
