@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 - Unreleased
+## 0.6.0 - 2026-11-24
 
 ### Breaking: section-provider contract 2.0
 
