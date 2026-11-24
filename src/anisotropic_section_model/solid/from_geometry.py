@@ -28,6 +28,12 @@ section out on skins and caps and from the leading-edge face to the trailing-edg
 on webs. Each element gets its ply's material, the ply angle ``theta`` and the wall
 angle ``alpha`` of its wall direction ``e_s`` (with ``x cross e_s`` along the stacking
 direction), so the 2D section and the thin-walled one see the same laminates.
+
+Each element is also tagged with its laminate ply, and every ply gets a node velocity
+(``SectionMesh.velocities``), so ``solid.layup_sensitivity`` gives ply-angle and
+ply-thickness derivatives of a blade cut. The mid-lines of the geometry stay put, as in
+the thin-walled model: a skin stays centred on the skin mid-line, a cap stacks inward
+from the skin, a web stays centred on its mid-line and its feet slide along the face.
 """
 
 from __future__ import annotations
@@ -167,6 +173,7 @@ def section_mesh_from_cut(
     origin: str = "pitch_axis",
     materials: Optional[Mapping[object, SolidMaterial]] = None,
     section_id: Optional[int] = None,
+    velocities: bool = True,
 ) -> SectionMesh:
     """Layered ``Q8`` mesh of an implicit-geometry-kernel ``SectionCut``.
 
@@ -185,11 +192,20 @@ def section_mesh_from_cut(
     materials : mapping PlyMaterial -> SolidMaterial, optional
         3D materials for ply materials (default ``SolidMaterial.from_ply``).
     section_id : int, optional
+    velocities : bool
+        Fill ``SectionMesh.velocities`` (default). They make ``section_mesh_2d.txt`` several
+        times larger (one row per moving node and ply); off, the mesh gives ply-angle
+        derivatives only.
 
     Returns
     -------
     SectionMesh
-        With ``labels``: the geometry label of each element's wall.
+        With ``labels`` (the geometry label of each element's wall), ``laminates``
+        (``{laminate_id: WallLaminate}``: a ``library`` laminate keeps its id, any other gets
+        the next free one), ``plies`` (each element's ``(laminate_id, ply)``, plies counted
+        in the laminate's own order), ``velocities`` (``d nodes / d t`` of every ply, for
+        ply-thickness sensitivities; see ``_thickness_velocities``) and an empty
+        ``tie_points`` (the mesh conforms, so it has no ties).
     """
     if origin not in ("pitch_axis", "blade"):
         raise ValueError(f"origin must be 'pitch_axis' or 'blade', got {origin!r}")
@@ -203,11 +219,21 @@ def section_mesh_from_cut(
     scale = max(1.0, float(np.abs(np.vstack([w.xy for w in cut.walls])).max()))
     tol = 1e-7 * scale
 
+    # laminate ids for the ply tags: a library laminate keeps its id, any other laminate
+    # object gets the next free id, in the order the walls first use it
+    lam_ids: Dict[int, int] = {id(v): int(k) for k, v in (library or {}).items()}
+    lam_by_id: Dict[int, object] = {}
+    next_id = [max((int(k) for k in (library or {})), default=0) + 1]
+
     def lam_of(wall):
         lam = laminate_lookup(wall, laminates, library)
         if wall.kind != "web" and abs(lam.thickness - wall.thickness) > thickness_tol * wall.thickness:
             raise ValueError(f"wall '{wall.label}' is {wall.thickness * 1e3:.4g} mm thick in the geometry but its "
                              f"laminate is {lam.thickness * 1e3:.4g} mm (thickness_tol {thickness_tol:g})")
+        if id(lam) not in lam_ids:
+            lam_ids[id(lam)] = next_id[0]
+            next_id[0] += 1
+        lam_by_id[lam_ids[id(lam)]] = lam
         return lam
 
     # skin loop, started at the trailing edge (the point farthest along the chord)
@@ -307,6 +333,7 @@ def section_mesh_from_cut(
         return np.array(out)
 
     # move cap edges that end under (or just beside) a web to the web's far face
+    moved_edges = set()                                       # (cap, 1 or 2): edges that follow a web
     for wi in web_info:
         for end in (0, 1):
             f = foot(wi, end, with_caps=False)
@@ -318,8 +345,10 @@ def section_mesh_from_cut(
                         centre = 0.5 * (cr[1] + cr[2])
                         if centre > hi:
                             cr[k] = lo
+                            moved_edges.add((id(cr), k))
                         elif centre < lo:
                             cr[k] = hi
+                            moved_edges.add((id(cr), k))
     # a cap that reaches under a web must cover its whole foot: push the edge out until
     # every web row meets the cap face strictly inside the cap
     for wi in web_info:
@@ -334,8 +363,10 @@ def section_mesh_from_cut(
                     step = 0.02 * cr[3].thickness
                     if centre > hi and cr[1] >= lo - 1e-3 * step:
                         cr[1] = min(cr[1], lo) - step
+                        moved_edges.add((id(cr), 1))
                     elif centre < lo and cr[2] <= hi + 1e-3 * step:
                         cr[2] = max(cr[2], hi) + step
+                        moved_edges.add((id(cr), 2))
                     else:
                         break
     for wi in web_info:
@@ -398,6 +429,9 @@ def section_mesh_from_cut(
     # nodes
     pos: List[np.ndarray] = []
     index: Dict[tuple, int] = {}
+    # how each node was placed, for the thickness velocities: ("skin", I, s, scale, d),
+    # ("cap", I, s, cap range, position in the cap stack) or ("web", u, end node, end node)
+    meta: Dict[int, tuple] = {}
 
     def node(key, p):
         if key not in index:
@@ -405,7 +439,7 @@ def section_mesh_from_cut(
             pos.append(np.asarray(p, float) - o)
         return index[key]
 
-    elements, kinds, mids, thetas, alphas, labels = [], [], [], [], [], []
+    elements, kinds, mids, thetas, alphas, labels, plies = [], [], [], [], [], [], []
     mat_ids: Dict[int, int] = {}
     mats: Dict[int, SolidMaterial] = {}
 
@@ -427,7 +461,7 @@ def section_mesh_from_cut(
 
     # skin rows: depth measured inward from the OML; skin plies are listed inside first,
     # so the outermost row is the last ply
-    def add_q8(c, mid_, label, ply, e_s):
+    def add_q8(c, mid_, label, ply, e_s, tag):
         X = np.array([pos[i] for i in c[:4]])
         area = 0.5 * np.sum(X[:, 0] * np.roll(X[:, 1], -1) - np.roll(X[:, 0], -1) * X[:, 1])
         if area < 0:
@@ -438,6 +472,7 @@ def section_mesh_from_cut(
         thetas.append(float(ply.angle_deg))
         alphas.append(float(np.degrees(np.arctan2(e_s[1], e_s[0]))))
         labels.append(label)
+        plies.append(tag)
 
     # skin rows: one set of interface depths (from the OML) for the whole skin, the union
     # of every skin laminate's, so neighbouring skin laminates share their nodes
@@ -461,18 +496,22 @@ def section_mesh_from_cut(
             scale_cache[I] = min(depth_scale(half_station(I + k)) for k in (-1, 0, 1))
         d = depth_skin[J // 2] if J % 2 == 0 else 0.5 * (depth_skin[J // 2] + depth_skin[J // 2 + 1])
         n_out = loop.outward(s, hn)
-        return node(key, loop.at(s) + (0.5 * ts - scale_cache[I] * d) * n_out)
+        k = node(key, loop.at(s) + (0.5 * ts - scale_cache[I] * d) * n_out)
+        meta[k] = ("skin", I, s, scale_cache[I], d)
+        return k
 
     def ply_at_depth(lam, d):
-        """Ply of ``lam`` (plies inside first) at depth ``d`` from the outer face."""
+        """Index of the ply of ``lam`` (plies inside first) at depth ``d`` from the outer face."""
         b = np.concatenate([[0.0], np.cumsum([p.thickness for p in lam.plies])])
-        k = int(np.clip(np.searchsorted(b, lam.thickness - d) - 1, 0, len(lam.plies) - 1))
-        return lam.plies[k]
+        return int(np.clip(np.searchsorted(b, lam.thickness - d) - 1, 0, len(lam.plies) - 1))
+
+    skin_elem_label: List[str] = []
 
     for i in range(M):
         I0, I1 = 2 * i, 2 * i + 2
         s_mid = half_station(2 * i + 1)
         label = skin_label(s_mid)
+        skin_elem_label.append(label)
         lam = skin_lam[label]
         n_out = loop.outward(s_mid, hn)
         e_s = np.array([n_out[1], -n_out[0]])                 # x cross e_s = n_out
@@ -480,8 +519,9 @@ def section_mesh_from_cut(
             J0, J1 = 2 * j, 2 * j + 2
             c = [skin_node(I0, J0), skin_node(I1, J0), skin_node(I1, J1), skin_node(I0, J1),
                  skin_node(I0 + 1, J0), skin_node(I1, J0 + 1), skin_node(I0 + 1, J1), skin_node(I0, J0 + 1)]
-            ply = ply_at_depth(lam, 0.5 * (depth_skin[j] + depth_skin[j + 1]))
-            add_q8(c, material_id(ply), label, ply, e_s)
+            k = ply_at_depth(lam, 0.5 * (depth_skin[j] + depth_skin[j + 1]))
+            ply = lam.plies[k]
+            add_q8(c, material_id(ply), label, ply, e_s, (lam_ids[id(lam)], k))
         # cap rows below the skin
         cr = cap_at(s_mid)
         if cr is not None and cr[1] - 1e-9 <= stations[i] and half_station(I1) <= cr[2] + 1e-9:
@@ -496,7 +536,9 @@ def section_mesh_from_cut(
                 s = half_station(I)
                 d = depth_cap[J // 2] if J % 2 == 0 else 0.5 * (depth_cap[J // 2] + depth_cap[J // 2 + 1])
                 n_out = loop.outward(s, hn)
-                return node(("cap", I % (2 * M), J), loop.at(s) + (0.5 * ts - d) * n_out)
+                k = node(("cap", I % (2 * M), J), loop.at(s) + (0.5 * ts - d) * n_out)
+                meta[k] = ("cap", I % (2 * M), s, cr, clam.thickness - (d - ts))
+                return k
 
             for j in range(len(cb) - 1):
                 J0, J1 = 2 * j, 2 * j + 2
@@ -504,7 +546,8 @@ def section_mesh_from_cut(
                      cap_node(I0 + 1, J0), cap_node(I1, J0 + 1), cap_node(I0 + 1, J1), cap_node(I0, J0 + 1)]
                 n_out = loop.outward(s_mid, hn)
                 ply = clam.plies[cply_from_outer[j]]
-                add_q8(c, material_id(ply), cr[0], ply, np.array([n_out[1], -n_out[0]]))
+                add_q8(c, material_id(ply), cr[0], ply, np.array([n_out[1], -n_out[0]]),
+                       (lam_ids[id(clam)], int(cply_from_outer[j])))
 
     # the innermost-face node at loop half-index I
     def face_node(I):
@@ -523,9 +566,26 @@ def section_mesh_from_cut(
             raise ValueError("internal: web foot is not a station")
         return k
 
+    # a cap edge carried to a web's far face follows that face's foot (the nearest end row)
+    edge_links = []                                           # (edge station, foot station)
+    for cr in cap_ranges:
+        for k in (1, 2):
+            if (id(cr), k) not in moved_edges:
+                continue
+            best = None
+            for wi in web_info:
+                for f in wi["feet"]:
+                    x = float(f.min() if k == 1 else f.max())
+                    dist = abs(((cr[k] - x + 0.5 * loop.length) % loop.length) - 0.5 * loop.length)
+                    if best is None or dist < best[0]:
+                        best = (dist, x)
+            if best is not None:
+                edge_links.append((station_index(cr[k]), station_index(best[1])))
+
     for wn, wi in enumerate(web_info):
         lam = wi["lam"]
         feet = [[station_index(s) for s in f] for f in wi["feet"]]
+        wi["foot_stations"] = feet
         nq = len(wi["q"]) - 1
         ends = []
         for f in feet:
@@ -550,7 +610,9 @@ def section_mesh_from_cut(
             if i2 == 2 * n_al:
                 return top[j2]
             u = i2 / (2 * n_al)
-            return node(("web", wn, i2, j2), (1 - u) * (pos[bot[j2]] + o) + u * (pos[top[j2]] + o))
+            k = node(("web", wn, i2, j2), (1 - u) * (pos[bot[j2]] + o) + u * (pos[top[j2]] + o))
+            meta[k] = ("web", u, bot[j2], top[j2])
+            return k
 
         e_s = np.array([wi["m"][1], -wi["m"][0]])
         for i in range(n_al):
@@ -559,11 +621,129 @@ def section_mesh_from_cut(
                 c = [web_node(I0, J0), web_node(I1, J0), web_node(I1, J1), web_node(I0, J1),
                      web_node(I0 + 1, J0), web_node(I1, J0 + 1), web_node(I0 + 1, J1), web_node(I0, J0 + 1)]
                 ply = lam.plies[wply[j]]
-                add_q8(c, material_id(ply), wi["wall"].label, ply, e_s)
+                add_q8(c, material_id(ply), wi["wall"].label, ply, e_s, (lam_ids[id(lam)], int(wply[j])))
 
-    mesh = SectionMesh(np.array(pos), elements, kinds, mids, thetas, alphas, mats, section_id)
+    node_velocities = None if not velocities else _thickness_velocities(
+        len(pos), meta, lam_by_id, lam_ids, skin_lam, skin_elem_label, web_info, stations, loop, hn, ts, h,
+        face_node, edge_links)
+    mesh = SectionMesh(np.array(pos), elements, kinds, mids, thetas, alphas, mats, section_id,
+                       plies=plies, velocities=node_velocities, tie_points=[])
     mesh.labels = labels
+    mesh.laminates = dict(sorted(lam_by_id.items()))
     return mesh
+
+
+# ----------------------------------------------------------------------------- thickness velocities
+def _ply_rate(lam, p: float) -> np.ndarray:
+    """``d p / d t_j`` for the point ``p`` of a stack measured from its first (inner) face.
+
+    A point at fraction ``f`` through ply ``k`` keeps that fraction: the plies before it
+    push it by their whole thickness change and its own ply by ``f`` of its change.
+    """
+    t = np.array([q.thickness for q in lam.plies])
+    b = np.concatenate([[0.0], np.cumsum(t)])
+    k = int(np.clip(np.searchsorted(b, p, side="right") - 1, 0, len(t) - 1))
+    out = np.zeros(len(t))
+    out[:k] = 1.0
+    out[k] = float(np.clip((p - b[k]) / t[k], 0.0, 1.0))
+    return out
+
+
+def _thickness_velocities(n_nodes, meta, lam_by_id, lam_ids, skin_lam, skin_elem_label, web_info, stations,
+                          loop, hn, ts, h, face_node, edge_links) -> Dict[Tuple[int, int], np.ndarray]:
+    """``d nodes / d t`` of every ply of every laminate of a cut mesh (``SectionMesh.velocities``).
+
+    The geometry's mid-lines stay put, as in the thin-walled model of the same cut: the skin
+    stack stays centred on the skin mid-line (its outer face moves out by half the change
+    and its inner face in by half), a cap stacks inward from the skin's inner face, and a
+    web stays centred on its mid-line. Each node keeps its fraction through its ply. Where
+    the trailing-edge wedge shortens the skin columns, the shortening factor is held. A
+    station where a web ply interface meets the inner face slides along the face, so the
+    interface still lands on it; its column slides with it, and the mid-side nodes beside
+    it by half as much. A cap edge the mesher carried to a web's far face slides with that
+    face's foot. A column on a station between two skin laminates moves with their
+    mean, and web nodes with the interpolation of their end nodes.
+    """
+    keys = [(lid, j) for lid in sorted(lam_by_id) for j in range(len(lam_by_id[lid].plies))]
+    col = {key: i for i, key in enumerate(keys)}
+    P, M = len(keys), len(stations)
+    V = np.zeros((n_nodes, P, 2))
+
+    def owners(I):
+        i = I // 2
+        return [skin_elem_label[i % M]] if I % 2 else [skin_elem_label[(i - 1) % M], skin_elem_label[i % M]]
+
+    def skin_rate(I, dr_of_p, p):
+        """Normal-offset rate of a column node, spread over the column's skin laminates."""
+        out = np.zeros(P)
+        labs = owners(I)
+        for lab in labs:
+            lam = skin_lam[lab]
+            lid = lam_ids[id(lam)]
+            dr = dr_of_p(_ply_rate(lam, p))
+            for j in range(len(lam.plies)):
+                out[col[(lid, j)]] += dr[j] / len(labs)
+        return out
+
+    offset: Dict[int, float] = {}
+    for k, m in meta.items():
+        if m[0] == "skin":
+            _, I, s, scale, d = m
+            rate = skin_rate(I, lambda dp: 0.5 - scale * (1.0 - dp), ts - d)
+            offset[k] = 0.5 * ts - scale * d
+        elif m[0] == "cap":
+            _, I, s, cr, pc = m
+            clam = cr[3]
+            rate = skin_rate(I, lambda dp: np.full(dp.shape, -0.5), 0.0)
+            lid = lam_ids[id(clam)]
+            dpc = _ply_rate(clam, pc)
+            for j in range(len(clam.plies)):
+                rate[col[(lid, j)]] += dpc[j] - 1.0
+            offset[k] = 0.5 * ts - (ts + clam.thickness - pc)
+        else:
+            continue
+        V[k] += rate[:, None] * loop.outward(s, hn)[None, :]
+
+    eps = 1e-4 * h
+
+    def dpos_ds(s, r):
+        a = loop.at(s + eps) + r * loop.outward(s + eps, hn)
+        b = loop.at(s - eps) + r * loop.outward(s - eps, hn)
+        return (a - b) / (2.0 * eps)
+
+    # web feet: the station slides along the face so that m . (face - a) - q stays zero
+    sigma: Dict[int, np.ndarray] = {}
+    for wi in web_info:
+        lam, m = wi["lam"], wi["m"]
+        lid = lam_ids[id(lam)]
+        for f in wi["foot_stations"]:
+            for kq, st in enumerate(f):
+                face = face_node(2 * st)
+                dg_ds = float(dpos_ds(stations[st], offset[face]) @ m)
+                dq = np.zeros(P)
+                dp = _ply_rate(lam, wi["q"][kq] + 0.5 * lam.thickness)
+                for j in range(len(lam.plies)):
+                    dq[col[(lid, j)]] += dp[j] - 0.5
+                sigma[st] = sigma.get(st, np.zeros(P)) - (V[face] @ m - dq) / dg_ds
+    for edge, foot in edge_links:
+        if edge != foot and foot in sigma:
+            sigma[edge] = sigma[foot]
+    if sigma:
+        for k, m in meta.items():
+            if m[0] == "web":
+                continue
+            I, s = m[1], m[2]
+            i = I // 2
+            sig = sigma.get(i) if I % 2 == 0 else \
+                0.5 * (sigma.get(i, np.zeros(P)) + sigma.get((i + 1) % M, np.zeros(P))) \
+                if (i in sigma or (i + 1) % M in sigma) else None
+            if sig is not None:
+                V[k] += sig[:, None] * dpos_ds(s, offset[k])[None, :]
+    for k, m in meta.items():
+        if m[0] == "web":
+            _, u, bot, top = m
+            V[k] = (1.0 - u) * V[bot] + u * V[top]
+    return {key: V[:, i, :].copy() for i, key in enumerate(keys)}
 
 
 # ----------------------------------------------------------------------------- writer

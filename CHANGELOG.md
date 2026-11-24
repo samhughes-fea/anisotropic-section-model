@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- Ply-thickness sensitivities of 2D blade cuts: `section_mesh_from_cut` now tags each
+  element with its laminate ply (`SectionMesh.plies`) and fills `SectionMesh.velocities`
+  and `tie_points` (empty: the mesh conforms), as `SectionMesh.from_thin_walled` does, and
+  sets `SectionMesh.laminates` (`{laminate_id: WallLaminate}`; library laminates keep
+  their ids). Skins stay centred on the skin mid-line, caps stack inward from the skin,
+  webs stay centred on their mid-line and their feet slide along the inner face, carrying
+  a cap edge that ends under a web with them. `solid_section_derivative` matches meshes
+  moved by `h V` to 1e-5 and meshes rebuilt with the thicker ply to 0.5 % on the
+  diagonal stiffnesses (`tests/test_solid_section_from_geometry_thickness.py`). No
+  contract change: the v2.1 file blocks carry it. `velocities=False` leaves them out
+  (they make `section_mesh_2d.txt` several times larger). (#PR)
+
 ### Changed
 
 - Follows the shared development standard 0.1.0: synced issue forms, PR template,
