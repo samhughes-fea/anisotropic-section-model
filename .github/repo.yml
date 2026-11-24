@@ -1,0 +1,8 @@
+# This repository's values for the shared development standard
+# (docs/conventions/standard/repo-profile.md). Owned by this repository.
+profile: python-package
+package: anisotropic_section_model
+python: ['3.11', '3.12']
+pypi: false
+docs-site: false
+scopes: [solid, thin-walled, benchmarks]

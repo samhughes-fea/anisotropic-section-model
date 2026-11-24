@@ -1,0 +1,16 @@
+# This repository's own labels; the shared ones are in labels.base.yml (synced).
+# label-sync.yml applies both files; labels in neither are deleted.
+# Rules: docs/conventions/standard/labels.md. Never repeat a base label here.
+
+- name: "area: solid"
+  color: "fef2c0"
+  description: 2D finite-element section analysis (solid/)
+- name: "area: thin-walled"
+  color: "fef2c0"
+  description: Thin-walled and closed-form section models (thin_walled/)
+- name: "area: benchmarks"
+  color: "fef2c0"
+  description: Published and cross-code section benchmarks (benchmarks/)
+- name: "area: examples"
+  color: "fef2c0"
+  description: Worked examples and figures

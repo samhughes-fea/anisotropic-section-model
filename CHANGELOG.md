@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Follows the shared development standard 0.1.0: synced issue forms, PR template,
+  labels, `pr-title`, `label-sync`, `codeql` and `release` workflows, and the standard
+  in `docs/conventions/standard/`. `release.yml` is now the shared one (it reads
+  `.github/repo.yml`; the backfill mode is gone), and new changelog sections use
+  `## [X.Y.Z] - YYYY-MM-DD`. Added `AGENTS.md`, `SCOPE.md`, `CONTRIBUTING.md` and
+  `.github/labels.yml`. (#PR)
+
 ## 0.6.1 - 2026-11-24
 
 ### Fixed

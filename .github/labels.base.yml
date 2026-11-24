@@ -1,0 +1,51 @@
+# Synced from the shared development standard 0.1.0. Edit it there, not here.
+# Labels shared by every tool repository (rules: docs/conventions/standard/labels.md).
+# The repository's own area labels are in .github/labels.yml.
+
+# Type: one per issue or pull request
+- name: bug
+  color: "d73a4a"
+  description: Wrong results, a crash, or a failed check
+- name: enhancement
+  color: "a2eeef"
+  description: New capability or option
+- name: documentation
+  color: "0075ca"
+  description: Manual, docstrings, example text or the docs site
+- name: maintenance
+  color: "c5def5"
+  description: CI, tooling, refactors with no behaviour change
+- name: dependencies
+  color: "0366d6"
+  description: Dependency or GitHub Actions version updates
+
+# Flags: change how a pull request is reviewed
+- name: deprecation
+  color: "e99695"
+  description: Retires a public name; needs a release of warnings first
+- name: breaking
+  color: "e99695"
+  description: Removes or changes a public name after its deprecation release
+- name: golden-change
+  color: "e99695"
+  description: Moves golden numbers on purpose; reason in the changelog
+- name: release
+  color: "0e8a16"
+  description: Release pull request
+- name: needs-decision
+  color: "fbca04"
+  description: Waiting on the maintainer's decision
+- name: good first issue
+  color: "7057ff"
+  description: Small and self-contained
+
+# Closing
+- name: duplicate
+  color: "cfd3d7"
+  description: Already reported
+- name: wontfix
+  color: "ffffff"
+  description: Out of scope or not planned
+- name: question
+  color: "d876e3"
+  description: A question rather than a change

@@ -1,0 +1,28 @@
+# Synced from the shared development standard 0.1.0. Edit it there, not here.
+name: Release plan
+description: Plan the next release
+title: "Release X.Y.Z"
+labels: [release]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "0.9.6"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: What ships
+      description: Link the milestone and any issue that must land first.
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: Steps (docs/conventions/standard/releasing.md)
+      options:
+        - label: Milestone issues closed or moved
+        - label: Lower packages this one pins are released first
+        - label: "Release PR `chore(release): prepare X.Y.Z` opened"
+        - label: Release PR merged; tag and GitHub release made by the workflow
+        - label: Consumers' pin PRs opened

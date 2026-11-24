@@ -1,0 +1,51 @@
+# Synced from the shared development standard 0.1.0. Edit it there, not here.
+name: pr-title
+
+# The PR title becomes the squash commit on main, so it must be a Conventional
+# Commit (docs/conventions/standard/commits.md). Allowed scopes are this
+# repository's `scopes` in .github/repo.yml plus the shared ones.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  conventional:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/repo.yml
+          sparse-checkout-cone-mode: false
+      - name: Read the scopes
+        id: scopes
+        run: |
+          {
+            echo "list<<EOF"
+            yq -r '.scopes // [] | .[]' .github/repo.yml
+            printf '%s\n' release deps ci docs-site examples
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            docs
+            test
+            build
+            ci
+            chore
+            revert
+          scopes: ${{ steps.scopes.outputs.list }}
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: "Start the summary with a lower-case letter (the subject was \"{subject}\")."

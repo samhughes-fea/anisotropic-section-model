@@ -1,0 +1,17 @@
+# Synced from the shared development standard 0.1.0. Edit it there, not here.
+name: Gap in a lower package
+description: Something a consumer has to compute, convert or refuse on top of this package
+labels: [enhancement]
+body:
+  - type: textarea
+    id: gap
+    attributes:
+      label: What the consumer does today
+      description: The computation, conversion or refusal, and where it lives (public packages only).
+    validations:
+      required: true
+  - type: textarea
+    id: generic
+    attributes:
+      label: The generic form
+      description: How this package could provide it without knowing about any one consumer.

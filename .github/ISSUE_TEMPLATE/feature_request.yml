@@ -1,0 +1,26 @@
+# Synced from the shared development standard 0.1.0. Edit it there, not here.
+name: Feature request
+description: A capability or option this package should have
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check SCOPE.md first: it says what belongs in this repository and what
+        belongs in a package built on it.
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need and why
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead
+      description: Anything you compute on top of this package to get there is worth naming.
+  - type: textarea
+    id: done
+    attributes:
+      label: How we will know it is done
+      description: A test, a figure or a published value to compare against.
