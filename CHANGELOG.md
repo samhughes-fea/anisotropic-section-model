@@ -14,7 +14,7 @@
   moved by `h V` to 1e-5 and meshes rebuilt with the thicker ply to 0.5 % on the
   diagonal stiffnesses (`tests/test_solid_section_from_geometry_thickness.py`). No
   contract change: the v2.1 file blocks carry it. `velocities=False` leaves them out
-  (they make `section_mesh_2d.txt` several times larger). (#PR)
+  (they make `section_mesh_2d.txt` several times larger). (#43)
 
 ### Changed
 
