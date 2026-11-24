@@ -9,7 +9,7 @@
   in `docs/conventions/standard/`. `release.yml` is now the shared one (it reads
   `.github/repo.yml`; the backfill mode is gone), and new changelog sections use
   `## [X.Y.Z] - YYYY-MM-DD`. Added `AGENTS.md`, `SCOPE.md`, `CONTRIBUTING.md` and
-  `.github/labels.yml`. (#PR)
+  `.github/labels.yml`. (#41)
 
 ## 0.6.1 - 2026-11-24
 
