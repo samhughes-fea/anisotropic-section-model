@@ -1,0 +1,29 @@
+# Synced from the shared development standard 0.1.0. Edit it there, not here.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencies]
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: pip
+    directory: /requirements
+    schedule:
+      interval: monthly
+    labels: [dependencies]
+    commit-message:
+      prefix: build
+      include: scope
+    # ruff and mypy are pinned on purpose; tool-drift.yml reports their new releases.
+    ignore:
+      - dependency-name: ruff
+      - dependency-name: mypy
+    groups:
+      python:
+        patterns: ["*"]

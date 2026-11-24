@@ -1,20 +1,21 @@
+# Synced from the shared development standard 0.1.0. Edit it there, not here.
 name: release
 
-# Makes a release: the vX.Y.Z tag, the GitHub release with the sdist and wheel,
-# and (only when the repository variable PYPI_PUBLISH is "true" and a PyPI
-# trusted publisher is set up for environment "pypi") the PyPI upload.
-# Rules: docs/RELEASING.md. Ported from implicit-geometry-kernel's release.yml.
+# Makes a release: the vX.Y.Z tag, the GitHub release with the sdist and wheel
+# and their build provenance, and (when .github/repo.yml says `pypi: true` and a
+# PyPI trusted publisher is set up for environment "pypi") the PyPI upload.
+# Rules: docs/conventions/standard/releasing.md. Values read from
+# .github/repo.yml at the release commit: `package`, `version-line`, `stable`,
+# `pypi`.
 #
 # Three ways in:
-# - push to main: when a commit in the push is a merged release PR titled
-#   "chore(release): prepare X.Y.Z" (the squash subject, or the PR title on the
-#   first body line of a "Merge pull request #N" commit), this workflow creates
-#   the tag itself. Any other push to main stops after the first job.
-# - workflow_dispatch with a commit SHA: releases a release-PR merge that was
-#   not tagged when it landed, or finishes a release whose tag exists on that
-#   commit but whose GitHub release or PyPI upload failed. With "backfill", it
-#   tags an older commit on main that was released before this workflow
-#   existed (see the backfill rules below).
+# - push to main: when a commit in the push is a merged release PR
+#   ("chore(release): prepare X.Y.Z", as a squash subject or as the PR title in
+#   a merge commit), this workflow creates the tag itself. Any other push to
+#   main stops after the first job.
+# - workflow_dispatch with a commit SHA: releases a release commit that was not
+#   tagged when it landed, or finishes a release whose tag exists on that
+#   commit but whose GitHub release or PyPI upload failed.
 # - push of a v* tag made by hand: checked and released.
 #
 # A tag created here with GITHUB_TOKEN does not start another workflow run, so
@@ -23,7 +24,7 @@ name: release
 # without changing anything, and a tag on a different commit fails the run.
 #
 # Concurrency is per tag and per job, not for the whole workflow: GitHub keeps
-# only one pending run in a concurrency group, so a workflow-wide group would
+# only one pending run in a concurrency group, so a workflow-wide group could
 # let a later push to main cancel a release run that was still waiting.
 
 on:
@@ -33,29 +34,9 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: "Commit on main to release (the release PR's merge commit)"
+        description: "Commit on main to release (the release PR's commit)"
         required: true
         type: string
-      backfill:
-        description: "Backfill: tag an older main commit that is not a release-PR merge"
-        required: false
-        default: false
-        type: boolean
-      tag:
-        description: "Backfill only: the tag to make (vX.Y.Z) when it differs from __version__ at that commit"
-        required: false
-        default: ""
-        type: string
-
-env:
-  PACKAGE: anisotropic-section-model
-  VERSION_FILE: src/anisotropic_section_model/__init__.py
-  CHANGELOG: CHANGELOG.md
-  # Changelog headings; {v} is the version (dots escaped). A release needs the
-  # dated heading, a release candidate only the plain one.
-  HEADING: '^## {v}( |$)'
-  HEADING_DATED: '^## {v} - [0-9]{4}-[0-9]{2}-[0-9]{2}'
-  HEADING_FORMAT: '## {v} - YYYY-MM-DD'
 
 permissions:
   contents: read
@@ -65,15 +46,15 @@ jobs:
     # Decides whether this run makes a release, which tag and which commit, and
     # checks the tag rules against that commit.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       release: ${{ steps.check.outputs.release }}
       tag: ${{ steps.check.outputs.tag }}
       sha: ${{ steps.check.outputs.sha }}
       create_tag: ${{ steps.check.outputs.create_tag }}
-      message: ${{ steps.check.outputs.message }}
-      backfill: ${{ steps.check.outputs.backfill }}
+      pypi: ${{ steps.check.outputs.pypi }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Check the release rules
@@ -83,8 +64,6 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
           INPUT_SHA: ${{ inputs.sha }}
-          INPUT_BACKFILL: ${{ inputs.backfill }}
-          INPUT_TAG: ${{ inputs.tag }}
           BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
@@ -108,11 +87,6 @@ jobs:
             fi
             printf '%s' "$subject"
           }
-          heading() { local ve="${2//./\\.}"; printf '%s' "${1//\{v\}/$ve}"; }
-
-          backfill=false
-          [ "$EVENT" = "workflow_dispatch" ] && [ "${INPUT_BACKFILL:-false}" = "true" ] && backfill=true
-          [ -n "${INPUT_TAG:-}" ] && [ "$backfill" != "true" ] && fail "the tag input is for backfill runs only"
 
           # The commit to release, and whether this run creates the tag.
           if [ "$EVENT" = "push" ] && [ "$REF_TYPE" = "tag" ]; then
@@ -139,56 +113,61 @@ jobs:
 
           git merge-base --is-ancestor "$sha" origin/main || fail "$sha is not on main"
 
-          # __version__ at that commit.
-          code_version=$(git show "$sha:$VERSION_FILE" | python3 -c "import ast, sys; tree = ast.parse(sys.stdin.read()); print(next(n.value.value for n in tree.body if isinstance(n, ast.Assign) and any(getattr(t, 'id', '') == '__version__' for t in n.targets)))")
-          version="$code_version"
-          if [ -n "${INPUT_TAG:-}" ]; then
-            grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' <<< "$INPUT_TAG" || fail "${INPUT_TAG} is not a release tag (vX.Y.Z)"
-            version="${INPUT_TAG#v}"
-          fi
-          tag="v${version}"
-          echo "commit ${sha}, __version__ ${code_version}, tag ${tag}"
+          # This repository's values at that commit.
+          git show "$sha:.github/repo.yml" > "$RUNNER_TEMP/repo.yml" || fail ".github/repo.yml is missing at ${sha}"
+          package=$(yq -r '.package // ""' "$RUNNER_TEMP/repo.yml")
+          line=$(yq -r '."version-line" // ""' "$RUNNER_TEMP/repo.yml")
+          stable=$(yq -r '.stable // false' "$RUNNER_TEMP/repo.yml")
+          pypi=$(yq -r '.pypi // false' "$RUNNER_TEMP/repo.yml")
+          [ -n "$package" ] || fail ".github/repo.yml has no 'package'"
 
-          message="${PACKAGE} ${version}"
-          if [ "$create_tag" = "true" ] && [ "$backfill" != "true" ]; then
-            # Only a merged release PR is released.
+          # __version__ at that commit.
+          version=$(git show "$sha:src/${package}/__init__.py" | python3 -c "import ast, sys; tree = ast.parse(sys.stdin.read()); print(next(n.value.value for n in tree.body if isinstance(n, ast.Assign) and any(getattr(t, 'id', '') == '__version__' for t in n.targets)))")
+          tag="v${version}"
+          echo "commit ${sha}, __version__ ${version}"
+
+          if [ "$create_tag" = "true" ]; then
+            # Only a merged release PR is released. PRs are squash-merged on
+            # their title, so the commit subject is the release PR's title.
             subject=$(title_of "$sha")
-            grep -Eq "$release_re" <<< "$subject" || fail "$sha is not a release PR merge (title: ${subject}); use backfill for a commit released before this workflow"
+            grep -Eq "$release_re" <<< "$subject" || fail "$sha is not a release PR merge (title: ${subject})"
             named=$(echo "$subject" | sed -E 's/^chore\(release\)!?: prepare v?([0-9][0-9A-Za-z.]*).*/\1/')
             test "$named" = "$version" || fail "release PR names ${named} but __version__ is ${version}"
-          elif [ "$create_tag" != "true" ]; then
+          else
             test "$REF_NAME" = "$tag" || fail "tag ${REF_NAME} does not match __version__ ${version}"
           fi
-          if [ "$version" != "$code_version" ]; then
-            message="${message} (tagged retrospectively; __version__ at this commit is ${code_version})"
-            echo "::warning::${tag} is a retrospective tag on code whose __version__ is ${code_version}"
-          fi
 
+          # The tag form, the version line, and no 1.0.0 until the repository
+          # says `stable: true` (a maintainer decision).
           grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+)?$' <<< "$tag" || fail "${tag} is not a release tag (vX.Y.Z or vX.Y.ZrcN)"
+          if [ -n "$line" ]; then
+            grep -Eq "^v${line//./\\.}\.[0-9]+(rc[0-9]+)?$" <<< "$tag" || fail "${tag} is outside this repository's version line ${line}.x"
+          fi
+          major="${version%%.*}"
+          if [ "$major" -ge 1 ] && [ "$stable" != "true" ]; then
+            fail "${tag}: this repository is pre-1.0; going to 1.0.0 needs 'stable: true' in .github/repo.yml"
+          fi
 
           # An existing tag is never moved or remade.
           if [ "$create_tag" = "true" ] && git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
             at=$(git rev-parse "${tag}^{commit}")
-            [ "$at" = "$sha" ] || fail "${tag} already exists on ${at}, not on ${sha}; tags never move, so release the next version"
-            # On the release commit already. A push stops here; a dispatch
-            # finishes the release (build, GitHub release, PyPI) without
-            # touching the tag, for a run that failed after tagging.
+            [ "$at" = "$sha" ] || fail "${tag} already exists on ${at}, not on ${sha}; tags never move, so release the next patch version"
             [ "$EVENT" = "workflow_dispatch" ] || skip "${tag} already exists on ${sha}; nothing to do"
             echo "::notice::${tag} already exists on ${sha}; finishing its release without touching the tag"
             create_tag=false
           fi
 
-          # The changelog has the release heading; a release (not a candidate)
-          # has its date set. A backfill reads main's changelog, since the dated
-          # section for an old release is written after the fact.
+          # The changelog at that commit has the release heading; a release
+          # (not a candidate) has its date: "## [X.Y.Z] - YYYY-MM-DD" (the
+          # brackets are optional). It is CHANGELOG.md, or docs/CHANGELOG.md.
           v="${version%%rc*}"
-          # Read from a file: grep -q on a pipe can stop early and, with pipefail,
-          # fail the pipeline on the writer's broken pipe.
-          from="$sha"; [ "$backfill" = "true" ] && from=origin/main
-          git show "$from:$CHANGELOG" > "$RUNNER_TEMP/CHANGELOG.md"
-          grep -Eq "$(heading "$HEADING" "$v")" "$RUNNER_TEMP/CHANGELOG.md" || fail "${CHANGELOG} has no heading for ${v} at ${from}"
+          ve="${v//./\\.}"
+          git show "$sha:CHANGELOG.md" > "$RUNNER_TEMP/CHANGELOG.md" 2>/dev/null \
+            || git show "$sha:docs/CHANGELOG.md" > "$RUNNER_TEMP/CHANGELOG.md" \
+            || fail "no CHANGELOG.md or docs/CHANGELOG.md at ${sha}"
+          grep -Eq "^## \\[?${ve}\\]?( |$)" "$RUNNER_TEMP/CHANGELOG.md" || fail "the changelog has no '## [${v}]' heading"
           if [ "$v" = "$version" ]; then
-            grep -Eq "$(heading "$HEADING_DATED" "$v")" "$RUNNER_TEMP/CHANGELOG.md" || fail "${CHANGELOG} heading for ${v} has no date at ${from}; the release PR sets '${HEADING_FORMAT//\{v\}/$v}'"
+            grep -Eq "^## \\[?${ve}\\]? - [0-9]{4}-[0-9]{2}-[0-9]{2}" "$RUNNER_TEMP/CHANGELOG.md" || fail "the changelog heading for ${v} has no date; the release PR sets '## [${v}] - YYYY-MM-DD'"
           fi
 
           {
@@ -196,17 +175,21 @@ jobs:
             echo "tag=${tag}"
             echo "sha=${sha}"
             echo "create_tag=${create_tag}"
-            echo "message=${message}"
-            echo "backfill=${backfill}"
+            echo "pypi=${pypi}"
           } >> "$GITHUB_OUTPUT"
-          echo "::notice::releasing ${tag} from ${sha} (create tag: ${create_tag}, backfill: ${backfill})"
+          echo "::notice::releasing ${tag} from ${sha} (create tag: ${create_tag}, PyPI: ${pypi})"
 
   build:
     needs: resolve
     if: ${{ needs.resolve.outputs.release == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -219,14 +202,20 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor "${SHA}" origin/main || { echo "::error::${SHA} is not on main"; exit 1; }
           git checkout --detach "${SHA}"
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Build sdist and wheel
         run: |
           python -m pip install build
           python -m build
-      - uses: actions/upload-artifact@v5
+      - name: Attest build provenance
+        # Free on public repositories only.
+        if: ${{ github.event.repository.visibility == 'public' }}
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -236,6 +225,7 @@ jobs:
     needs: [resolve, build]
     if: ${{ needs.resolve.outputs.create_tag == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Per tag, so only runs for the same release wait on each other.
     concurrency:
       group: release-tag-${{ needs.resolve.outputs.tag }}
@@ -243,14 +233,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Create and push the tag
         env:
           TAG: ${{ needs.resolve.outputs.tag }}
           SHA: ${{ needs.resolve.outputs.sha }}
-          MESSAGE: ${{ needs.resolve.outputs.message }}
+          REPO: ${{ github.event.repository.name }}
         run: |
           set -euo pipefail
           git fetch --tags --force origin
@@ -260,14 +250,15 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${TAG}" -m "${MESSAGE}" "${SHA}"
+          git tag -a "${TAG}" -m "${REPO} ${TAG#v}" "${SHA}"
           git push origin "refs/tags/${TAG}"
 
   publish:
     needs: [resolve, build, tag]
-    # Runs after the tag job, or when the tag already existed (tag skipped).
-    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.tag.result == 'success' || needs.tag.result == 'skipped') && vars.PYPI_PUBLISH == 'true' }}
+    # Runs after the tag job, or when the tag was pushed by hand (tag skipped).
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.tag.result == 'success' || needs.tag.result == 'skipped') && needs.resolve.outputs.pypi == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: pypi
     concurrency:
       group: release-pypi-${{ needs.resolve.outputs.tag }}
@@ -275,7 +266,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -285,23 +276,32 @@ jobs:
           skip-existing: true
 
   github-release:
-    # The GitHub release for the tag: notes are the version's section of the
-    # changelog on main, with the sdist and wheel attached. A release candidate
-    # is a pre-release.
+    # The GitHub release for the tag: notes are the tag's CHANGELOG.md section,
+    # with the sdist and wheel attached. A release candidate is a pre-release.
     needs: [resolve, build, tag]
     if: ${{ !cancelled() && needs.build.result == 'success' && (needs.tag.result == 'success' || needs.tag.result == 'skipped') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     concurrency:
       group: release-notes-${{ needs.resolve.outputs.tag }}
       cancel-in-progress: false
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
-          ref: main
+          fetch-depth: 0
           persist-credentials: false
-      - uses: actions/download-artifact@v5
+      # The release commit is checked out only after this job confirms it is on
+      # main (protected), so no code from outside main is built or run here.
+      - name: Check out the release commit
+        env:
+          SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "${SHA}" origin/main || { echo "::error::${SHA} is not on main"; exit 1; }
+          git checkout --detach "${SHA}"
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -310,18 +310,18 @@ jobs:
           TAG: ${{ needs.resolve.outputs.tag }}
         run: |
           v="${TAG#v}"; v="${v%%rc*}"
-          export START="${HEADING//\{v\}/${v//./\\.}}"
-          awk '
-            $0 ~ ENVIRON["START"] {on=1; next}
+          log=CHANGELOG.md; [ -f "$log" ] || log=docs/CHANGELOG.md
+          awk -v v="$v" '
+            BEGIN {gsub(/\./, "\\.", v)}
+            $0 ~ "^## \\[?" v "\\]?( |$)" {on=1; next}
             on && /^## / {exit}
             on {print}
-          ' "$CHANGELOG" > notes.md
-          test -s notes.md || echo "See ${CHANGELOG}." > notes.md
-      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+          ' "$log" > notes.md
+          test -s notes.md || echo "See CHANGELOG.md." > notes.md
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: ${{ needs.resolve.outputs.tag }}
           body_path: notes.md
           files: dist/*
           prerelease: ${{ contains(needs.resolve.outputs.tag, 'rc') }}
-          # A backfilled old release never becomes "latest".
-          make_latest: ${{ !contains(needs.resolve.outputs.tag, 'rc') && needs.resolve.outputs.backfill != 'true' }}
+          make_latest: ${{ !contains(needs.resolve.outputs.tag, 'rc') }}

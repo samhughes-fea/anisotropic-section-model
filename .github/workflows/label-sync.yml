@@ -1,0 +1,27 @@
+# Synced from the shared development standard 0.1.0. Edit it there, not here.
+name: label-sync
+
+# Applies .github/labels.base.yml (shared) and .github/labels.yml (this
+# repository's areas) to the repository's labels. Labels in neither file are
+# deleted (docs/conventions/standard/labels.md).
+on:
+  push:
+    branches: [main]
+    paths: [".github/labels.base.yml", ".github/labels.yml"]
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a # v2.3.3
+        with:
+          config-file: |
+            .github/labels.base.yml
+            .github/labels.yml
+          delete-other-labels: true

@@ -1,0 +1,9 @@
+# Synced from the shared development standard 0.1.0. Edit it there, not here.
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/samhughes-fea/anisotropic-section-model#readme
+    about: Manual and API reference.
+  - name: Security report
+    url: https://github.com/samhughes-fea/anisotropic-section-model/security/advisories/new
+    about: Report a vulnerability privately.
