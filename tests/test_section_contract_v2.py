@@ -28,8 +28,8 @@ def _box(d_angle=0.0, d_thickness=0.0):
     return ThinWalledSectionAnalysis(ThinWalledSection(pts, walls), lams)
 
 
-def test_package_declares_contract_2_0():
-    assert asm.SECTION_API_VERSION == (2, 0)
+def test_package_declares_contract_2_x():
+    assert asm.SECTION_API_VERSION == (2, 1)
 
 
 def test_thin_walled_and_solid_sections_keep_the_right_handed_matrices():

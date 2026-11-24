@@ -54,7 +54,7 @@ import numpy as np
 import numpy.typing as npt
 
 #: version of the section-provider contract (``docs/package_boundary.md``): (major, minor)
-SECTION_API_VERSION: Tuple[int, int] = (2, 0)
+SECTION_API_VERSION: Tuple[int, int] = (2, 1)
 
 #: the only frame this package builds sections in
 ENGINE_FRAME = "engine"

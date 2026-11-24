@@ -572,14 +572,30 @@ def write_section_mesh_2d(path: str, meshes: Mapping[int, SectionMesh]) -> None:
 
     Material ids are renumbered across sections (one ``[Solid_Material]`` row per
     distinct material object). Junction ties (``SectionMesh.ties``) go to a
-    ``[Section_Tie]`` block, ply tags (``SectionMesh.plies``) to a ``[Section_Element_Ply]`` block.
+    ``[Section_Tie]`` block, ply tags (``SectionMesh.plies``) to a ``[Section_Element_Ply]`` block,
+    and, when the mesh has them, node velocities (``SectionMesh.velocities``) and tie points
+    (``SectionMesh.tie_points``) to ``[Section_Node_Velocity]`` and ``[Section_Tie_Point]``
+    blocks, so ply-thickness sensitivities survive the file (``solid.mesh.parse_section_mesh_2d``).
     """
     mat_rows: Dict[int, Tuple[int, SolidMaterial]] = {}
     lines_n, lines_e = ["[Section_Node]", "[section_id] [node_id] [y] [z]"], \
         ["[Section_Element]", "[section_id] [element_id] [type] [nodes...] [material_id] [theta] [alpha]"]
     lines_t = ["[Section_Tie]", "[section_id] [node_id] [master_id] [coefficient]"]
     lines_p = ["[Section_Element_Ply]", "[section_id] [element_id] [laminate_id] [ply]"]
+    lines_v = ["[Section_Node_Velocity]", "[section_id] [node_id] [laminate_id] [ply] [dy] [dz]"]
+    lines_tp = ["[Section_Tie_Point]", "[section_id] [node_id] [element_id] [xi] [eta]"]
     for sid, mesh in meshes.items():
+        velocities = getattr(mesh, "velocities", None)
+        if velocities is not None:
+            n_before = len(lines_v)
+            for (lid, ply), V in sorted(velocities.items()):
+                for k in np.flatnonzero(np.any(np.asarray(V) != 0.0, axis=1)):
+                    lines_v.append(f"{sid} {k + 1} {int(lid)} {int(ply) + 1} {float(V[k, 0])!r} {float(V[k, 1])!r}")
+            if len(lines_v) == n_before:          # velocities, all zero: one row keeps them
+                (lid, ply) = next(iter(sorted(velocities)), (1, 0))
+                lines_v.append(f"{sid} 1 {int(lid)} {int(ply) + 1} 0.0 0.0")
+        for n, e, xi, eta in getattr(mesh, "tie_points", None) or ():
+            lines_tp.append(f"{sid} {int(n) + 1} {int(e) + 1} {float(xi)!r} {float(eta)!r}")
         for e, t in enumerate(getattr(mesh, "plies", None) or (), start=1):
             if t is not None:
                 lines_p.append(f"{sid} {e} {int(t[0])} {int(t[1]) + 1}")
@@ -605,4 +621,8 @@ def write_section_mesh_2d(path: str, meshes: Mapping[int, SectionMesh]) -> None:
             blocks += [""] + lines_t
         if len(lines_p) > 2:
             blocks += [""] + lines_p
+        if len(lines_v) > 2:
+            blocks += [""] + lines_v
+        if len(lines_tp) > 2:
+            blocks += [""] + lines_tp
         fh.write("\n".join(blocks) + "\n")
