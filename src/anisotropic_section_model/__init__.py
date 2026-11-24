@@ -75,7 +75,7 @@ from .geometry_to_properties import (
     section_properties_from_geometry,
 )
 
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 __all__ = [
     "axes",
