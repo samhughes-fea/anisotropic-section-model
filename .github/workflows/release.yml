@@ -212,7 +212,7 @@ jobs:
       - name: Attest build provenance
         # Free on public repositories only.
         if: ${{ github.event.repository.visibility == 'public' }}
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*
       - uses: actions/upload-artifact@v7
