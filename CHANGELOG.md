@@ -11,6 +11,21 @@
   ply-thickness derivatives (`solid_section_derivative`) to 1e-12
   (`tests/test_section_mesh_2d_velocities.py`).
 
+## 0.6.1 - 2026-11-24
+
+### Fixed
+
+- `SectionAnalysis.from_isotropic(y_sc=, z_sc=)` now couples shear and twist about the
+  given shear centre, where it only recorded it. With the shear strains at the shear
+  centre `gamma_xy - z_sc phi`, `gamma_xz + y_sc phi`, the centroid stiffness gets
+  `D[3,5] = -z_sc kGA`, `D[4,5] = y_sc kGA` and `D[5,5] = GJ_t + kGA (y_sc^2 + z_sc^2)`.
+  A shear force through the shear centre then twists nothing (`from_matrices` recovers
+  the centre) and the torsional stiffness about it is still `G J_t`. On a thin-walled
+  channel the block matches the thin-walled model's to 1e-9. `classical_stiffness`, the
+  mass and the second-order terms do not change; a zero offset gives the old section.
+  It reached `main` just after the 0.6.0 tag, so 0.6.0 does not have it (its
+  changelog listed it by mistake).
+
 ## 0.6.0 - 2026-11-24
 
 ### Breaking: section-provider contract 2.0
