@@ -8,7 +8,7 @@
   (`section_derivative`, `solid_section_derivative(taper=)`, `section_taper`,
   `solid_section_taper`), which 1d-fem now uses for tapered 2D sections
   (`[Section_Taper_2D]`). They have been in ASM since 0.5.0, so the contract stays at 2.1.
-  (#PR)
+  (#46)
 
 ### Changed
 
