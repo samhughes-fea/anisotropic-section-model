@@ -57,7 +57,10 @@ Functions in the contract: `SectionAnalysis.from_isotropic`, `from_matrices`,
 `thin_walled.layup_sensitivity.section_analysis_derivative` (the station's derivative as a
 `SectionAnalysisDerivative` of plain engine-frame arrays: `stiffness` with its taper,
 `classical_stiffness`, `mass_matrix`, Benscoter, second-order, axial points, GBT);
-`gbt_alignment.align_gbt_pair` and `mass_transform` (1d-fem walks its elements).
+`gbt_alignment.align_gbt_pair` and `mass_transform` (1d-fem walks its elements);
+`thin_walled.layup_sensitivity.section_derivative` and
+`solid.layup_sensitivity.solid_section_derivative` (with `taper=`), and the taper builders
+`thin_walled.taper.section_taper` and `solid.taper.solid_section_taper`.
 
 **Torsion and polar constants.** `J_t` (Saint-Venant torsion constant, m^4) enters only the
 stiffness: `stiffness[5, 5] = G J_t` [N m^2] for an uncoupled section. For a coupled one
@@ -83,8 +86,13 @@ Optional 2D ply-thickness data in `section_mesh_2d.txt`: `[Section_Node_Velocity
 reads them, so a mesh from `SectionMesh.from_thin_walled` keeps its ply-thickness
 sensitivities through the file. Since ASM 0.8.0 meshes of blade cuts
 (`section_mesh_from_cut`) carry them too, with no change to the contract: ply tags,
-velocities and an empty `tie_points` (the cut mesh conforms, so it has no ties). Planned
-next: tapered 2D ply-thickness sensitivities in 1d-fem.
+velocities and an empty `tie_points` (the cut mesh conforms, so it has no ties).
+
+Tapered 2D sections (1d-fem, `[Section_Taper_2D]` in `section_taper.txt`) use
+`solid.taper.solid_section_taper` (the coupling of two meshes of the same topology a
+distance apart) and `solid.layup_sensitivity.solid_section_derivative(taper=)`, which
+differentiates it through both meshes. Both have been in ASM since 0.5.0, so the contract
+stays at 2.1; they join the contract functions here.
 
 ## Reference beams
 

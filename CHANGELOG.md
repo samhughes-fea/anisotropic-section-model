@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Documentation
+
+- `docs/package_boundary.md` lists the section and taper derivatives in the contract
+  (`section_derivative`, `solid_section_derivative(taper=)`, `section_taper`,
+  `solid_section_taper`), which 1d-fem now uses for tapered 2D sections
+  (`[Section_Taper_2D]`). They have been in ASM since 0.5.0, so the contract stays at 2.1.
+  (#46)
+
 ### Changed
 
 - CI lints with a pinned ruff (`requirements/lint.txt`, syntax errors and pyflakes):
